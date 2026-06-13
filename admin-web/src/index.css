@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── FieldTrack design tokens ──────────────────────────────────────────────
+   The same palette as the Flutter app, expressed as CSS variables so the
+   `.dark` class on <html> flips the entire theme in one place. */
+:root {
+  --ft-bg: #fff8e7; /* warm cream */
+  --ft-surface: #ffffff;
+  --ft-card: #ffffff;
+  --ft-border: rgba(26, 26, 46, 0.1);
+  --ft-shadow: rgba(26, 26, 46, 0.08);
+
+  --ft-primary: #f5a623; /* amber */
+  --ft-primary-fg: #1a1a2e; /* dark text on amber */
+  --ft-secondary: #8b7fd4; /* soft purple */
+  --ft-danger: #e8645a; /* coral */
+
+  --ft-text: #1a1a2e;
+  --ft-text-secondary: #6b6b80;
+
+  --ft-status-active: #4caf7d;
+  --ft-status-idle: #f5a623;
+  --ft-status-offline: #9e9eae;
+  --ft-status-danger: #e8645a;
+  --ft-status-battery: #e8a05a;
+}
+
+.dark {
+  --ft-bg: #1a1a2e;
+  --ft-surface: #252540;
+  --ft-card: #2d2d4e;
+  --ft-border: rgba(255, 255, 255, 0.08);
+  --ft-shadow: rgba(0, 0, 0, 0.35);
+
+  --ft-text: #f0f0ff;
+  --ft-text-secondary: #a0a0c0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--ft-bg);
+  color: var(--ft-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Thin, theme-aware scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ft-border) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--ft-border);
+  border-radius: 999px;
+}
+
+/* Leaflet tiles should respect the card radius where embedded */
+.leaflet-container {
+  font-family: 'Inter', sans-serif;
+  background: var(--ft-surface);
+}

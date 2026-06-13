@@ -1,0 +1,619 @@
+"""Report generation: authorization, data assembly, and the async job store.
+
+PIPELINE:
+  endpoint (sync, has actor + db) -> authorize() raises 4xx early, returns a
+      NormalizedReport (role-scoped, validated filters)
+  -> ReportStore.create() writes PROCESSING to Redis, returns report_id
+  -> BackgroundTask -> run_report_job(): fresh db session, build_data(),
+      render to bytes (off the event loop via to_thread), write file,
+      mark READY|FAILED.
+
+WHY a separate background session: the request's session closes when the 202
+response is sent; the job outlives it.
+
+TIME ZONES: stored timestamps are UTC; clock-in/out times in the report are
+shown in settings.business_timezone (the employees' wall clock).
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import time
+import uuid
+from calendar import monthrange
+from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta, timezone
+from typing import Any
+from zoneinfo import ZoneInfo
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import get_settings
+from app.core.database import async_session_factory
+from app.core.exceptions import bad_request, forbidden, not_found
+from app.core.redis import Keys, get_redis
+from app.models.attendance import Attendance, AttendanceSession
+from app.models.enums import AttendanceStatus, SessionType, UserRole
+from app.models.user import User
+from app.repositories.report_repository import ReportRepository
+from app.schemas.report import (
+    ReportFilters,
+    ReportFormat,
+    ReportStatus,
+    ReportType,
+)
+
+logger = logging.getLogger("fieldtrack.reports")
+
+DEFAULT_RANGE_DAYS = 30  # used when ATTENDANCE/DISTANCE omit a date range
+
+
+# ── Internal report representation (exporter-agnostic) ───────────────────
+@dataclass
+class ReportTable:
+    name: str
+    columns: list[str]
+    rows: list[list[Any]]
+    # Right-align these column indices in Excel/PDF (numeric columns).
+    numeric_cols: set[int] = field(default_factory=set)
+
+
+@dataclass
+class ReportData:
+    title: str
+    subtitle: str
+    filters_text: list[str]
+    generated_at: datetime
+    summary: list[tuple[str, str]]
+    tables: list[ReportTable]
+    filename_stem: str
+
+
+@dataclass
+class NormalizedReport:
+    """The role-authorized, validated request handed to the background job."""
+
+    type: ReportType
+    start: date
+    end: date
+    team_id: int | None
+    user_id: int | None
+    status: AttendanceStatus | None
+    scope_label: str
+    month: date | None = None
+
+
+# ── Service ──────────────────────────────────────────────────────────────
+class ReportService:
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+        self.repo = ReportRepository(db)
+        self.settings = get_settings()
+
+    @property
+    def _tz(self) -> ZoneInfo:
+        try:
+            return ZoneInfo(self.settings.business_timezone)
+        except Exception:  # noqa: BLE001 — bad tz string shouldn't 500 a report
+            return ZoneInfo("UTC")
+
+    # ── Authorization + normalization (runs in the request) ──────────────
+    async def authorize(
+        self, actor: User, type_: ReportType, filters: ReportFilters
+    ) -> NormalizedReport:
+        """Clamp the request to what `actor` may export and validate targets.
+        Raises 403/400/404 synchronously so the client never schedules a job
+        it isn't allowed to run."""
+        status = self._parse_status(filters.status)
+
+        if type_ is ReportType.TEAM:
+            return await self._authorize_team(actor, filters)
+
+        # ATTENDANCE / DISTANCE
+        start, end = self._resolve_range(filters.start_date, filters.end_date)
+
+        if actor.role == UserRole.EMPLOYEE:
+            # Locked to self — team_id/user_id from the client are ignored.
+            return NormalizedReport(
+                type=type_, start=start, end=end, team_id=None,
+                user_id=actor.id, status=status, scope_label="My records",
+            )
+
+        if actor.role == UserRole.SUPERVISOR:
+            return await self._authorize_supervisor_range(
+                actor, type_, start, end, filters, status
+            )
+
+        # ADMIN — anything; just validate referenced entities exist.
+        return await self._authorize_admin_range(type_, start, end, filters, status)
+
+    async def _authorize_team(
+        self, actor: User, filters: ReportFilters
+    ) -> NormalizedReport:
+        if actor.role == UserRole.EMPLOYEE:
+            raise forbidden("Employees cannot generate team reports")
+        if filters.team_id is None:
+            raise bad_request("team_id is required for a team report")
+        team = await self.repo.get_team(filters.team_id)
+        if team is None:
+            raise not_found("Team not found")
+        if actor.role == UserRole.SUPERVISOR:
+            supervised = await self.repo.supervised_team_ids(actor.id)
+            if filters.team_id not in supervised:
+                raise forbidden("You don't supervise this team")
+
+        month = filters.month or date.today().replace(day=1)
+        start, end = self._month_bounds(month)
+        return NormalizedReport(
+            type=ReportType.TEAM, start=start, end=end, team_id=team.id,
+            user_id=None, status=None, scope_label=f"Team: {team.name}",
+            month=month.replace(day=1),
+        )
+
+    async def _authorize_supervisor_range(
+        self,
+        actor: User,
+        type_: ReportType,
+        start: date,
+        end: date,
+        filters: ReportFilters,
+        status: AttendanceStatus | None,
+    ) -> NormalizedReport:
+        supervised = await self.repo.supervised_team_ids(actor.id)
+        if not supervised:
+            raise forbidden("You don't supervise any team")
+
+        if filters.user_id is not None:
+            target = await self.repo.get_user(filters.user_id)
+            if target is None:
+                raise not_found("Employee not found")
+            if target.team_id not in supervised:
+                raise forbidden("That employee isn't on your team")
+            return NormalizedReport(
+                type=type_, start=start, end=end, team_id=None,
+                user_id=target.id, status=status,
+                scope_label=f"Employee: {target.name}",
+            )
+
+        if filters.team_id is not None:
+            if filters.team_id not in supervised:
+                raise forbidden("You don't supervise this team")
+            team = await self.repo.get_team(filters.team_id)
+            return NormalizedReport(
+                type=type_, start=start, end=end, team_id=filters.team_id,
+                user_id=None, status=status,
+                scope_label=f"Team: {team.name if team else filters.team_id}",
+            )
+
+        # Neither set: default to their single team, else ask them to pick.
+        if len(supervised) == 1:
+            tid = next(iter(supervised))
+            team = await self.repo.get_team(tid)
+            return NormalizedReport(
+                type=type_, start=start, end=end, team_id=tid, user_id=None,
+                status=status,
+                scope_label=f"Team: {team.name if team else tid}",
+            )
+        raise bad_request("Select a team or employee for this report")
+
+    async def _authorize_admin_range(
+        self,
+        type_: ReportType,
+        start: date,
+        end: date,
+        filters: ReportFilters,
+        status: AttendanceStatus | None,
+    ) -> NormalizedReport:
+        scope = "All employees"
+        if filters.user_id is not None:
+            target = await self.repo.get_user(filters.user_id)
+            if target is None:
+                raise not_found("Employee not found")
+            scope = f"Employee: {target.name}"
+        elif filters.team_id is not None:
+            team = await self.repo.get_team(filters.team_id)
+            if team is None:
+                raise not_found("Team not found")
+            scope = f"Team: {team.name}"
+        return NormalizedReport(
+            type=type_, start=start, end=end, team_id=filters.team_id,
+            user_id=filters.user_id, status=status, scope_label=scope,
+        )
+
+    # ── Data assembly (runs in the background job) ───────────────────────
+    async def build_data(self, n: NormalizedReport) -> ReportData:
+        if n.type is ReportType.ATTENDANCE:
+            return await self._attendance_data(n)
+        if n.type is ReportType.DISTANCE:
+            return await self._distance_data(n)
+        return await self._team_data(n)
+
+    async def _attendance_data(self, n: NormalizedReport) -> ReportData:
+        rows = await self.repo.attendance_in_range(
+            start=n.start, end=n.end, team_id=n.team_id,
+            user_id=n.user_id, status=n.status,
+        )
+        user_ids = list({u.id for _, u in rows})
+        mock = await self.repo.mock_counts_in_range(
+            start=n.start, end=n.end, user_ids=user_ids
+        )
+
+        columns = [
+            "Employee", "Date", "Start", "End", "Duration",
+            "Distance (km)", "Status", "Mock GPS", "Work Summary",
+        ]
+        table_rows: list[list[Any]] = []
+        total_minutes = 0
+        total_distance = 0.0
+        total_mock = 0
+        for att, user in rows:
+            start_t, end_t = self._session_bounds(att.sessions)
+            mock_n = mock.get((user.id, att.date), 0)
+            total_minutes += att.total_duration_minutes
+            total_distance += att.total_distance_meters
+            total_mock += mock_n
+            table_rows.append([
+                user.name,
+                att.date.isoformat(),
+                start_t,
+                end_t,
+                self._fmt_duration(att.total_duration_minutes),
+                round(att.total_distance_meters / 1000, 2),
+                att.status.value,
+                mock_n,
+                (att.work_summary or "").strip(),
+            ])
+
+        summary = [
+            ("Records", str(len(rows))),
+            ("Employees", str(len(user_ids))),
+            ("Total hours", self._fmt_duration(total_minutes)),
+            ("Total distance", f"{total_distance / 1000:.2f} km"),
+            ("Mock-GPS flags", str(total_mock)),
+        ]
+        return ReportData(
+            title="Attendance Report",
+            subtitle=self._range_text(n.start, n.end),
+            filters_text=self._filters_text(n),
+            generated_at=datetime.now(timezone.utc),
+            summary=summary,
+            tables=[ReportTable(
+                name="Attendance",
+                columns=columns,
+                rows=table_rows,
+                numeric_cols={5, 7},
+            )],
+            filename_stem=f"attendance_{n.start}_{n.end}",
+        )
+
+    async def _distance_data(self, n: NormalizedReport) -> ReportData:
+        rows = await self.repo.attendance_in_range(
+            start=n.start, end=n.end, team_id=n.team_id,
+            user_id=n.user_id, status=None,
+        )
+        # Per-employee accumulation.
+        per_user: dict[int, dict[str, Any]] = {}
+        daily_rows: list[list[Any]] = []
+        for att, user in rows:
+            km = att.total_distance_meters / 1000
+            daily_rows.append([user.name, att.date.isoformat(), round(km, 2)])
+            agg = per_user.setdefault(
+                user.id, {"name": user.name, "days": 0, "total": 0.0}
+            )
+            agg["days"] += 1
+            agg["total"] += km
+
+        total_km = sum(a["total"] for a in per_user.values())
+        total_days = sum(a["days"] for a in per_user.values())
+        team_avg_day = (total_km / total_days) if total_days else 0.0
+
+        summary_rows: list[list[Any]] = []
+        top_name, top_total = "—", 0.0
+        for agg in sorted(per_user.values(), key=lambda a: a["total"], reverse=True):
+            avg_day = agg["total"] / agg["days"] if agg["days"] else 0.0
+            vs_team = (
+                f"{((avg_day - team_avg_day) / team_avg_day * 100):+.0f}%"
+                if team_avg_day
+                else "—"
+            )
+            summary_rows.append([
+                agg["name"], agg["days"], round(agg["total"], 2),
+                round(avg_day, 2), vs_team,
+            ])
+            if agg["total"] > top_total:
+                top_total, top_name = agg["total"], agg["name"]
+
+        summary = [
+            ("Employees", str(len(per_user))),
+            ("Total distance", f"{total_km:.2f} km"),
+            ("Team avg / active day", f"{team_avg_day:.2f} km"),
+            ("Top distance", f"{top_name} ({top_total:.1f} km)"),
+        ]
+        return ReportData(
+            title="Distance Report",
+            subtitle=self._range_text(n.start, n.end),
+            filters_text=self._filters_text(n),
+            generated_at=datetime.now(timezone.utc),
+            summary=summary,
+            tables=[
+                ReportTable(
+                    name="Per-Employee Summary",
+                    columns=["Employee", "Active Days", "Total (km)",
+                             "Avg/Day (km)", "vs Team Avg"],
+                    rows=summary_rows,
+                    numeric_cols={1, 2, 3},
+                ),
+                ReportTable(
+                    name="Daily Distance",
+                    columns=["Employee", "Date", "Distance (km)"],
+                    rows=daily_rows,
+                    numeric_cols={2},
+                ),
+            ],
+            filename_stem=f"distance_{n.start}_{n.end}",
+        )
+
+    async def _team_data(self, n: NormalizedReport) -> ReportData:
+        assert n.team_id is not None
+        team = await self.repo.get_team(n.team_id)
+        members = await self.repo.team_members(n.team_id)
+        rows = await self.repo.attendance_in_range(
+            start=n.start, end=n.end, team_id=n.team_id, user_id=None, status=None,
+        )
+
+        # Working days = distinct dates the team had any attendance activity.
+        working_days = len({att.date for att, _ in rows})
+
+        agg: dict[int, dict[str, Any]] = {
+            m.id: {"name": m.name, "present": 0, "half": 0, "absent": 0,
+                   "minutes": 0, "distance": 0.0}
+            for m in members
+        }
+        for att, user in rows:
+            a = agg.setdefault(
+                user.id,
+                {"name": user.name, "present": 0, "half": 0, "absent": 0,
+                 "minutes": 0, "distance": 0.0},
+            )
+            if att.status == AttendanceStatus.PRESENT:
+                a["present"] += 1
+            elif att.status == AttendanceStatus.HALF_DAY:
+                a["half"] += 1
+            elif att.status == AttendanceStatus.ABSENT:
+                a["absent"] += 1
+            a["minutes"] += att.total_duration_minutes
+            a["distance"] += att.total_distance_meters
+
+        member_count = len(agg) or 1
+        total_minutes = sum(a["minutes"] for a in agg.values())
+        total_distance = sum(a["distance"] for a in agg.values())
+        credited = sum(a["present"] + 0.5 * a["half"] for a in agg.values())
+        denom = member_count * working_days
+        team_rate = (credited / denom * 100) if denom else 0.0
+
+        breakdown: list[list[Any]] = []
+        top = {"name": "—", "score": -1.0}
+        most_absent = {"name": "—", "absent": -1}
+        for a in sorted(agg.values(), key=lambda x: x["name"]):
+            credited_m = a["present"] + 0.5 * a["half"]
+            rate = (credited_m / working_days * 100) if working_days else 0.0
+            derived_absent = max(working_days - int(credited_m), 0) if working_days else a["absent"]
+            breakdown.append([
+                a["name"], a["present"], a["half"], a["absent"],
+                self._fmt_duration(a["minutes"]),
+                round(a["distance"] / 1000, 2), f"{rate:.0f}%",
+            ])
+            score = credited_m * 1000 + a["minutes"]  # tie-break by hours
+            if score > top["score"]:
+                top = {"name": a["name"], "score": score}
+            if derived_absent > most_absent["absent"]:
+                most_absent = {"name": a["name"], "absent": derived_absent}
+
+        month_label = (n.month or n.start).strftime("%B %Y")
+        summary = [
+            ("Team", team.name if team else str(n.team_id)),
+            ("Month", month_label),
+            ("Members", str(len(members))),
+            ("Working days", str(working_days)),
+            ("Attendance rate", f"{team_rate:.0f}%"),
+            ("Total hours", self._fmt_duration(total_minutes)),
+            ("Total distance", f"{total_distance / 1000:.2f} km"),
+            ("Top performer", top["name"]),
+            ("Most absences", most_absent["name"]),
+        ]
+        return ReportData(
+            title="Team Report",
+            subtitle=month_label,
+            filters_text=[f"Team: {team.name if team else n.team_id}"],
+            generated_at=datetime.now(timezone.utc),
+            summary=summary,
+            tables=[ReportTable(
+                name="Individual Breakdown",
+                columns=["Employee", "Present", "Half", "Absent",
+                         "Hours", "Distance (km)", "Attendance %"],
+                rows=breakdown,
+                numeric_cols={1, 2, 3, 5},
+            )],
+            filename_stem=f"team_{n.team_id}_{(n.month or n.start):%Y-%m}",
+        )
+
+    # ── Small helpers ────────────────────────────────────────────────────
+    def _session_bounds(
+        self, sessions: list[AttendanceSession]
+    ) -> tuple[str, str]:
+        """First START time and last END time, in business tz (HH:MM)."""
+        start_t = end_t = ""
+        for s in sessions:
+            if s.type == SessionType.START and not start_t:
+                start_t = self._fmt_time(s.timestamp)
+            if s.type == SessionType.END:
+                end_t = self._fmt_time(s.timestamp)
+        return start_t, end_t
+
+    def _fmt_time(self, dt: datetime) -> str:
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(self._tz).strftime("%H:%M")
+
+    @staticmethod
+    def _fmt_duration(minutes: int) -> str:
+        h, m = divmod(max(minutes, 0), 60)
+        return f"{h}h {m:02d}m"
+
+    @staticmethod
+    def _parse_status(raw: str | None) -> AttendanceStatus | None:
+        if not raw:
+            return None
+        try:
+            return AttendanceStatus(raw.strip().upper())
+        except ValueError:
+            raise bad_request("status must be PRESENT, ABSENT or HALF_DAY")
+
+    @staticmethod
+    def _resolve_range(
+        start: date | None, end: date | None
+    ) -> tuple[date, date]:
+        if start and end:
+            return start, end
+        today = date.today()
+        if end and not start:
+            return end - timedelta(days=DEFAULT_RANGE_DAYS), end
+        if start and not end:
+            return start, today
+        return today - timedelta(days=DEFAULT_RANGE_DAYS), today
+
+    @staticmethod
+    def _month_bounds(month: date) -> tuple[date, date]:
+        first = month.replace(day=1)
+        last = date(month.year, month.month, monthrange(month.year, month.month)[1])
+        today = date.today()
+        if last > today and first <= today:
+            last = today  # current month: stop at today
+        return first, last
+
+    @staticmethod
+    def _range_text(start: date, end: date) -> str:
+        return f"{start.strftime('%d %b %Y')} – {end.strftime('%d %b %Y')}"
+
+    @staticmethod
+    def _filters_text(n: NormalizedReport) -> list[str]:
+        parts = [n.scope_label]
+        if n.status is not None:
+            parts.append(f"Status: {n.status.value}")
+        return parts
+
+
+# ── Async job store (Redis status + filesystem files) ────────────────────
+class ReportStore:
+    """Status in Redis (TTL = retention), bytes on the filesystem. Both expire
+    together so a stale status never points at a deleted file."""
+
+    def __init__(self) -> None:
+        self.settings = get_settings()
+        self.redis = get_redis()
+
+    @property
+    def _ttl(self) -> int:
+        return self.settings.report_retention_minutes * 60
+
+    def _dir(self) -> str:
+        os.makedirs(self.settings.report_storage_dir, exist_ok=True)
+        return self.settings.report_storage_dir
+
+    def file_path(self, report_id: str, fmt: ReportFormat) -> str:
+        return os.path.join(self._dir(), f"{report_id}.{fmt.extension}")
+
+    def download_url(self, report_id: str) -> str:
+        return f"{self.settings.api_v1_prefix}/reports/{report_id}/download"
+
+    async def create(
+        self, owner_id: int, type_: ReportType, fmt: ReportFormat
+    ) -> str:
+        report_id = uuid.uuid4().hex
+        now = datetime.now(timezone.utc)
+        expires = now + timedelta(seconds=self._ttl)
+        mapping = {
+            "status": ReportStatus.PROCESSING.value,
+            "type": type_.value,
+            "format": fmt.value,
+            "owner_id": str(owner_id),
+            "created_at": now.isoformat(),
+            "expires_at": expires.isoformat(),
+        }
+        key = Keys.report(report_id)
+        await self.redis.hset(key, mapping=mapping)
+        await self.redis.expire(key, self._ttl)
+        return report_id
+
+    async def mark_ready(
+        self, report_id: str, *, path: str, filename: str
+    ) -> None:
+        key = Keys.report(report_id)
+        await self.redis.hset(
+            key,
+            mapping={
+                "status": ReportStatus.READY.value,
+                "path": path,
+                "filename": filename,
+                "download_url": self.download_url(report_id),
+            },
+        )
+        await self.redis.expire(key, self._ttl)  # refresh from completion time
+
+    async def mark_failed(self, report_id: str, *, error: str) -> None:
+        key = Keys.report(report_id)
+        await self.redis.hset(
+            key,
+            mapping={"status": ReportStatus.FAILED.value, "error": error[:300]},
+        )
+        await self.redis.expire(key, self._ttl)
+
+    async def get(self, report_id: str) -> dict[str, str] | None:
+        data = await self.redis.hgetall(Keys.report(report_id))
+        return data or None
+
+    def prune_expired_files(self) -> None:
+        """Best-effort: delete files older than the retention window. Called at
+        generation start so storage self-maintains without a dedicated cron."""
+        try:
+            cutoff = time.time() - self._ttl
+            d = self.settings.report_storage_dir
+            if not os.path.isdir(d):
+                return
+            for name in os.listdir(d):
+                fp = os.path.join(d, name)
+                try:
+                    if os.path.isfile(fp) and os.path.getmtime(fp) < cutoff:
+                        os.remove(fp)
+                except OSError:
+                    continue
+        except Exception:  # noqa: BLE001
+            logger.warning("report file prune skipped", exc_info=True)
+
+
+# ── Background entry point ───────────────────────────────────────────────
+async def run_report_job(
+    report_id: str, normalized: NormalizedReport, fmt: ReportFormat
+) -> None:
+    """Render the report and persist it. Owns its own DB session (the request's
+    is long gone). All failures are captured into the Redis status — this never
+    raises into the event loop."""
+    from app.services.report_exporters import render_report  # lazy: heavy libs
+
+    store = ReportStore()
+    try:
+        store.prune_expired_files()
+        async with async_session_factory() as db:
+            data = await ReportService(db).build_data(normalized)
+        # Rendering is CPU-bound (openpyxl/reportlab) — keep it off the loop.
+        content: bytes = await asyncio.to_thread(render_report, data, fmt)
+        path = store.file_path(report_id, fmt)
+        with open(path, "wb") as fh:
+            fh.write(content)
+        filename = f"{data.filename_stem}.{fmt.extension}"
+        await store.mark_ready(report_id, path=path, filename=filename)
+        logger.info("report %s ready (%s, %s)", report_id, normalized.type.value, fmt.value)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("report %s failed", report_id)
+        await store.mark_failed(report_id, error=str(exc))

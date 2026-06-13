@@ -1,0 +1,37 @@
+# FieldTrack backend dependencies — pinned majors, production-grade set.
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+pydantic[email]==2.11.4          # [email] => email-validator for EmailStr
+pydantic-settings==2.9.1
+
+# Database
+sqlalchemy[asyncio]==2.0.41
+asyncpg==0.30.0
+geoalchemy2==0.17.1
+shapely==2.1.0
+alembic==1.15.2
+psycopg2-binary==2.9.10      # sync driver for Alembic offline/CLI convenience
+
+# Redis
+redis==5.2.1                  # redis-py with async support (redis.asyncio)
+
+# Auth
+pyjwt==2.10.1
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1                 # pinned: passlib 1.7.4 breaks with bcrypt>=4.1
+
+# Push notifications (FCM HTTP v1)
+google-auth==2.40.1
+httpx==0.28.1
+
+# Background scheduling (in-process; no Celery — see ARCHITECTURE.md)
+apscheduler==3.11.0
+
+# Exports
+openpyxl==3.1.5               # Excel
+reportlab==4.4.0              # PDF
+
+# Testing
+pytest==8.3.5
+pytest-asyncio==0.26.0
+aiosqlite==0.21.0

@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+.git
+__pycache__
+*.pyc
+.pytest_cache
+.venv
+venv
+tests
+docs
+static
+nginx
+docker-compose.yml
+.mypy_cache
+.ruff_cache

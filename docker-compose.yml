@@ -1,0 +1,160 @@
+# FieldTrack — production-grade Docker Compose
+#
+# DECISIONS (explicit):
+# - Ports 8080/8081 are unavailable on this machine, so Nginx binds to
+#   ${NGINX_HTTP_PORT:-8090}. Change in .env, not here.
+# - Postgres host port defaults to 5433 because another dockerized Postgres
+#   already exists on this machine (likely on 5432). Internal port stays 5432.
+# - Postgres and Redis bind to 127.0.0.1 only — they are NEVER exposed to the
+#   internet. Only Nginx is publicly reachable.
+# - Memory limits sized for a 2 vCPU / 4 GB VPS with headroom:
+#     postgres 1g, redis 256m, app 1g, nginx 128m  => ~2.4 GB max, ~1.6 GB OS headroom.
+# - Redis runs with AOF persistence (everysec) because it holds sync-dedup keys;
+#   losing them on restart would cause duplicate sync processing.
+# - postgis/postgis:15-3.4 image creates the postgis extension automatically in
+#   the default DB; the Alembic migration still runs CREATE EXTENSION IF NOT
+#   EXISTS as a safety net (idempotent).
+# - App runs 2 uvicorn workers (matches 2 vCPU). Scaling to 100 employees is a
+#   config change: raise workers/pool sizes in .env, nothing else.
+# - No `version:` key — obsolete in Compose v2.
+
+name: fieldtrack
+
+services:
+  postgres:
+    image: postgis/postgis:15-3.4
+    container_name: fieldtrack-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      # Faster, safe-enough defaults for a small instance
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    command:
+      # Tuned for ~1 GB budget on a 4 GB VPS (pgtune "mixed" profile, scaled down)
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=768MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - max_connections=50
+      - -c
+      - wal_compression=on
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Host-side 5433 to avoid clashing with your existing dockerized Postgres.
+      # Bound to localhost only — not reachable from outside the VPS.
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    mem_limit: 1g
+    networks:
+      - fieldtrack
+
+  redis:
+    image: redis:7-alpine
+    container_name: fieldtrack-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      - --maxmemory
+      - 200mb
+      - --maxmemory-policy
+      - volatile-lru        # evict only keys WITH a TTL; never evict blacklist/dedup silently before expiry of unset keys
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:${REDIS_HOST_PORT:-6380}:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    mem_limit: 256m
+    networks:
+      - fieldtrack
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fieldtrack-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Inside the compose network the hostnames are the service names.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      # Generated report exports (CSV/Excel/PDF). Persisted across restarts;
+      # files self-prune after REPORT_RETENTION_MINUTES. Path matches
+      # REPORT_STORAGE_DIR in .env.
+      - reports_data:/srv/fieldtrack/reports
+    expose:
+      - "8000"          # internal only; Nginx is the public entrypoint
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    mem_limit: 1g
+    networks:
+      - fieldtrack
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: fieldtrack-nginx
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "${NGINX_HTTP_PORT:-8090}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./static:/var/www/static:ro       # future admin web build goes here
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/nginx-health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    mem_limit: 128m
+    networks:
+      - fieldtrack
+
+volumes:
+  postgres_data:
+  redis_data:
+  reports_data:
+
+networks:
+  fieldtrack:
+    driver: bridge
