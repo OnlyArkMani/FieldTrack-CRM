@@ -12,9 +12,16 @@ import Badge from '@/components/ui/Badge';
 
 const MAX_RANGE_DAYS = 31;
 
+// Cell values starting with these characters are interpreted as formulas by
+// Excel/Sheets/LibreOffice when a CSV is opened (CSV/formula injection).
+// work_summary is free-text from employees, so neutralize it with a leading
+// apostrophe — Excel then renders it literally as text.
+const FORMULA_PREFIXES = ['=', '+', '-', '@', '\t', '\r'];
+
 function toCsv(rows, columns) {
   const esc = (v) => {
-    const s = v == null ? '' : String(v);
+    let s = v == null ? '' : String(v);
+    if (FORMULA_PREFIXES.some((p) => s.startsWith(p))) s = `'${s}`;
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const header = columns.map((c) => esc(c.header)).join(',');

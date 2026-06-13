@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import csv
 import io
+from typing import Any
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -68,10 +69,24 @@ def _render_csv(data: ReportData) -> bytes:
         w.writerow([table.name])
         w.writerow(table.columns)
         for row in table.rows:
-            w.writerow(["" if c is None else c for c in row])
+            w.writerow(["" if c is None else _csv_safe(c) for c in row])
         w.writerow([])
 
     return buf.getvalue().encode("utf-8-sig")
+
+
+# Cell values starting with these characters are interpreted as formulas by
+# Excel/Sheets/LibreOffice when a CSV/XLSX is opened (CSV/formula injection).
+# Free-text user input (e.g. work_summary) flows into these exports, so any
+# string cell starting with one of these is neutralized with a leading
+# apostrophe, which Excel renders literally and treats as "text".
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value: Any) -> Any:
+    if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
+        return "'" + value
+    return value
 
 
 # ── Excel ────────────────────────────────────────────────────────────────
@@ -115,7 +130,7 @@ def _render_excel(data: ReportData) -> bytes:
             cell.alignment = Alignment(horizontal="center", vertical="center")
 
         for i, row in enumerate(table.rows, start=2):
-            sheet.append(["" if c is None else c for c in row])
+            sheet.append(["" if c is None else _csv_safe(c) for c in row])
             if i % 2 == 0:  # zebra stripe even data rows
                 for col_idx in range(1, len(table.columns) + 1):
                     sheet.cell(row=i, column=col_idx).fill = zebra_fill
