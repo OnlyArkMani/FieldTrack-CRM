@@ -20,6 +20,7 @@ from app.schemas.location import (
     LocationHistoryOut,
     RouteReplayOut,
     TeamLivePoint,
+    TrailSummaryOut,
 )
 from app.services.location_service import LocationService
 
@@ -82,6 +83,22 @@ async def route(
     always preserved."""
     day = date or date_type.today()
     return await LocationService(db).route(user, user_id, day)
+
+
+@router.get("/trail-summary/{user_id}", response_model=TrailSummaryOut)
+async def trail_summary(
+    user_id: int,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    days: Annotated[
+        int, Query(ge=1, le=31, description="Window size in days (max 31)")
+    ] = 31,
+) -> TrailSummaryOut:
+    """31-day distance report for one employee: per-day distance (metres) +
+    GPS point count, derived on the fly from location_logs (retention window is
+    31 days — no extra storage). Pick a day with `has_trail=true` and call
+    /location/route/{user_id}?date=... for that day's full trail."""
+    return await LocationService(db).trail_summary(user, user_id, days)
 
 
 @router.get("/team-live", response_model=list[TeamLivePoint])

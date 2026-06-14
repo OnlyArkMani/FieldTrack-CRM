@@ -29,6 +29,7 @@ from app.models.enums import SyncStatus, UserRole
 from app.models.user import User
 from app.repositories.location_repository import LocationRepository
 from app.schemas.location import (
+    DailyDistanceOut,
     HistoryPoint,
     LivePoint,
     LocationBatchIn,
@@ -38,6 +39,7 @@ from app.schemas.location import (
     RouteReplayOut,
     RouteSessionOut,
     TeamLivePoint,
+    TrailSummaryOut,
 )
 
 
@@ -392,10 +394,58 @@ class LocationService:
         )
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
+    # ── Trail summary (30-day distance report) ──────────────────────────────
+    async def trail_summary(
+        self, viewer: User, user_id: int, days: int
+    ) -> TrailSummaryOut:
+        """Per-day distance + point count for the last `days` days. One
+        grouped PostGIS query over location_logs (retention window is 31 days —
+        no extra storage). The UI lists this table and lets the
+        admin/supervisor open any day's full trail via /location/route."""
+        await self._assert_can_view(viewer, user_id)
+
+        end_date = date_type.today()
+        start_date = end_date - timedelta(days=days - 1)
+        range_start = datetime.combine(start_date, time.min, tzinfo=timezone.utc)
+        range_end = datetime.combine(end_date, time.max, tzinfo=timezone.utc)
+
+        rows = await self.repo.daily_distance_summary(user_id, range_start, range_end)
+        by_day = {d: (m, p) for d, m, p in rows}
+
+        out_days: list[DailyDistanceOut] = []
+        total = 0.0
+        for i in range(days):
+            d = start_date + timedelta(days=i)
+            meters, pts = by_day.get(d, (0.0, 0))
+            total += meters
+            out_days.append(
+                DailyDistanceOut(
+                    date=d.isoformat(),
+                    distance_meters=round(meters, 1),
+                    point_count=pts,
+                    has_trail=pts > 0,
+                )
+            )
+
+        return TrailSummaryOut(
+            user_id=user_id,
+            start_date=start_date.isoformat(),
+            end_date=end_date.isoformat(),
+            total_distance_meters=round(total, 1),
+            days=out_days,
+        )
+
     # ── Team live (supervisor map) ──────────────────────────────────────────
     async def team_live(self, viewer: User) -> list[TeamLivePoint]:
         team_ids = await self.repo.supervised_team_ids(viewer.id)
         members = await self.repo.members_of_teams(team_ids)
+        # A supervisor is a field user with extra rights — they carry a tracked
+        # device too and should see their OWN position on the team map. Append
+        # them (deduped: a supervisor may also be a member of a team they run).
+        if viewer.role == UserRole.SUPERVISOR and not any(
+            m.id == viewer.id for m in members
+        ):
+            members = [*members, viewer]
         return await self._live_points_for(members)
 
     # ── All live (admin dashboard / WebSocket) ──────────────────────────────

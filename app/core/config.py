@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     report_storage_dir: str = "/srv/fieldtrack/reports"
     report_retention_minutes: int = 60
 
+    # Data retention — location_logs is the hottest, highest-volume table.
+    # 31 days keeps storage (and the VPS disk) small while still covering the
+    # "last month" of employee trails the dashboard needs. Tune via env.
+    location_retention_days: int = 31
+
     # Background jobs
     cleanup_enabled: bool = True  # daily housekeeping worker (APScheduler)
     reminders_enabled: bool = True  # daily attendance reminder jobs (APScheduler)

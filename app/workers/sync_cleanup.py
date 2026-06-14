@@ -4,8 +4,9 @@ Runs once a day (APScheduler, wired in main.lifespan). Four jobs, each guarded
 so one failing never aborts the others, and the whole run is wrapped so a bad
 night never crashes the API process:
 
-  1. Prune location_logs older than 90 days (the hottest, highest-volume table
-     — see models/location.py's volume math).
+  1. Prune location_logs older than settings.location_retention_days (default
+     31 — the hottest, highest-volume table; see models/location.py's volume
+     math). 31 days keeps a full month of trails while staying cheap on disk.
   2. Delete DONE sync_queue rows older than 7 days (the server-side dead-letter
      landing zone; once processed they're noise).
   3. Archive attendance older than 1 year into a cold table WITH a JSON snapshot
@@ -23,11 +24,14 @@ from typing import Any
 
 from sqlalchemy import text
 
+from app.core.config import get_settings
 from app.core.database import async_session_factory
 
 logger = logging.getLogger("fieldtrack.cleanup")
 
-LOCATION_RETENTION_DAYS = 90
+# Default; the actual value comes from settings.location_retention_days at run
+# time (env-tunable). Kept as a module constant for the fallback/import compat.
+LOCATION_RETENTION_DAYS = 31
 SYNC_QUEUE_RETENTION_DAYS = 7
 ATTENDANCE_ARCHIVE_AFTER_DAYS = 365
 
@@ -60,7 +64,10 @@ async def run_cleanup() -> dict[str, Any]:
     async with async_session_factory() as db:
         # 1. Prune old location_logs.
         try:
-            cutoff = now - timedelta(days=LOCATION_RETENTION_DAYS)
+            retention_days = getattr(
+                get_settings(), "location_retention_days", LOCATION_RETENTION_DAYS
+            )
+            cutoff = now - timedelta(days=retention_days)
             res = await db.execute(
                 text("DELETE FROM location_logs WHERE created_at < :cutoff"),
                 {"cutoff": cutoff},
