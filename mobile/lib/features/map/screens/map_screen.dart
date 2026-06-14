@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/shimmer_card.dart';
 import '../../../core/widgets/state_views.dart';
@@ -260,34 +261,56 @@ class _SupervisorMap extends ConsumerWidget {
   const _SupervisorMap({required this.controller});
   final MapController controller;
 
+  // Centre of India — the map always opens here when there are no located
+  // members, so supervisors see tiles (not a blank screen) from the first frame.
+  static const _indiaCenter = LatLng(20.5937, 78.9629);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final teamAsync = ref.watch(teamLiveProvider);
     final geofences = ref.watch(geofencesProvider).valueOrNull ?? const <Geofence>[];
 
-    return teamAsync.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.all(AppDimens.grid * 2),
-        child: MapShimmer(),
-      ),
-      error: (e, _) => ErrorStateView(
-        message: e.toString(),
-        onRetry: () => ref.invalidate(teamLiveProvider),
-      ),
-      data: (members) {
-        final located = members.where((m) => m.hasPosition).toList();
-        if (located.isEmpty) {
-          return const EmptyStateView(
-            icon: Icons.location_off_rounded,
-            title: 'No live locations',
-            message: 'Team members appear here once they start sharing location.',
-          );
-        }
-        final center = located.first.position!;
-        return FlutterMap(
+    // The map renders in EVERY state — loading, error and empty just change the
+    // overlay drawn on top of it. (Previously these returned a non-map widget,
+    // so the supervisor saw a blank/empty screen with no tiles at all.)
+    final members = teamAsync.valueOrNull ?? const <TeamLiveMember>[];
+    final located = members.where((m) => m.hasPosition).toList();
+    final error = teamAsync.hasError ? teamAsync.error : null;
+
+    return _buildMap(
+      context,
+      ref,
+      located: located,
+      geofences: geofences,
+      isLoading: teamAsync.isLoading,
+      error: error,
+    );
+  }
+
+  Widget _buildMap(
+    BuildContext context,
+    WidgetRef ref, {
+    required List<TeamLiveMember> located,
+    required List<Geofence> geofences,
+    required bool isLoading,
+    required Object? error,
+  }) {
+    // Fly to the first active member if we have one; otherwise show all of India.
+    final hasMembers = located.isNotEmpty;
+    final center = hasMembers ? located.first.position! : _indiaCenter;
+
+    return Stack(
+      children: [
+        FlutterMap(
           mapController: controller,
-          options: MapOptions(initialCenter: center, initialZoom: 13, minZoom: 3, maxZoom: 18),
+          options: MapOptions(
+            initialCenter: center,
+            initialZoom: hasMembers ? 13 : 5,
+            minZoom: 3,
+            maxZoom: 18,
+          ),
           children: [
+            // TileLayer must be the first child or nothing renders.
             MapService.tileLayer(),
             if (geofences.isNotEmpty) ...geofenceLayers(geofences),
             MarkerLayer(
@@ -305,8 +328,25 @@ class _SupervisorMap extends ConsumerWidget {
               ],
             ),
           ],
-        );
-      },
+        ),
+
+        // ── Overlays (drawn OVER the map, never instead of it) ──────────────
+        if (error != null && located.isEmpty)
+          _MapOverlay(
+            icon: Icons.wifi_off_rounded,
+            title: "Couldn't load team locations",
+            message: 'Pull to retry — showing the last known view.',
+            onRetry: () => ref.invalidate(teamLiveProvider),
+          )
+        else if (located.isEmpty)
+          _MapOverlay(
+            icon: isLoading ? Icons.my_location_rounded : Icons.location_off_rounded,
+            title: isLoading ? 'Locating your team…' : 'No team members are currently active',
+            message: isLoading
+                ? null
+                : 'They appear on the map as soon as they start sharing location.',
+          ),
+      ],
     );
   }
 
@@ -642,4 +682,73 @@ String _relative(DateTime dt) {
   if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
   if (diff.inHours < 24) return '${diff.inHours}h ago';
   return '${diff.inDays}d ago';
+}
+
+/// A compact, centred card drawn ON TOP of the live map (the map keeps its
+/// tiles visible behind it). Used for the supervisor map's empty / loading /
+/// error states so the screen is never blank.
+class _MapOverlay extends StatelessWidget {
+  const _MapOverlay({
+    required this.icon,
+    required this.title,
+    this.message,
+    this.onRetry,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final scheme = Theme.of(context).colorScheme;
+    return IgnorePointer(
+      ignoring: onRetry == null,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: Padding(
+          padding: const EdgeInsets.all(AppDimens.grid * 2),
+          child: AppCard(
+            color: colors.card.withValues(alpha: 0.94),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: scheme.primary, size: 28),
+                const SizedBox(height: AppDimens.grid),
+                Text(
+                  title,
+                  style: AppTextStyles.bodyMedium.copyWith(color: scheme.onSurface),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (message != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    message!,
+                    style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                if (onRetry != null) ...[
+                  const SizedBox(height: AppDimens.grid * 1.5),
+                  AppButton(
+                    label: 'Retry',
+                    variant: AppButtonVariant.secondary,
+                    icon: Icons.refresh_rounded,
+                    expanded: false,
+                    onPressed: onRetry,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
