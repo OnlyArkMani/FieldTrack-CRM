@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Wifi, WifiOff, X } from 'lucide-react';
+import { Wifi, WifiOff, X, Route } from 'lucide-react';
 
 import { useAdminLiveSocket } from '@/hooks/useWebSocket';
 import { useEmployees } from '@/hooks/useEmployees';
@@ -10,7 +10,9 @@ import PageHeader from '@/components/ui/PageHeader';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import Avatar from '@/components/ui/Avatar';
+import Button from '@/components/ui/Button';
 import { Select } from '@/components/ui/Input';
+import TrailReplayModal from '@/features/map/TrailReplayModal';
 
 const STATUS_COLOR = {
   ACTIVE: '#4CAF7D',
@@ -69,6 +71,7 @@ export default function MapPage() {
   const { data: teams = [] } = useTeams();
   const [teamFilter, setTeamFilter] = useState('');
   const [selected, setSelected] = useState(null);
+  const [trailFor, setTrailFor] = useState(null); // employee whose 31-day trail is open
 
   // user_id → team_id (the WS payload doesn't carry team membership).
   const teamOf = useMemo(() => {
@@ -161,9 +164,23 @@ export default function MapPage() {
               <Row label="Battery" value={selected.battery_level != null ? `${selected.battery_level}%` : '—'} />
               <Row label="Team" value={teams.find((t) => t.id === teamOf[selected.user_id])?.name || '—'} />
             </dl>
+            <Button
+              variant="secondary"
+              icon={Route}
+              className="mt-4 w-full"
+              onClick={() => setTrailFor({ id: selected.user_id, name: selected.name })}
+            >
+              View 31-day trail
+            </Button>
           </Card>
         )}
       </div>
+
+      <TrailReplayModal
+        open={!!trailFor}
+        onClose={() => setTrailFor(null)}
+        employee={trailFor}
+      />
     </div>
   );
 }

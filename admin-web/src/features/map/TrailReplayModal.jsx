@@ -9,7 +9,7 @@ import {
 import dayjs from 'dayjs';
 import { Play, Pause, RotateCcw } from 'lucide-react';
 
-import { useEmployeeRoute } from '@/hooks/useTrail';
+import { useEmployeeRoute, useTrailSummary } from '@/hooks/useTrail';
 import Modal from '@/components/ui/Modal';
 import Spinner from '@/components/ui/Spinner';
 import { Input } from '@/components/ui/Input';
@@ -47,8 +47,13 @@ export default function TrailReplayModal({ open, onClose, employee }) {
   const timer = useRef(null);
 
   const { data, isLoading } = useEmployeeRoute(employee?.id, date, open);
+  const { data: summary } = useTrailSummary(employee?.id, 31, open);
   const points = useMemo(() => data?.points || [], [data]);
   const sessions = data?.sessions || [];
+  const maxDayMeters = useMemo(
+    () => Math.max(1, ...(summary?.days || []).map((d) => d.distance_meters)),
+    [summary]
+  );
 
   // Reset playback whenever the route changes (new date / fresh fetch).
   useEffect(() => {
@@ -98,6 +103,47 @@ export default function TrailReplayModal({ open, onClose, employee }) {
             <Stat label="Points" value={points.length} />
           </div>
         </div>
+
+        {/* 30-day distance report */}
+        {summary?.days?.length > 0 && (
+          <div>
+            <div className="mb-1 flex items-baseline justify-between text-xs text-text-secondary">
+              <span>Last 31 days</span>
+              <span>Total {((summary.total_distance_meters || 0) / 1000).toFixed(1)} km</span>
+            </div>
+            <div className="flex gap-1 overflow-x-auto pb-1">
+              {summary.days.map((d) => {
+                const isSelected = d.date === date;
+                const heightPct = Math.max(6, (d.distance_meters / maxDayMeters) * 100);
+                return (
+                  <button
+                    key={d.date}
+                    type="button"
+                    disabled={!d.has_trail}
+                    onClick={() => setDate(d.date)}
+                    title={`${dayjs(d.date).format('DD MMM')} · ${(d.distance_meters / 1000).toFixed(2)} km`}
+                    className={`flex h-16 w-6 shrink-0 flex-col items-center justify-end gap-1 rounded-btn px-0.5 pb-1 text-[10px] ${
+                      isSelected
+                        ? 'bg-primary/16'
+                        : d.has_trail
+                        ? 'hover:bg-border/50'
+                        : 'opacity-30'
+                    }`}
+                  >
+                    <div
+                      className="w-full rounded-sm"
+                      style={{
+                        height: `${heightPct}%`,
+                        background: isSelected ? AMBER : d.has_trail ? '#9E9EAE' : 'transparent',
+                      }}
+                    />
+                    <span className="text-text-secondary">{dayjs(d.date).format('D')}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Map */}
         <div className="h-[460px] overflow-hidden rounded-card border border-border">
