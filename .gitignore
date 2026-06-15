@@ -1,4 +1,10 @@
 .env
+.env.prod
+admin-web/.env.prod
+admin-web/.env.production
+mobile/.env.prod
+mobile/android/app/google-services.json
+admin-web/dist/
 __pycache__/
 *.pyc
 .pytest_cache/
