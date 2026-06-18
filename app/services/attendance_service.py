@@ -106,6 +106,23 @@ class AttendanceService:
     def _today() -> date_type:
         return datetime.now(timezone.utc).date()
 
+    async def _day_distance(self, user_id: int, day: date_type) -> float:
+        """Real-world distance covered today (metres), from location_logs via
+        PostGIS — see LocationRepository.day_distance_meters. Best-effort: a
+        GPS query failure must never block clocking out."""
+        from app.repositories.location_repository import LocationRepository
+
+        day_start = datetime.combine(day, time.min, tzinfo=timezone.utc)
+        day_end = datetime.combine(day, time.max, tzinfo=timezone.utc)
+        try:
+            meters = await LocationRepository(self.db).day_distance_meters(
+                user_id, day_start, day_end
+            )
+            return round(meters, 1)
+        except Exception:  # noqa: BLE001
+            logger.exception("distance calc failed for user %s on %s", user_id, day)
+            return 0.0
+
     async def _current_state(
         self, user_id: int, attendance: Attendance | None
     ) -> str:
@@ -174,6 +191,9 @@ class AttendanceService:
                 attendance.work_summary = work_summary
                 attendance.total_duration_minutes = calculate_duration(
                     attendance.sessions
+                )
+                attendance.total_distance_meters = await self._day_distance(
+                    user.id, day
                 )
 
         new_state = _STATE_FOR_TYPE[action]

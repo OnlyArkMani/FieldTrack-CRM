@@ -55,6 +55,60 @@ class LocationRepository:
         )
         return list(result.scalars().all())
 
+    async def day_distance_meters(
+        self, user_id: int, day_start: datetime, day_end: datetime
+    ) -> float:
+        """Real-world distance (metres) covered on one day, via PostGIS
+        ST_Length on a ::geography line through that day's points ordered by
+        time. Used to fill attendance.total_distance_meters on END — a single
+        cheap query against the existing (user_id, timestamp) index."""
+        sql = text(
+            """
+            SELECT COALESCE(
+                ST_Length(
+                    ST_MakeLine(
+                        ST_SetSRID(ST_MakePoint(lng, lat), 4326) ORDER BY timestamp
+                    )::geography
+                ), 0
+            )
+            FROM location_logs
+            WHERE user_id = :uid AND timestamp >= :start AND timestamp <= :end
+            """
+        )
+        result = await self.db.execute(
+            sql, {"uid": user_id, "start": day_start, "end": day_end}
+        )
+        return float(result.scalar() or 0.0)
+
+    async def daily_distance_summary(
+        self, user_id: int, range_start: datetime, range_end: datetime
+    ) -> list[tuple[date_type, float, int]]:
+        """Per-calendar-day (distance_meters, point_count) over a range — the
+        30-day trail/distance report. One grouped query; cheap even at 100
+        employees x 90 days (location_logs is indexed on (user_id, timestamp))."""
+        sql = text(
+            """
+            SELECT
+                date(timestamp) AS day,
+                COALESCE(
+                    ST_Length(
+                        ST_MakeLine(
+                            ST_SetSRID(ST_MakePoint(lng, lat), 4326) ORDER BY timestamp
+                        )::geography
+                    ), 0
+                ) AS meters,
+                count(*) AS pts
+            FROM location_logs
+            WHERE user_id = :uid AND timestamp >= :start AND timestamp <= :end
+            GROUP BY date(timestamp)
+            ORDER BY day
+            """
+        )
+        result = await self.db.execute(
+            sql, {"uid": user_id, "start": range_start, "end": range_end}
+        )
+        return [(row.day, float(row.meters), int(row.pts)) for row in result.all()]
+
     async def supervised_team_ids(self, supervisor_id: int) -> set[int]:
         result = await self.db.execute(
             select(Team.id).where(Team.supervisor_id == supervisor_id)
