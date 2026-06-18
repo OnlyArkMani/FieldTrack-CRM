@@ -36,4 +36,5 @@ reportlab==4.4.0              # PDF
 # Testing
 pytest==8.3.5
 pytest-asyncio==0.26.0
+pytest-cov==5.0.0            # provides --cov flags used by the CI test job
 aiosqlite==0.21.0
