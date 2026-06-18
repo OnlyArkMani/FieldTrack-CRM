@@ -56,6 +56,8 @@ class Team(Base, TimestampMixin):
         ForeignKey("users.id", ondelete="SET NULL", use_alter=True,
                    name="fk_teams_supervisor_id_users")
     )
+    # Soft-delete flag (TeamService.soft_delete). Added in migration 0003.
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     supervisor: Mapped["User | None"] = relationship(foreign_keys=[supervisor_id])
     members: Mapped[list["User"]] = relationship(

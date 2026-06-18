@@ -120,6 +120,29 @@ class RouteReplayOut(BaseModel):
     sessions: list[RouteSessionOut]
 
 
+class DailyDistanceOut(BaseModel):
+    """One day's distance + GPS point count — a row in the 30-day trail
+    summary. `has_trail` is true when a per-day route replay is available
+    (i.e. points > 0) so the UI knows which days are clickable."""
+
+    date: str
+    distance_meters: float
+    point_count: int
+    has_trail: bool
+
+
+class TrailSummaryOut(BaseModel):
+    """30-day (configurable) distance report for one employee. Cheap to
+    compute (one grouped SQL query) and cheap to store — it's derived
+    on-demand from location_logs, which already retains 90 days."""
+
+    user_id: int
+    start_date: str
+    end_date: str
+    total_distance_meters: float
+    days: list[DailyDistanceOut]
+
+
 class TeamLivePoint(BaseModel):
     """One team member's live position for the supervisor map. status is the
     derived ACTIVE/IDLE/OFFLINE; attendance_state is the state-machine label."""

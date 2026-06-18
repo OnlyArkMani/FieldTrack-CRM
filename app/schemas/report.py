@@ -72,11 +72,14 @@ class ReportFilters(BaseModel):
         if self.start_date is not None and self.end_date is not None:
             if self.start_date > self.end_date:
                 raise ValueError("start_date must be on or before end_date")
-            # Cap the window at 31 days (defense-in-depth; the endpoint also
-            # enforces this with a 400 + X-Error-Code for the documented API
-            # contract — see reports.py).
-            if (self.end_date - self.start_date).days > 31:
-                raise ValueError("Date range cannot exceed 31 days")
+            # The 31-day business rule is owned by the endpoint (reports.py),
+            # which returns the documented 400 + X-Error-Code: DATE_RANGE_TOO_LARGE.
+            # If we also raised here, Pydantic would reject a 35-day range with a
+            # 422 BEFORE the endpoint runs, so the documented 400 contract would
+            # be unreachable. We keep only a loose sanity ceiling (1 year) as a
+            # backstop for non-HTTP callers; the real cap lives at the edge.
+            if (self.end_date - self.start_date).days > 366:
+                raise ValueError("Date range cannot exceed 366 days")
         return self
 
 
