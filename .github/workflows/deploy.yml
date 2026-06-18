@@ -179,6 +179,13 @@ jobs:
             set -e
             cd /opt/fieldtrack/app
 
+            # All compose invocations MUST pass --env-file .env.prod: compose
+            # only auto-loads a file literally named `.env`, but production
+            # secrets live in `.env.prod`. Without this, ${POSTGRES_USER},
+            # ${POSTGRES_PASSWORD}, ${REDIS_PASSWORD}, ${IMAGE_TAG} etc. all
+            # interpolate to empty strings and the whole stack comes up broken.
+            COMPOSE="docker compose --env-file .env.prod -f docker-compose.prod.yml"
+
             echo "==> Pulling latest source"
             git fetch origin main
             git reset --hard origin/main
@@ -186,39 +193,45 @@ jobs:
             echo "==> Logging in to GHCR"
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
+            echo "==> Recording the currently-running image tag (rollback target)"
+            # The tag the live app container is on right now is our known-good
+            # rollback target if the new image fails its health check below.
+            PREV_TAG=$(docker inspect --format '{{ .Config.Image }}' fieldtrack-app 2>/dev/null | sed 's/^.*://' || true)
+            echo "    previous tag: ${PREV_TAG:-<none>}"
+
             echo "==> Pulling image ${{ github.sha }}"
-            export IMAGE_TAG="${{ github.sha }}"
             docker pull ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
-            # Tag it as the local name docker-compose.prod.yml builds/refers to,
-            # so `docker compose up` uses this pre-built image instead of
-            # rebuilding from source.
+            # Tag it as the local name docker-compose.prod.yml refers to, so
+            # `docker compose up` uses this pre-built image instead of rebuilding.
             docker tag ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} fieldtrack-app:${{ github.sha }}
 
             echo "==> Running database migrations"
-            docker compose -f docker-compose.prod.yml run --rm \
-              -e IMAGE_TAG=${{ github.sha }} app alembic upgrade head
+            IMAGE_TAG=${{ github.sha }} $COMPOSE run --rm app alembic upgrade head
 
             echo "==> Rolling restart of the app service only"
             # Postgres, Redis, and Nginx are untouched — zero-downtime for
             # everything except the brief app restart (Nginx queues requests).
-            IMAGE_TAG=${{ github.sha }} docker compose -f docker-compose.prod.yml up -d --no-deps app
+            IMAGE_TAG=${{ github.sha }} $COMPOSE up -d --no-deps app
 
             echo "==> Waiting for app to become healthy"
             sleep 15
 
-            echo "==> Health check"
-            if curl -fsS http://localhost:8000/api/v1/health > /dev/null; then
+            echo "==> Health check (run INSIDE the container — port 8000 is not published to the host in prod)"
+            if IMAGE_TAG=${{ github.sha }} $COMPOSE exec -T app \
+                 python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=5).status==200 else 1)"; then
               echo "Health check passed."
             else
-              echo "Health check FAILED — rolling back to previous image"
-              PREV_TAG=$(docker images "fieldtrack-app" --format '{{.Tag}}' | grep -v "${{ github.sha }}" | grep -v latest | head -n1)
-              if [ -n "$PREV_TAG" ]; then
-                IMAGE_TAG=$PREV_TAG docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate app
+              echo "Health check FAILED — rolling back to previous image: ${PREV_TAG:-<none>}"
+              if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "${{ github.sha }}" ]; then
+                IMAGE_TAG=$PREV_TAG $COMPOSE up -d --no-deps --force-recreate app
+                echo "Rolled back to $PREV_TAG."
+              else
+                echo "No previous image tag available — manual recovery required (see RESTORE.md)."
               fi
               exit 1
             fi
 
-            echo "==> Pruning old images (keep current + previous)"
+            echo "==> Pruning old images (keep recent)"
             docker image prune -f --filter "until=24h"
 
       - name: Notify success
