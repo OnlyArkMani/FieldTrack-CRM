@@ -17,3 +17,5 @@ static/*
 !static/index.html
 secrets/
 *.log
+scripts/perf/load_test_users.json
+scripts/perf/results.json
