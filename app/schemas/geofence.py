@@ -15,6 +15,7 @@ from app.models.enums import GeofenceEventType
 Coordinate = Annotated[list[float], Field(min_length=2, max_length=2)]
 
 ShapeType = Literal["POLYGON", "CIRCLE"]
+GeofenceScope = Literal["UNIVERSAL", "TEAM"]
 CIRCLE_MIN_RADIUS_M = 50.0
 CIRCLE_MAX_RADIUS_M = 50000.0
 
@@ -39,12 +40,24 @@ class GeofenceCreate(BaseModel):
     description: str | None = Field(default=None, max_length=500)
     shape_type: ShapeType = "POLYGON"
 
+    # Visibility. UNIVERSAL (default) = all teams; TEAM = one team only.
+    scope: GeofenceScope = "UNIVERSAL"
+    team_id: int | None = None
+
     # POLYGON
     coordinates: list[Coordinate] | None = None
     # CIRCLE
     center_lat: float | None = Field(default=None, ge=-90, le=90)
     center_lng: float | None = Field(default=None, ge=-180, le=180)
     radius_meters: float | None = Field(default=None)
+
+    @model_validator(mode="after")
+    def _check_scope(self) -> "GeofenceCreate":
+        if self.scope == "TEAM" and self.team_id is None:
+            raise ValueError("team_id required when scope is TEAM")
+        if self.scope == "UNIVERSAL":
+            self.team_id = None  # silently clear — universal zones aren't scoped
+        return self
 
     @model_validator(mode="after")
     def _check_shape(self) -> "GeofenceCreate":
@@ -73,11 +86,22 @@ class GeofenceUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=120)
     description: str | None = Field(default=None, max_length=500)
     coordinates: list[Coordinate] | None = Field(default=None, min_length=3)
+    # Optional re-scoping (admin can move a zone between universal/team).
+    scope: GeofenceScope | None = None
+    team_id: int | None = None
 
     @field_validator("coordinates")
     @classmethod
     def _check(cls, coords):
         return None if coords is None else _validate_ring(coords)
+
+    @model_validator(mode="after")
+    def _check_scope(self) -> "GeofenceUpdate":
+        if self.scope == "TEAM" and self.team_id is None:
+            raise ValueError("team_id required when scope is TEAM")
+        if self.scope == "UNIVERSAL":
+            self.team_id = None
+        return self
 
 
 class GeofenceEventOut(BaseModel):
@@ -104,6 +128,10 @@ class GeofenceOut(BaseModel):
     center_lng: float | None = None
     radius_meters: float | None = None
     area_sq_meters: float | None = None  # ST_Area(zone::geography)
+    # Visibility (Change 1). team_name is joined in for the admin list only.
+    scope: GeofenceScope = "UNIVERSAL"
+    team_id: int | None = None
+    team_name: str | None = None
     is_active: bool
     created_at: datetime
 

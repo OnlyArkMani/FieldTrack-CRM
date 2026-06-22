@@ -52,6 +52,17 @@ class Geofence(Base):
     center_lat: Mapped[float | None] = mapped_column(Float)
     center_lng: Mapped[float | None] = mapped_column(Float)
     radius_meters: Mapped[float | None] = mapped_column(Float)
+    # Visibility scope (migration 0004):
+    #   'UNIVERSAL' -> every team/employee sees it and triggers events for it.
+    #   'TEAM'      -> only the assigned team_id sees/triggers it.
+    scope: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="UNIVERSAL", server_default="UNIVERSAL"
+    )
+    # NULL => universal. Set only when scope == 'TEAM'. SET NULL on team delete
+    # gracefully degrades a team zone to universal rather than dropping it.
+    team_id: Mapped[int | None] = mapped_column(
+        ForeignKey("teams.id", ondelete="SET NULL")
+    )
     created_by: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )
@@ -62,6 +73,7 @@ class Geofence(Base):
 
     __table_args__ = (
         Index("ix_geofences_zone", "zone", postgresql_using="gist"),
+        Index("idx_geofences_team_id", "team_id"),
     )
 
 

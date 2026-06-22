@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import CurrentUser, get_current_admin, get_db
+from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.geofence import (
     EmployeeVisitOut,
@@ -26,10 +27,17 @@ router = APIRouter(prefix="/geofences", tags=["geofences"])
 
 @router.get("", response_model=list[GeofenceOut])
 async def list_geofences(
-    _user: CurrentUser,
+    user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[GeofenceOut]:
-    return await GeofenceService(db).list_active()
+    """Role-scoped (Change 1):
+    - ADMIN: every zone, with team_name joined in (web manager).
+    - SUPERVISOR / EMPLOYEE: their team's zones + all universal zones.
+    """
+    service = GeofenceService(db)
+    if user.role == UserRole.ADMIN:
+        return await service.list_all_admin()
+    return await service.list_for_user(user.id, user.team_id)
 
 
 @router.get("/{geofence_id}", response_model=GeofenceDetailOut)

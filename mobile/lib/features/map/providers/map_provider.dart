@@ -81,6 +81,27 @@ final geofencesProvider = FutureProvider.autoDispose<List<Geofence>>((ref) async
   return ref.watch(mapRepositoryProvider).geofences();
 });
 
+/// Whether geofence overlays are visible on the map (Show/Hide Zones toggle).
+/// Defaults to visible.
+final showZonesProvider = StateProvider<bool>((ref) => true);
+
+/// The current employee's zone visits today (geofence_id → visit). Drives the
+/// "You visited this zone today" line in the employee zone sheet.
+final employeeZonesTodayProvider =
+    FutureProvider.autoDispose<Map<int, ZoneVisit>>((ref) async {
+  final uid = ref.watch(authProvider).user?.id;
+  if (uid == null) return const {};
+  final list = await ref.watch(mapRepositoryProvider).employeeZonesToday(uid);
+  return {for (final v in list) v.geofenceId: v};
+});
+
+/// Team presence inside a given zone today (supervisor zone sheet). Keyed by
+/// geofence id so each tapped zone fetches independently.
+final zonePresenceProvider =
+    FutureProvider.autoDispose.family<List<ZonePresence>, int>((ref, gid) async {
+  return ref.watch(mapRepositoryProvider).zonePresence(gid);
+});
+
 /// Supervisor team-live, polled every 30s. autoDispose => polling stops when
 /// the map screen is closed (no wasted requests in the background).
 final teamLiveProvider =

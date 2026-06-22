@@ -9,9 +9,10 @@ import {
   useMap,
   useMapEvents,
 } from 'react-leaflet';
-import { Circle as CircleIcon, Hexagon, Search, MapPin } from 'lucide-react';
+import { Circle as CircleIcon, Hexagon, Search, MapPin, Globe, Users } from 'lucide-react';
 
 import { useCreateGeofence } from '@/hooks/useGeofences';
+import { useTeams } from '@/hooks/useTeams';
 import { apiErrorMessage } from '@/services/api/client';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
@@ -60,6 +61,7 @@ function MapBridge({ shape, flyTarget, onSetCenter, onAddVertex, onFinishPolygon
 
 export default function GeofenceCreateModal({ open, onClose, onCreated }) {
   const create = useCreateGeofence();
+  const { data: teams = [] } = useTeams();
 
   const [shape, setShape] = useState(null); // 'CIRCLE' | 'POLYGON'
   const [center, setCenter] = useState(null); // [lat,lng]
@@ -67,6 +69,8 @@ export default function GeofenceCreateModal({ open, onClose, onCreated }) {
   const [points, setPoints] = useState([]); // [[lat,lng], ...]
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [scope, setScope] = useState('UNIVERSAL'); // 'UNIVERSAL' | 'TEAM'
+  const [teamId, setTeamId] = useState(null);
   const [error, setError] = useState(null);
 
   // Address search (Nominatim)
@@ -83,6 +87,8 @@ export default function GeofenceCreateModal({ open, onClose, onCreated }) {
     setPoints([]);
     setName('');
     setDescription('');
+    setScope('UNIVERSAL');
+    setTeamId(null);
     setError(null);
     setQ('');
     setResults([]);
@@ -118,7 +124,8 @@ export default function GeofenceCreateModal({ open, onClose, onCreated }) {
 
   const canCreate =
     name.trim().length >= 2 &&
-    (shape === 'CIRCLE' ? !!center : points.length >= 3);
+    (shape === 'CIRCLE' ? !!center : points.length >= 3) &&
+    (scope === 'UNIVERSAL' || teamId != null);
 
   const selectResult = (res) => {
     setFlyTarget([parseFloat(res.lat), parseFloat(res.lon)]);
@@ -129,7 +136,12 @@ export default function GeofenceCreateModal({ open, onClose, onCreated }) {
   const submit = async () => {
     setError(null);
     try {
-      const base = { name: name.trim(), description: description.trim() || null };
+      const base = {
+        name: name.trim(),
+        description: description.trim() || null,
+        scope,
+        team_id: scope === 'TEAM' ? teamId : null,
+      };
       const body =
         shape === 'CIRCLE'
           ? {
@@ -290,6 +302,44 @@ export default function GeofenceCreateModal({ open, onClose, onCreated }) {
             </div>
           )}
 
+          {/* Visibility (scope) */}
+          <div>
+            <div className="mb-2 text-sm font-medium text-text-primary">Visibility</div>
+            <div className="grid grid-cols-2 gap-3">
+              <ScopeCard
+                icon={Globe}
+                label="Universal"
+                hint="All teams see this"
+                selected={scope === 'UNIVERSAL'}
+                onClick={() => {
+                  setScope('UNIVERSAL');
+                  setTeamId(null);
+                }}
+              />
+              <ScopeCard
+                icon={Users}
+                label="Team"
+                hint="Assign to one team"
+                selected={scope === 'TEAM'}
+                onClick={() => setScope('TEAM')}
+              />
+            </div>
+            {scope === 'TEAM' && (
+              <select
+                value={teamId ?? ''}
+                onChange={(e) => setTeamId(e.target.value ? Number(e.target.value) : null)}
+                className="mt-3 h-10 w-full rounded-btn border border-border bg-surface px-3 text-sm text-text-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">Select a team…</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({t.member_count} member{t.member_count === 1 ? '' : 's'})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
           {/* Name + description */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -328,6 +378,27 @@ function ShapeCard({ icon: Icon, label, hint, onClick }) {
       <Icon className="h-10 w-10 text-primary" />
       <span className="text-base font-semibold text-text-primary">{label}</span>
       <span className="text-center text-xs text-text-secondary">{hint}</span>
+    </button>
+  );
+}
+
+// Radio-style card for the Visibility selector. Amber border when selected.
+function ScopeCard({ icon: Icon, label, hint, selected, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-3 rounded-card border-2 p-3 text-left transition-colors ${
+        selected
+          ? 'border-primary bg-primary/5'
+          : 'border-border hover:border-primary/50'
+      }`}
+    >
+      <Icon className={`h-6 w-6 shrink-0 ${selected ? 'text-primary' : 'text-text-secondary'}`} />
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-text-primary">{label}</span>
+        <span className="block truncate text-xs text-text-secondary">{hint}</span>
+      </span>
     </button>
   );
 }

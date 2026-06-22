@@ -7,7 +7,7 @@ import {
   Tooltip,
   useMap,
 } from 'react-leaflet';
-import { Plus, Trash2, Circle as CircleIcon, Hexagon } from 'lucide-react';
+import { Plus, Trash2, Circle as CircleIcon, Hexagon, Globe, Users } from 'lucide-react';
 
 import { useGeofences, useDeleteGeofence } from '@/hooks/useGeofences';
 import { apiErrorMessage } from '@/services/api/client';
@@ -41,6 +41,24 @@ function FlyController({ target }) {
   return null;
 }
 
+// Scope indicator: Universal (globe, grey) or Team (people, amber + name).
+function ScopeBadge({ g }) {
+  if (g.scope === 'TEAM') {
+    return (
+      <div className="mt-0.5 flex items-center gap-1 text-xs font-medium text-primary">
+        <Users className="h-3 w-3 shrink-0" />
+        <span className="truncate">{g.team_name || `Team ${g.team_id}`}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-0.5 flex items-center gap-1 text-xs text-text-secondary">
+      <Globe className="h-3 w-3 shrink-0" />
+      <span>Universal</span>
+    </div>
+  );
+}
+
 function ZoneTooltip({ g }) {
   const area =
     g.shape_type === 'CIRCLE'
@@ -59,10 +77,31 @@ function ZoneTooltip({ g }) {
 }
 
 export default function GeofencesPage() {
-  const { data: geofences = [], isLoading } = useGeofences();
+  const { data: allGeofences = [], isLoading } = useGeofences();
   const del = useDeleteGeofence();
   const [creating, setCreating] = useState(false);
   const [flyTarget, setFlyTarget] = useState(null);
+  // Filter: 'ALL' | 'UNIVERSAL' | `team:<id>`
+  const [scopeFilter, setScopeFilter] = useState('ALL');
+
+  // Distinct teams present among the zones (id → name), for the filter dropdown.
+  const teamOptions = useMemo(() => {
+    const map = new Map();
+    for (const g of allGeofences) {
+      if (g.scope === 'TEAM' && g.team_id != null) {
+        map.set(g.team_id, g.team_name || `Team ${g.team_id}`);
+      }
+    }
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [allGeofences]);
+
+  const geofences = useMemo(() => {
+    if (scopeFilter === 'ALL') return allGeofences;
+    if (scopeFilter === 'UNIVERSAL')
+      return allGeofences.filter((g) => g.scope !== 'TEAM');
+    const id = Number(scopeFilter.slice(5)); // 'team:<id>'
+    return allGeofences.filter((g) => g.team_id === id);
+  }, [allGeofences, scopeFilter]);
 
   const center = useMemo(() => {
     const g = geofences[0];
@@ -124,8 +163,22 @@ export default function GeofencesPage() {
 
         <div className="w-full lg:w-80">
           <Card padded={false}>
-            <div className="border-b border-border px-4 py-3 text-sm font-semibold text-text-primary">
-              {geofences.length} zone{geofences.length === 1 ? '' : 's'}
+            <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+              <span className="text-sm font-semibold text-text-primary">
+                {geofences.length} zone{geofences.length === 1 ? '' : 's'}
+              </span>
+              <select
+                value={scopeFilter}
+                onChange={(e) => setScopeFilter(e.target.value)}
+                className="h-8 rounded-btn border border-border bg-surface px-2 text-xs text-text-primary focus:border-primary focus:outline-none"
+                title="Filter by scope"
+              >
+                <option value="ALL">All</option>
+                <option value="UNIVERSAL">Universal</option>
+                {teamOptions.map(([id, label]) => (
+                  <option key={id} value={`team:${id}`}>{label}</option>
+                ))}
+              </select>
             </div>
             {isLoading ? (
               <Spinner label="Loading…" className="py-8" />
@@ -157,6 +210,7 @@ export default function GeofencesPage() {
                           ? `Circle · ${Math.round(g.radius_meters)} m radius`
                           : `Polygon · ${g.coordinates.length - 1} vertices`}
                       </div>
+                      <ScopeBadge g={g} />
                     </div>
                     <Button
                       size="sm"
