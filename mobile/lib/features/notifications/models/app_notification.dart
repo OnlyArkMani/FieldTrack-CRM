@@ -46,10 +46,19 @@ enum AppNotificationType {
         AppNotificationType.endWorkReminder => Icons.bedtime_rounded,
         AppNotificationType.gpsDisabled => Icons.location_off_rounded,
         AppNotificationType.syncFailed => Icons.sync_problem_rounded,
-        AppNotificationType.geofenceEnter => Icons.login_rounded,
-        AppNotificationType.geofenceExit => Icons.logout_rounded,
+        // Location pin + arrow-in / arrow-out (zone entry/exit).
+        AppNotificationType.geofenceEnter => Icons.where_to_vote_rounded,
+        AppNotificationType.geofenceExit => Icons.wrong_location_rounded,
         AppNotificationType.adminAnnouncement => Icons.campaign_rounded,
         AppNotificationType.unknown => Icons.notifications_rounded,
+      };
+
+  /// Optional type-specific accent (null = use the default amber/grey accent).
+  /// Geofence entry reads green ("you're in"), exit reads coral ("you left").
+  Color? get accentColor => switch (this) {
+        AppNotificationType.geofenceEnter => const Color(0xFF34C759), // green
+        AppNotificationType.geofenceExit => const Color(0xFFE8645A), // coral
+        _ => null,
       };
 }
 

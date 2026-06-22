@@ -131,7 +131,11 @@ class _NotificationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.appColors;
     final scheme = Theme.of(context).colorScheme;
-    final accent = item.isRead ? colors.textSecondary : scheme.primary;
+    // Type-specific accent (e.g. geofence enter=green / exit=coral) takes
+    // priority while unread; read rows mute to the secondary text colour.
+    final accent = item.isRead
+        ? colors.textSecondary
+        : (item.type.accentColor ?? scheme.primary);
 
     return Dismissible(
       key: ValueKey(item.id),
