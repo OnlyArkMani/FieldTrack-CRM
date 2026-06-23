@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -12,6 +14,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -39,7 +42,7 @@ android {
     // rejected by the Play Console.
     val keystorePropsFile = rootProject.file("key.properties")
     val hasReleaseKeystore = keystorePropsFile.exists()
-    val releaseProps = java.util.Properties().apply {
+    val releaseProps = Properties().apply {
         if (hasReleaseKeystore) keystorePropsFile.inputStream().use { load(it) }
     }
     if (hasReleaseKeystore) {
@@ -78,6 +81,7 @@ android {
 
 dependencies {
     implementation("androidx.multidex:multidex:2.0.1")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
 kotlin {
