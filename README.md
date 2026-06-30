@@ -1,10 +1,10 @@
-# FieldTrack — Employee Tracking & Attendance System
+# FieldTrack CRM — Employee Tracking, Attendance & Field Sales System
 
 <div align="center">
 
-![FieldTrack](https://img.shields.io/badge/FieldTrack-Employee%20Tracking-4F46E5?style=for-the-badge&logo=fastapi&logoColor=white)
+![FieldTrack CRM](https://img.shields.io/badge/FieldTrack%20CRM-Field%20Sales%20%26%20Tracking-F5A623?style=for-the-badge&logo=fastapi&logoColor=white)
 
-**Production-grade employee tracking and attendance system with real-time GPS, polygon geofencing, offline-first sync, FCM notifications, and comprehensive reporting — engineered for 15-100 employees on a single VPS without architecture changes.**
+**Production-grade employee tracking, attendance management, and field CRM — built for agricultural sales teams. Real-time GPS, polygon geofencing, offline-first sync, FCM notifications, farmer/customer database, visit planning, lead pipeline, and daily sales reporting — engineered for 15-100 employees on a single VPS without architecture changes.**
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
@@ -18,7 +18,7 @@
 
 [Documentation](#documentation) | [Quick Start](#quick-start) | [API Reference](#api-endpoints) | [Architecture](#architecture) | [Deployment](#deployment)
 
-**GitHub:** https://github.com/OnlyArkMani/FieldTrack-Final
+**GitHub:** https://github.com/OnlyArkMani/FieldTrack-CRM
 
 </div>
 
@@ -28,89 +28,105 @@
 
 - [Overview](#overview)
 - [Key Features](#key-features)
+- [CRM Extension Modules](#crm-extension-modules)
 - [Technology Stack](#technology-stack)
 - [Quick Start](#quick-start)
 - [Architecture](#architecture)
-- [Scalability](#scalability)
 - [API Endpoints](#api-endpoints)
 - [Deployment](#deployment)
 - [Documentation](#documentation)
 - [Project Structure](#project-structure)
-- [Contributing](#contributing)
+- [Roadmap](#roadmap)
 
 ---
 
 ## Overview
 
-**FieldTrack** is a full-stack, production-grade employee tracking and attendance system. It combines a FastAPI backend with async PostgreSQL and Redis, a Flutter mobile app with offline-first architecture, a React admin dashboard with real-time WebSocket updates, and integrated geofencing via PostGIS — all containerised and deployable to a single 2 vCPU / 4 GB RAM VPS.
+**FieldTrack CRM** is a full-stack, production-grade system combining employee attendance tracking with a field sales CRM — purpose-built for agricultural sales teams. It ships a FastAPI backend with async PostgreSQL and Redis, a Flutter mobile app with offline-first architecture, and a React admin dashboard with real-time WebSocket updates.
 
-Designed for small-to-medium teams (15-100 employees) with zero architecture changes required to scale within that range. Includes automatic daily backups to Backblaze B2, audit logging for compliance, and comprehensive reporting (CSV/Excel/PDF exports).
+The core tracking layer handles attendance, GPS, geofencing, and reporting. The CRM layer adds a farmer/customer database, pre-day visit planning, in-field visit execution with livestock profiles and order capture, a Hot/Warm/Cold lead pipeline, and auto-generated Daily Sales Reports (DSR) on attendance end.
+
+All of this runs containerised on a single 2 vCPU / 4 GB RAM VPS with zero architecture changes needed to scale from 15 to 100 employees.
 
 ---
 
 ## Key Features
 
-### Real-Time GPS Tracking
-
-- Live location updates with hybrid cadence: 2-5 minutes when moving, 10-15 minutes when stationary
-- Battery-aware tracking that adjusts frequency based on device battery level
-- Mock GPS detection flagged (not hard-blocked) for edge cases
-- Offline tile caching via OpenStreetMap — employees can view maps without internet
-- Sync-lag metrics from device capture time vs. server arrival timestamp
-
 ### Attendance State Machine
-
 - 4-state workflow: START → BREAK → RESUME → END
-- Work summary on end-of-day (lightweight text field for notes)
-- Daily reminders (9 AM clock-in, 6 PM clock-out, 11 PM cleanup)
+- Work summary notes on end-of-day
+- Daily reminders (9 AM clock-in, 6 PM clock-out)
 - Session tracking with millisecond precision for compliance
+- DSR auto-generated when employee submits END attendance
+
+### Real-Time GPS Tracking
+- Live location updates with hybrid cadence: 2-5 minutes when moving, 10-15 minutes when stationary
+- Battery-aware tracking adjusts frequency based on device battery level
+- Mock GPS flagged (not hard-blocked), visible to admin
+- Offline tile caching via OpenStreetMap — maps work without internet
+- Sync-lag metrics from device capture time vs. server arrival timestamp
+- Configurable GPS interval per team (admin-controlled, Module 6)
 
 ### Geofencing and Polygon Detection
-
-- Polygon geofencing (not circles) for precise office/site boundaries via PostGIS ST_Contains()
+- Polygon geofencing (not circles) via PostGIS ST_Contains()
 - Automatic zone entry/exit detection with GIST spatial index
-- Event logging for compliance audits and reports
-- Distance calculations from location trails
-
-### Reports and Analytics
-
-- CSV, Excel, PDF exports with configurable date ranges
-- Attendance summaries by employee, team, and date
-- Distance and zone-time analytics with custom report types
-- Async generation with polling and auto-cleanup after retention period
+- Event logging for compliance audits
+- Distance and time-in-zone analytics in reports
 
 ### Push Notifications (Firebase Cloud Messaging)
-
 - Attendance reminders (clock-in/out prompts)
 - GPS alerts (zone entry/exit, low battery, no internet)
 - Admin announcements broadcast to all employees
-- Scheduled delivery respecting business hours and timezones
+- Scheduled delivery respecting business hours
+
+### Reports and Analytics
+- CSV, Excel, PDF exports with configurable date ranges
+- Attendance summaries by employee, team, and date
+- Distance and zone-time analytics
+- Async generation with polling and auto-cleanup
 
 ### Offline-First Architecture
-
 - Local SQLite queue on mobile with hybrid sync cadence
 - Deduplication via Redis (6-hour window) prevents duplicate processing
-- Async validation — failed syncs are retried without blocking the UI
+- Async validation — failed syncs retry without blocking the UI
 - Conflict resolution for offline changes vs. server updates
 
 ### Role-Based Access Control
-
-- Admin (web-only) — full control, user management, reports, dashboards
-- Supervisor (mobile) — team-scoped view, attendance records, team analytics
-- Employee (mobile) — personal attendance, GPS tracking, profile settings
+- Admin (web-only) — full control, user management, reports, dashboards, CRM oversight
+- Supervisor (mobile + web read) — team-scoped view, attendance, CRM pipeline
+- Employee (mobile) — attendance, GPS, farmer visits, leads, DSR
 
 ### Dark and Light Theme
-
 - System theme toggle from the Profiles tab (persistent across sessions)
-- Warm color palette (Amber primary, Soft Purple secondary) designed for accessibility
-- Smooth transitions across all screens (350ms animations)
+- Warm color palette (Amber primary, Soft Purple secondary)
+- Smooth 350ms transitions across all screens
 
-### Mobile-First Design (Android)
+---
 
-- Low-end device support — tested on budget Android phones (min SDK 21)
-- Location and timestamp based attendance (no biometrics)
-- Icon-driven UI with minimal text
-- Full offline operation — all core features work without internet
+## CRM Extension Modules
+
+### Module 1 — Farmer / Customer Database
+Central farmer/customer entity with contact details, village/district, GPS coordinates (set on first visit), cattle count, current feed brand and price, and team assignment. All field users see their team's farmers; admin sees all.
+
+### Module 2 — Visit Planning (Pre-Day)
+Employees plan their field visits the day before: select target farmers, estimated visit time, and purpose. Supervisors can view their team's pending plans and flag missing submissions. Plans feed directly into Module 3 execution.
+
+### Module 3 — Field Visit Execution
+On-field visit flow:
+- **Check-in** with GPS location — warning + remark if outside farmer's expected location (no hard block)
+- **Meeting notes** — structured or free-text notes during the visit
+- **Livestock profile** — cattle count, feed consumption, health observations, product interest
+- **Order capture** — product selection, quantity, price per bag, total (manager approval deferred to v2)
+- **Complete visit** — status set, duration recorded, lead tag updated
+
+### Module 4 — Lead Management (Hot / Warm / Cold)
+Every farmer carries a lead status. Field employees update it during or after a visit. Supervisors see the full team pipeline with counts by status. Follow-ups can be scheduled with a target date and notes. Admin views the org-wide pipeline with filters.
+
+### Module 5 — Daily Sales Report (DSR)
+Auto-generated when an employee submits END attendance. The DSR captures: total visits completed, farmers met, orders placed, lead status changes, total order value, and end-of-day notes. Supervisors and admin can add manager comments. DSRs are archived by date and exportable.
+
+### Module 6 — Configurable GPS Interval
+Admins set per-team GPS reporting intervals (moving cadence and stationary cadence) from the dashboard. Settings are Redis-cached (24h TTL) and pulled by mobile on next sync. Overrides global defaults without a code deploy.
 
 ---
 
@@ -123,13 +139,13 @@ Designed for small-to-medium teams (15-100 employees) with zero architecture cha
 | FastAPI | 0.115+ | Async web framework with auto-generated OpenAPI docs |
 | Python | 3.11+ | Async throughout via asyncpg + SQLAlchemy 2.0 |
 | PostgreSQL | 15 + PostGIS | Spatial queries for geofencing; async via asyncpg |
-| Redis | 7 | Cache, session management, sync deduplication |
+| Redis | 7 | Cache, session management, sync deduplication, GPS config |
 | APScheduler | 3.11+ | In-process job scheduler (no Celery dependency) |
 | Alembic | 1.15+ | Database migrations with async support |
 | PyJWT | 2.10+ | JWT token handling with separate access/refresh secrets |
 | Passlib + Bcrypt | 1.7.4 | Password hashing (12 rounds) |
 
-### Frontend
+### Frontend (Admin Web)
 
 | Component | Version | Purpose |
 |-----------|---------|---------|
@@ -174,7 +190,6 @@ Designed for small-to-medium teams (15-100 employees) with zero architecture cha
 ## Quick Start
 
 ### Prerequisites
-
 - Docker and Docker Compose v2.0 or later
 - Git
 - For local development: Python 3.11+, Node.js 18+, Flutter 3.22+
@@ -183,8 +198,8 @@ Designed for small-to-medium teams (15-100 employees) with zero architecture cha
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/OnlyArkMani/FieldTrack-Final.git
-cd FieldTrack-Final
+git clone https://github.com/OnlyArkMani/FieldTrack-CRM.git
+cd FieldTrack-CRM
 
 # 2. Create environment file
 cp .env.example .env
@@ -201,29 +216,8 @@ curl http://localhost:8090/api/v1/health
 # {"status":"ok","env":"development"}
 
 # 6. Open dashboard
-# Admin web: http://localhost:8090 (will prompt for login)
-# API docs: http://localhost:8090/api/v1/docs
-```
-
-### Create Admin User
-
-```bash
-# Inside the app container (one-time)
-docker compose exec app python -c "
-from app.core.database import engine
-from sqlalchemy.orm import Session
-from app.models.user import User
-from app.core.security import hash_password
-import asyncio
-
-async def create_admin():
-    async with engine.begin() as conn:
-        result = await conn.execute('...')  # insert user
-        await conn.commit()
-
-asyncio.run(create_admin())
-"
-# Or use the app's POST /api/v1/auth/signup endpoint (if enabled)
+# Admin web: http://localhost:8090
+# API docs:  http://localhost:8090/api/v1/docs
 ```
 
 ---
@@ -247,7 +241,7 @@ REDIS_URL=redis://:PASSWORD@redis:6379/0
 **JWT & Auth**
 ```env
 JWT_ACCESS_SECRET=<openssl rand -hex 32>
-JWT_REFRESH_SECRET=<openssl rand -hex 32>  # DIFFERENT from access
+JWT_REFRESH_SECRET=<openssl rand -hex 32>   # DIFFERENT from access
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=15
 REFRESH_TOKEN_EXPIRE_DAYS=7
@@ -259,453 +253,313 @@ FCM_SERVICE_ACCOUNT_FILE=/run/secrets/fcm-service-account.json
 FCM_PROJECT_ID=your-firebase-project-id
 ```
 
-> **FCM Setup Note:** Download the Firebase service account JSON from Firebase Console → Project Settings → Service Accounts → Generate New Private Key. Place it at the path above. Also place `google-services.json` (Firebase Console → Project Settings → Android app) at `mobile/android/app/google-services.json` before building the Flutter APK — this file is excluded from git.
+> **FCM Setup:** Download the service account JSON from Firebase Console → Project Settings → Service Accounts → Generate New Private Key. Place `google-services.json` at `mobile/android/app/google-services.json` before building the Flutter APK — this file is excluded from git.
 
 **Reports**
 ```env
 REPORT_STORAGE_DIR=/srv/fieldtrack/reports
-REPORT_RETENTION_MINUTES=60  # Auto-cleanup after 1 hour
+REPORT_RETENTION_MINUTES=60
 ```
 
 **App & Server**
 ```env
-APP_ENV=development              # or staging, production
-DEBUG=true                       # MUST be false in prod
-NGINX_HTTP_PORT=8090            # 8080/8081 unavailable
-UVICORN_WORKERS=2               # Match vCPU count
+APP_ENV=development
+DEBUG=true                  # MUST be false in prod
+NGINX_HTTP_PORT=8090        # 8080/8081 unavailable
+UVICORN_WORKERS=2           # Match vCPU count
 ```
 
 See `.env.example` for all options.
 
 ---
 
-## Project Structure
+## Architecture
 
-```
-FieldTrack/
-├── README.md                          # This file
-├── ARCHITECTURE.md                    # Backend design decisions
-├── DEPLOYMENT_CHECKLIST.md            # Production deployment steps
-├── RESTORE.md                         # Backup restoration procedure
-│
-├── app/                               # FastAPI backend
-│   ├── main.py                        # Entry point, routes registration
-│   ├── core/                          # Infrastructure
-│   │   ├── config.py                  # Pydantic settings with validation
-│   │   ├── security.py                # JWT, bcrypt, rate limiting
-│   │   ├── database.py                # Async SQLAlchemy session factory
-│   │   ├── redis.py                   # Async Redis client & key registry
-│   │   └── dependencies.py            # FastAPI dependency injection
-│   ├── api/v1/                        # HTTP routes (zero business logic)
-│   │   ├── auth.py                    # Login, refresh, logout, password reset
-│   │   ├── employees.py               # Employee CRUD, profile
-│   │   ├── teams.py                   # Team management, supervisor assignment
-│   │   ├── attendance.py              # Clock in/out, state machine
-│   │   ├── location.py                # GPS ping submission
-│   │   ├── geofencing.py              # Zone creation, entry/exit events
-│   │   ├── notifications.py           # FCM subscription, admin broadcast
-│   │   ├── devices.py                 # Device info, FCM token registration
-│   │   ├── reports.py                 # CSV/Excel/PDF export endpoints
-│   │   ├── sync.py                    # Offline queue batch processing
-│   │   └── ws.py                      # WebSocket for admin live dashboard
-│   ├── services/                      # Business logic & transactions
-│   │   ├── attendance.py              # State validation, session creation
-│   │   ├── location.py                # GPS processing, geofence check
-│   │   ├── sync.py                    # Dedup, conflict resolution
-│   │   ├── reports.py                 # Export generation (CSV/Excel/PDF)
-│   │   └── notification.py            # FCM message building
-│   ├── repositories/                  # Database queries (zero commits)
-│   ├── models/                        # SQLAlchemy ORM definitions
-│   ├── schemas/                       # Pydantic request/response models
-│   ├── workers/                       # APScheduler jobs
-│   │   ├── attendance_reminder.py     # Daily clock-in/out reminders
-│   │   ├── geofence_processor.py      # Zone event handling
-│   │   ├── fcm_retry.py               # Failed notification retries
-│   │   └── sync_cleanup.py            # Prune old location_logs, sync_queue
-│   └── utils/                         # Pure helpers (haversine, export builders)
-│
-├── admin-web/                         # React admin dashboard
-│   ├── src/
-│   │   ├── App.jsx                    # Root component, router
-│   │   ├── pages/                     # Route-level pages
-│   │   │   ├── Dashboard.jsx          # Live employee map + status
-│   │   │   ├── Employees.jsx          # Employee table, bulk actions
-│   │   │   ├── Reports.jsx            # Export builder & history
-│   │   │   └── Settings.jsx           # App configuration
-│   │   ├── components/                # Reusable UI components
-│   │   └── hooks/                     # Custom React hooks
-│   ├── vite.config.js
-│   ├── tailwind.config.js
-│   └── package.json
-│
-├── mobile/                            # Flutter mobile app (Android-first)
-│   ├── lib/
-│   │   ├── main.dart                  # App entry, theme setup
-│   │   ├── core/
-│   │   │   ├── location/              # GPS service wrapper
-│   │   │   ├── storage/               # SQLite queue, preferences
-│   │   │   └── api/                   # HTTP client, retry logic
-│   │   ├── features/
-│   │   │   ├── attendance/            # Clock-in/out screens
-│   │   │   ├── location/              # Map view, GPS status
-│   │   │   ├── reports/               # Export preview/download
-│   │   │   └── profile/               # Settings, dark/light toggle
-│   │   └── widgets/                   # Reusable Flutter widgets
-│   ├── android/                       # Android-specific config
-│   │   └── app/google-services.json   # Firebase config (not in git)
-│   ├── pubspec.yaml
-│   └── pubspec.lock
-│
-├── nginx/
-│   ├── nginx.conf                     # Dev/staging proxy config
-│   └── nginx.prod.conf                # Production with TLS
-│
-├── postgres/                          # Database utilities
-│   └── init.sql                       # PostGIS setup (if needed)
-│
-├── alembic/                           # Database migrations
-│   ├── env.py                         # Async migration runner
-│   ├── script.py.mako                 # Migration template
-│   └── versions/
-│       └── 0001_initial_schema.py     # Initial schema with PostGIS
-│
-├── monitoring/                        # Prometheus + Grafana + Uptime Kuma
-│   └── docker-compose.monitoring.yml
-│
-├── scripts/
-│   ├── server_setup.sh                # VPS first-time setup
-│   ├── ssl_setup.sh                   # Let's Encrypt + certbot
-│   ├── backup.sh                      # Automated backup to B2
-│   ├── build_flutter.sh               # Flutter Android split APKs
-│   └── build_admin.sh                 # Admin web build & deploy
-│
-├── tests/                             # Pytest test suite
-│   ├── conftest.py                    # Fixtures, test DB
-│   ├── test_auth.py
-│   ├── test_attendance.py
-│   └── test_sync.py
-│
-├── docs/
-│   └── REDIS_KEYS.md                  # Complete Redis schema reference
-│
-├── docker-compose.yml                 # Development (postgres, redis, app, nginx)
-├── docker-compose.prod.yml            # Production (with health checks, limits)
-├── Dockerfile                         # Multi-stage, non-root, python:3.11-slim
-├── .env.example                       # Template environment file
-├── .env.prod.example                  # Production template
-├── requirements.txt                   # Python dependencies (pinned majors)
-└── .gitignore
-```
+### Async Throughout
+- FastAPI + asyncpg + SQLAlchemy 2.0 — async/await everywhere
+- Zero blocking I/O on critical paths (location pings, sync batches, visit saves)
+- Scales to 100 employees on 2 vCPU without Celery or message brokers
+
+### Database Design (23 Tables)
+
+**Core tracking:** `users`, `teams`, `attendance`, `attendance_sessions`, `location_logs`, `geofences`, `geofence_events`, `notifications`, `sync_queue`, `device_info`, `audit_logs`, `settings`
+
+**CRM extension:** `farmers`, `visit_plans`, `visit_plan_items`, `visits`, `visit_notes`, `livestock_profiles`, `visit_orders`, `leads`, `follow_ups`, `daily_reports`, `gps_config`
+
+Key decisions: PostGIS for spatial queries, partial indexes on hot paths, native Postgres enums for domain states, timestamptz everywhere (UTC server, clients localize).
+
+### Redis Strategy
+- Never source of truth — every key is reconstructible from Postgres
+- Every key has a TTL — volatile-lru eviction, graceful degradation
+- Refresh tokens stored as sha256 hashes (never raw credentials)
+- Sync deduplication via atomic SET NX
+- GPS config cached per team (24h TTL)
+
+### Security
+- JWT with separate access (15 min) + refresh (7 day) secrets
+- Refresh token rotation with session theft detection
+- Rate limiting: 30 req/s per IP (Nginx) + per-endpoint limits (app)
+- Bcrypt password hashing (12 rounds)
+- Non-root Docker — runs as `app:app`
+- Audit trail for login, attendance changes, role changes
 
 ---
 
 ## API Endpoints
 
 ### Authentication
-- `POST /api/v1/auth/signup` — Create user account
 - `POST /api/v1/auth/login` — Get access + refresh tokens
 - `POST /api/v1/auth/refresh` — Rotate access token
 - `POST /api/v1/auth/logout` — Revoke tokens
-- `POST /api/v1/auth/forgot-password` — Initiate password reset
+- `POST /api/v1/auth/forgot-password` / `reset-password`
+- `GET  /api/v1/auth/me` — Current user profile
 
 ### Employees & Teams
-- `GET /api/v1/employees` — List all employees (admin) / own profile (employee)
-- `PUT /api/v1/employees/{id}` — Update employee
-- `GET /api/v1/teams` — List teams
-- `POST /api/v1/teams` — Create team (admin only)
-- `PUT /api/v1/teams/{id}` — Update team assignment
+- `GET/POST /api/v1/employees` — List / create employees
+- `GET/PUT  /api/v1/employees/{id}` — Get / update employee
+- `GET/POST /api/v1/teams` — List / create teams
+- `PUT      /api/v1/teams/{id}` — Update team assignment
 
 ### Attendance
 - `POST /api/v1/attendance/start` — Begin work day
 - `POST /api/v1/attendance/break` — Begin break
 - `POST /api/v1/attendance/resume` — Resume after break
-- `POST /api/v1/attendance/end` — End work day (with optional summary)
-- `GET /api/v1/attendance/current` — Current session state
-- `GET /api/v1/attendance/history` — Historical attendance records
+- `POST /api/v1/attendance/end` — End work day (triggers DSR auto-generation)
+- `GET  /api/v1/attendance/today` — Current session state
+- `GET  /api/v1/attendance/history` — Historical records
 
 ### Location & Geofencing
-- `POST /api/v1/locations/ping` — Submit GPS location (mobile)
-- `GET /api/v1/locations/live` — Get all employees' current location (admin, cached in Redis)
+- `POST /api/v1/location/batch` — Submit GPS pings (mobile)
+- `GET  /api/v1/location/live/{user_id}` — Last known position
+- `GET  /api/v1/location/team-live` — All employees' current position (admin)
 - `POST /api/v1/geofences` — Create zone polygon
-- `GET /api/v1/geofences` — List all zones
-- `GET /api/v1/geofences/{id}/events` — Zone entry/exit log
+- `GET  /api/v1/geofences` — List all zones
+- `GET  /api/v1/geofences/{id}/events` — Zone entry/exit log
 
-### Sync (Mobile Offline Queue)
-- `POST /api/v1/sync/batch` — Submit batch of offline changes
-- `GET /api/v1/sync/status` — Check sync queue status
+### CRM — Farmers (Module 1)
+- `GET/POST /api/v1/farmers` — List (team-scoped) / create farmer
+- `GET/PUT  /api/v1/farmers/{id}` — Get / update farmer
+- `GET      /api/v1/farmers/{id}/visits` — Farmer visit history
+- `GET      /api/v1/farmers/{id}/lead` — Current lead status
 
-### Reports
-- `POST /api/v1/reports/attendance` — Export attendance CSV/Excel/PDF
-- `POST /api/v1/reports/location` — Export location history
-- `GET /api/v1/reports` — List generated exports
-- `GET /api/v1/reports/{id}` — Download export file
+### CRM — Visit Planning (Module 2)
+- `GET/POST /api/v1/visit-plans/my` — Get or create today's plan
+- `PATCH    /api/v1/visit-plans/my/items/{id}` — Update plan item status
+- `GET      /api/v1/visit-plans/team` — Supervisor: team plans
+- `GET      /api/v1/visit-plans/pending-submissions` — Supervisor: missing plans
 
-### Notifications
-- `POST /api/v1/notifications/subscribe` — Register FCM token
-- `POST /api/v1/notifications/broadcast` — Send admin announcement (admin only)
+### CRM — Field Visits (Module 3)
+- `POST /api/v1/visits/check-in` — Start visit with GPS location
+- `GET  /api/v1/visits/active` — Current open visit
+- `PUT  /api/v1/visits/{id}/notes` — Upsert meeting notes
+- `PUT  /api/v1/visits/{id}/livestock` — Upsert livestock profile
+- `POST /api/v1/visits/{id}/orders` — Add order to visit
+- `POST /api/v1/visits/{id}/complete` — Complete visit
 
-### WebSocket (Admin Live Dashboard)
-- `WS /api/v1/ws/admin-live` — Real-time employee location stream (admin only)
+### CRM — Leads (Module 4)
+- `GET /api/v1/leads` — Lead pipeline (team-scoped)
+- `PUT /api/v1/leads/{farmer_id}` — Update lead status (Hot/Warm/Cold)
+- `GET /api/v1/leads/pipeline` — Pipeline summary with counts
+- `GET /api/v1/leads/team/{team_id}` — Supervisor: team lead view
+- `POST    /api/v1/follow-ups` — Schedule follow-up
+- `GET/PUT /api/v1/follow-ups/{id}` — Get / update follow-up
 
-See `http://localhost:8090/api/v1/docs` (Swagger UI) for complete endpoint documentation with request/response schemas.
+### CRM — Daily Sales Report (Module 5)
+- `GET  /api/v1/daily-reports/my` — Employee's own DSRs
+- `GET  /api/v1/daily-reports/team` — Supervisor: team DSRs
+- `GET  /api/v1/daily-reports/{id}` — Full DSR with visit breakdown
+- `POST /api/v1/daily-reports/{id}/comment` — Manager comment
+- `GET  /api/v1/daily-reports/archive` — Date-range archive
 
----
+### GPS Config (Module 6)
+- `GET /api/v1/gps-config/my` — Employee: get team's GPS interval config
+- `GET /api/v1/gps-config/team/{team_id}` — Admin/supervisor view
+- `PUT /api/v1/gps-config/team/{team_id}` — Admin: update interval (Redis-cached)
 
-## Key Workflows
+### Reports & Exports
+- `POST /api/v1/reports/generate` — Async export (CSV/Excel/PDF)
+- `GET  /api/v1/reports/{id}/status` — Poll generation status
+- `GET  /api/v1/reports/{id}/download` — Download export file
 
-### Attendance Workflow
-1. Employee taps **START** (9 AM) → `attendance_sessions` created with status `STARTED`
-2. Optional: Tap **BREAK** → status becomes `ON_BREAK`, pause time recorded
-3. Tap **RESUME** → status becomes `RESUMED`, pause duration calculated
-4. Tap **END** (5 PM) → status becomes `ENDED`, total work hours calculated, optional summary notes saved
-5. Admin can view daily summary per employee in reports
+### Sync & Notifications
+- `POST /api/v1/sync/attendance-sessions` — Submit offline attendance batch
+- `GET  /api/v1/sync/status` — Sync queue status
+- `POST /api/v1/notifications/broadcast` — Admin announcement
+- `POST /api/v1/devices/token` — Register FCM token
 
-**State Machine Validation** (enforced in Redis):
-```
-START → BREAK → RESUME → BREAK → RESUME → ... → END
-  ❌ Cannot BREAK before START
-  ❌ Cannot RESUME without BREAK
-  ❌ Cannot END during BREAK
-```
+### WebSocket
+- `WS /api/v1/ws/admin-live` — Real-time employee location stream (admin only, 15s heartbeat)
 
-### GPS & Geofencing Workflow
-1. Employee's phone pings location every 2-5 min (moving) or 10-15 min (stationary)
-2. Device battery level + network status recorded on each ping
-3. Server stores ping in `location_logs` + Redis cache (2-hour TTL for last-known position)
-4. Every ping checked against all `geofences` polygons via PostGIS `ST_Contains()`
-5. If zone entry/exit detected → FCM alert sent (async, background)
-6. Admin live map shows all employees, last known position, status (Active/Idle/Offline/Low Battery)
-
-### Offline Sync Workflow
-1. Mobile device queues changes (attendance, location) in SQLite when offline
-2. When connectivity restored, app submits entire queue as **batch** (`POST /api/v1/sync/batch`)
-3. Server deduplicates via Redis `SET NX` on hash of (user_id, timestamp, entity_id)
-4. Duplicates are skipped silently; batch returns success
-5. Conflicts checked: if attendance already exists for same date, device version accepted if later
-6. All changes committed atomically to Postgres; Redis dedup key expires after 6 hours
-
-### Report Export Workflow
-1. Admin chooses date range + report type (attendance, location, distance zones)
-2. Server queries Postgres + generates file (CSV/Excel/PDF)
-3. File stored in named volume (`reports_data`) with TTL marker in Redis
-4. Admin downloads via S3-like presigned URL or inline
-5. Files auto-prune after `REPORT_RETENTION_MINUTES` (default 60)
+Full schema at `http://localhost:8090/api/v1/docs` (Swagger UI).
 
 ---
 
-## Architecture
+## Project Structure
 
-### Async Throughout
-- **FastAPI + asyncpg + SQLAlchemy 2.0** — async/await everywhere
-- **Zero blocking I/O** on critical paths (location pings, sync batches)
-- **Scales to 100 employees on 2 vCPU** without Celery or message brokers
-
-### Database Design
-- **PostGIS for spatial queries** — polygon geofencing without app-level math
-- **Partial indexes** — only index active rows (pending syncs, FCM tokens)
-- **Native Postgres enums** for domain states (role, attendance status, etc.)
-- **Timestamptz everywhere** (UTC server time, mobile clients localize)
-- **Audit logs** (critical events only: login, attendance changes, role changes)
-
-### Redis Strategy
-- **Never source of truth** — every key is reconstructible from Postgres
-- **Every key has a TTL** — volatile-lru eviction policy, graceful degradation
-- **Session fingerprinting** — refresh tokens stored as sha256 hashes (never raw credentials)
-- **Deduplication** — sync batches deduplicated via atomic SET NX
-
-### Security
-- **JWT with separate secrets** — access (15 min) + refresh (7 days)
-- **Refresh token rotation** — session detection of token theft
-- **Rate limiting** — 30 req/s per IP (Nginx) + per-endpoint limits (app)
-- **Bcrypt password hashing** — 12 rounds
-- **Audit trail** — login, attendance changes, role changes logged
-- **Non-root Docker** — runs as `app:app`, filesystem read-only except `/srv/fieldtrack`
+```
+FieldTrack-CRM/
+├── app/                               # FastAPI backend
+│   ├── main.py                        # Entry point, route registration
+│   ├── core/                          # Infrastructure (config, security, db, redis)
+│   ├── api/v1/                        # HTTP routes (zero business logic)
+│   │   ├── auth.py
+│   │   ├── attendance.py
+│   │   ├── employees.py
+│   │   ├── teams.py
+│   │   ├── location.py
+│   │   ├── geofencing.py
+│   │   ├── notifications.py
+│   │   ├── reports.py
+│   │   ├── sync.py
+│   │   ├── ws.py
+│   │   ├── farmers.py                 # Module 1
+│   │   ├── visit_plans.py             # Module 2
+│   │   ├── visits.py                  # Module 3
+│   │   ├── leads.py                   # Module 4
+│   │   ├── follow_ups.py              # Module 4
+│   │   ├── daily_reports.py           # Module 5
+│   │   └── gps_config.py              # Module 6
+│   ├── services/
+│   │   ├── attendance.py
+│   │   ├── location.py
+│   │   ├── reports.py
+│   │   ├── notification.py
+│   │   ├── farmer_service.py
+│   │   ├── visit_plan_service.py
+│   │   ├── visit_service.py
+│   │   ├── lead_service.py
+│   │   └── dsr_service.py
+│   ├── models/
+│   │   ├── user.py
+│   │   ├── attendance.py
+│   │   ├── location.py
+│   │   ├── geofence.py
+│   │   ├── misc.py
+│   │   ├── enums.py
+│   │   └── crm.py                     # All 11 CRM tables
+│   └── schemas/
+│
+├── admin-web/src/features/
+│   ├── dashboard/
+│   ├── employees/
+│   ├── attendance/
+│   ├── map/
+│   ├── reports/
+│   ├── geofences/
+│   ├── teams/
+│   ├── settings/
+│   ├── farmers/                       # Module 1
+│   ├── planning/                      # Module 2
+│   ├── leads/                         # Module 4
+│   ├── followups/                     # Module 4
+│   └── daily-reports/                 # Module 5
+│
+├── mobile/lib/features/
+│   ├── attendance/
+│   ├── dashboard/
+│   ├── map/
+│   ├── notifications/
+│   ├── profile/
+│   ├── reports/
+│   └── crm/
+│       ├── farmers/                   # Module 1
+│       ├── planning/                  # Module 2
+│       ├── visits/                    # Module 3
+│       ├── leads/                     # Module 4
+│       ├── followups/                 # Module 4
+│       └── dsr/                       # Module 5
+│
+├── alembic/versions/
+│   ├── 0001_initial_schema.py         # Core tables
+│   ├── 0002_geofence_shapes.py
+│   ├── 0003_team_is_active.py
+│   ├── 0004_audit_logs.py
+│   └── 0005_crm_tables.py             # 11 CRM tables
+│
+├── nginx/
+├── monitoring/
+├── scripts/
+├── tests/
+├── docs/REDIS_KEYS.md
+├── docker-compose.yml
+├── docker-compose.prod.yml
+├── Dockerfile
+└── .env.example
+```
 
 ---
 
 ## Deployment
 
 ### Infrastructure Requirements
-
-**VPS Specifications:** 2 vCPU, 4 GB RAM, Ubuntu 22.04 LTS
+**VPS:** 2 vCPU, 4 GB RAM, Ubuntu 22.04 LTS
 
 **Resource Allocation:**
-
 ```
 PostgreSQL:     1 GB
 Redis:          256 MB
 FastAPI App:    1 GB (2x Uvicorn workers)
 Nginx:          128 MB
-─────────────────────
+────────────────────
 Total Used:     ~2.4 GB
-Headroom:       ~1.6 GB (OS and surge capacity)
+Headroom:       ~1.6 GB
 ```
 
-**Deployment Steps** (See `DEPLOYMENT_CHECKLIST.md` for complete guide)
-
+**Deploy:**
 ```bash
-# On VPS
-curl -sSL https://your-repo/scripts/server_setup.sh | sudo bash
-
-# Create .env.prod with secrets
-scp .env.prod deploy@vps:/opt/fieldtrack/app/.env.prod
-
-# Deploy via Docker Compose
-ssh deploy@vps 'cd /opt/fieldtrack/app && docker compose -f docker-compose.prod.yml up -d'
-
-# Run migrations
-ssh deploy@vps 'cd /opt/fieldtrack/app && docker compose exec app alembic upgrade head'
-```
-
-**TLS and HTTPS Setup**
-
-Automated certificate management via Let's Encrypt and certbot:
-
-```bash
+git clone https://github.com/OnlyArkMani/FieldTrack-CRM.git /opt/fieldtrack/app
+cp .env.prod.example .env.prod   # Fill real secrets
+docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml exec app alembic upgrade head
 ./scripts/ssl_setup.sh your-domain.com
 ```
 
-This script creates the Nginx production configuration with 443 HTTPS port and automatic renewal.
-
-**Monitoring Stack**
-
-Deploy monitoring services (Prometheus, Grafana, Uptime Kuma):
-
-```bash
-docker compose -f monitoring/docker-compose.monitoring.yml up -d
-```
-
-Access:
-- Grafana: http://your-domain.com:3000 (default credentials: admin / admin)
-- Uptime Kuma: http://your-domain.com:3001
-- Status page: http://your-domain.com/status
-
-**Automated Backups**
-
-Daily PostgreSQL backups to Backblaze B2 at 2:00 AM UTC. See `RESTORE.md` for recovery procedures.
-
----
-
-## Testing
-
-```bash
-# Run all tests (requires test database)
-pytest
-
-# Run specific module
-pytest tests/test_attendance.py
-
-# With coverage
-pytest --cov=app tests/
-
-# Watch mode (requires pytest-watch)
-ptw
-
-# Integration tests (hit real Postgres via docker)
-pytest tests/test_integration/ --integration
-```
+See `DEPLOYMENT_CHECKLIST.md` for the complete step-by-step guide.
 
 ---
 
 ## Documentation
 
-- **ARCHITECTURE.md** — Every design decision, assumption, and reasoning
+- **ARCHITECTURE.md** — Design decisions and reasoning
 - **DEPLOYMENT_CHECKLIST.md** — Step-by-step production deployment with verification
-- **RESTORE.md** — Backup restoration and disaster recovery procedures
+- **RESTORE.md** — Backup restoration and disaster recovery
 - **docs/REDIS_KEYS.md** — Complete Redis key schema, TTLs, and memory budget
 - **API Docs** — Auto-generated Swagger UI at `/api/v1/docs` (dev/staging only)
-
----
-
-## Troubleshooting
-
-### Container won't start
-```bash
-docker compose logs <service> --tail 100
-# Most common: missing .env variable, port conflict, or unhealthy healthcheck
-```
-
-### Migrations failed
-```bash
-docker compose exec app alembic current
-docker compose exec app alembic history
-docker compose exec app alembic downgrade -1  # Rollback one revision
-```
-
-### GPS not showing on admin map
-- Confirm device has location permission (check "GPS Disabled" in live status)
-- Check Redis for recent keys: `redis-cli --scan --pattern 'location:*'`
-- Verify WebSocket connection: browser devtools → Network → WS → `/api/v1/ws/admin-live`
-
-### FCM not delivering
-- Check Firebase console → Cloud Messaging → delivery reports
-- Verify `FCM_SERVICE_ACCOUNT_FILE` points to valid, non-expired JSON
-- Confirm device's FCM token in `device_info` table (stale tokens are expected)
-
-### High memory usage
-- Check `docker compose ps` — memory limits enforced, container should restart if exceeded
-- Review Redis keys: `redis-cli INFO memory`
-- Prune old location logs: `docker compose exec app python scripts/cleanup.py`
-
----
-
-## Contributing
-
-1. **Code style** — Black (Python), Prettier (JS), Dart formatting
-2. **Layering** — API → Services → Repositories → Models (enforced by review)
-3. **Migrations** — Always test with real Postgres (Docker Compose test database)
-4. **Tests** — New features require unit + integration tests
-5. **Documentation** — Update ARCHITECTURE.md and README.md for design changes
-
----
-
-## 📄 License
-
-[Your License Here]
-
----
-
-## 📞 Support
-
-For issues, feature requests, or deployment help:
-- **GitHub Issues** — Bug reports and feature tracking
-- **Documentation** — See ARCHITECTURE.md and DEPLOYMENT_CHECKLIST.md
-- **Email** — [contact email]
 
 ---
 
 ## Roadmap
 
 ### Completed
-
-- Attendance state machine (START/BREAK/RESUME/END) with work summary on END
-- Real-time GPS tracking with hybrid cadence (2-5 min moving, 10-15 min stationary)
+- Attendance state machine (START/BREAK/RESUME/END) with work summary
+- Real-time GPS tracking with hybrid cadence and battery awareness
 - Polygon geofencing via PostGIS — team-scoped zone assignment with entry/exit events
-- Offline-first mobile sync with Redis deduplication (6-hour dedup window)
-- CSV, Excel, and PDF report export — async pipeline, auto-prune after retention period
-- Distance zones report type — distance traveled + time-in-zone analytics
-- Push notifications via Firebase Cloud Messaging (FCM) — reminders, GPS alerts, admin broadcast
-- Dark and light theme toggle across mobile and web
-- Admin live dashboard with WebSocket real-time updates — per-member live status, expandable team cards
-- 31-day employee location trail on admin map — click any employee to replay movement
-- Supervisor sees own location in team live view
-- Android build: AGP 8.11.1, Gradle 8.14, Kotlin 2.2.20, core desugaring enabled
-- Splash screen with correct Android 12+ SplashScreen API integration
-- ProGuard/R8 production build configuration
-- Pre-deploy hardening: health checks, env-file validation, rollback scripts
-- GitHub Actions CI/CD pipeline with automated test + build jobs
+- Offline-first mobile sync with Redis deduplication
+- CSV, Excel, PDF report export — async pipeline, auto-prune after retention
+- Push notifications via FCM — reminders, GPS alerts, admin broadcast
+- Admin live dashboard with WebSocket real-time updates
+- 31-day employee location trail with replay on admin map
+- Dark/light theme toggle
+- Android build: AGP 8.11.1, Gradle 8.14, Kotlin 2.2.20
+- GitHub Actions CI/CD pipeline
+- **CRM Module 1** — Farmer/customer database with team scoping
+- **CRM Module 2** — Pre-day visit planning with supervisor oversight
+- **CRM Module 3** — Field visit execution with check-in, notes, livestock profile, order capture
+- **CRM Module 4** — Hot/Warm/Cold lead pipeline with follow-up scheduling
+- **CRM Module 5** — Daily Sales Report auto-generated on attendance END
+- **CRM Module 6** — Per-team configurable GPS intervals (admin-controlled, Redis-cached)
 
 ### Planned
-
-- Multi-language support (internationalization)
-- Time card corrections and approval workflows
-- Integration with payroll systems
-- WhatsApp and SMS notifications (supplementing FCM)
-- Mobile app for iOS (currently Android-only)
+- Manager approval workflow for field orders
+- Payroll system integration
+- WhatsApp/SMS notifications (supplementing FCM)
+- Multi-language support
+- iOS mobile app
+- Offline DSR draft support
 
 ---
 
-**Project Status:** Production Ready  
-**Last Updated:** June 25, 2026  
-**Current Version:** 0.2.0  
-**Repository:** https://github.com/OnlyArkMani/FieldTrack-Final
+**Project Status:** Production Ready
+**Last Updated:** June 30, 2026
+**Current Version:** 0.3.0
+**Repository:** https://github.com/OnlyArkMani/FieldTrack-CRM
