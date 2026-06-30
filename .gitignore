@@ -5,6 +5,7 @@ admin-web/.env.production
 mobile/.env.prod
 mobile/android/app/google-services.json
 admin-web/dist/
+node_modules/
 __pycache__/
 *.pyc
 .pytest_cache/
