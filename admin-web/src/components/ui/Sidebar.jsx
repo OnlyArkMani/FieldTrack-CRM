@@ -3,18 +3,25 @@ import clsx from 'clsx';
 import {
   LayoutDashboard,
   Users,
+  Sprout,
+  CalendarCheck,
+  BellRing,
   Boxes,
   Fingerprint,
   Map,
   Hexagon,
   FileBarChart,
+  ClipboardList,
+  TrendingUp,
   Settings,
+  Radio,
   ChevronLeft,
   X,
 } from 'lucide-react';
 
 import { useUiStore } from '@/store/uiStore';
 
+// NAV uses either a route object or a section divider { section: label }
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/employees', label: 'Employees', icon: Users },
@@ -23,33 +30,58 @@ const NAV = [
   { to: '/map', label: 'Live Map', icon: Map },
   { to: '/geofences', label: 'Geofences', icon: Hexagon },
   { to: '/reports', label: 'Reports', icon: FileBarChart },
+  { section: 'CRM' },
+  { to: '/farmers', label: 'Farmers', icon: Sprout },
+  { to: '/planning', label: 'Visit Plans', icon: CalendarCheck },
+  { to: '/leads', label: 'Lead Pipeline', icon: TrendingUp },
+  { to: '/follow-ups', label: 'Follow-ups', icon: BellRing },
+  { to: '/daily-reports', label: 'Daily Reports', icon: ClipboardList },
   { to: '/settings', label: 'Settings', icon: Settings },
+  { to: '/settings/gps', label: 'GPS Tracking', icon: Radio },
 ];
 
 function NavItems({ collapsed, onNavigate }) {
   return (
-    <nav className="flex flex-1 flex-col gap-1 px-3">
-      {NAV.map(({ to, label, icon: Icon, end }) => (
-        <NavLink
-          key={to}
-          to={to}
-          end={end}
-          onClick={onNavigate}
-          className={({ isActive }) =>
-            clsx(
-              'flex items-center gap-3 rounded-btn px-3 py-2.5 text-sm font-medium transition-colors',
-              isActive
-                ? 'bg-primary/16 text-primary'
-                : 'text-text-secondary hover:bg-border/40 hover:text-text-primary',
-              collapsed && 'justify-center px-2',
-            )
+    <nav className="flex flex-1 flex-col gap-1 px-3 overflow-y-auto">
+      {NAV.map((item, idx) => {
+        if (item.section) {
+          if (collapsed) {
+            return (
+              <div key={`section-${idx}`} className="my-1 mx-auto h-px w-6 bg-border" />
+            );
           }
-          title={collapsed ? label : undefined}
-        >
-          <Icon className="h-5 w-5 shrink-0" />
-          {!collapsed && <span className="truncate">{label}</span>}
-        </NavLink>
-      ))}
+          return (
+            <div
+              key={`section-${idx}`}
+              className="mt-3 mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-text-secondary/60"
+            >
+              {item.section}
+            </div>
+          );
+        }
+        const { to, label, icon: Icon, end } = item;
+        return (
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            onClick={onNavigate}
+            className={({ isActive }) =>
+              clsx(
+                'flex items-center gap-3 rounded-btn px-3 py-2.5 text-sm font-medium transition-colors',
+                isActive
+                  ? 'bg-primary/16 text-primary'
+                  : 'text-text-secondary hover:bg-border/40 hover:text-text-primary',
+                collapsed && 'justify-center px-2',
+              )
+            }
+            title={collapsed ? label : undefined}
+          >
+            <Icon className="h-5 w-5 shrink-0" />
+            {!collapsed && <span className="truncate">{label}</span>}
+          </NavLink>
+        );
+      })}
     </nav>
   );
 }

@@ -34,6 +34,7 @@ import Avatar from '@/components/ui/Avatar';
 import Spinner from '@/components/ui/Spinner';
 import EmployeeFormModal from './EmployeeFormModal';
 import TrailReplayModal from '@/features/map/TrailReplayModal';
+import { useCrmPerformance } from '@/hooks/useCrm';
 
 const STATUS_COLOR = {
   PRESENT: 'var(--ft-status-active)',
@@ -217,6 +218,8 @@ export default function EmployeeDetailPage() {
       </div>
 
       <GpsIntegrityCard employeeId={employee.id} />
+
+      <CrmScorecard employeeId={employee.id} />
 
       <EmployeeReportCard employeeId={employee.id} employeeName={employee.name} />
 
@@ -671,5 +674,93 @@ function Mini({ label, value, color }) {
       </div>
       <div className="text-xs text-text-secondary">{label}</div>
     </div>
+  );
+}
+
+
+// ── CRM Performance Scorecard ────────────────────────────────────────────────
+
+
+function CrmScorecard({ employeeId }) {
+  const { data, isLoading } = useCrmPerformance(employeeId);
+
+  const pct = (n, d) => (d > 0 ? `${Math.round((n / d) * 100)}%` : '—');
+
+  return (
+    <Card>
+      <CardHeader
+        title="CRM performance"
+        subtitle={
+          data
+            ? `${dayjs(data.start_date).format('D MMM')} – ${dayjs(data.end_date).format('D MMM YYYY')}`
+            : 'Last 30 days'
+        }
+      />
+      {isLoading ? (
+        <Spinner label="Loading…" className="py-8" />
+      ) : !data ? (
+        <div className="py-6 text-center text-sm text-text-secondary">No CRM data yet.</div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Mini
+            label="Visits"
+            value={data.visits_completed}
+            color="var(--ft-status-active)"
+          />
+          <Mini
+            label="Orders"
+            value={data.orders_captured}
+            color="var(--ft-primary)"
+          />
+          <Mini
+            label="Farmers"
+            value={data.unique_farmers_visited}
+            color="var(--ft-secondary)"
+          />
+          <Mini
+            label="DSRs"
+            value={`${data.dsrs_submitted}/${data.dsrs_total}`}
+            color={
+              data.dsrs_submitted === data.dsrs_total
+                ? 'var(--ft-status-active)'
+                : 'var(--ft-status-battery)'
+            }
+          />
+          <div className="col-span-2 rounded-btn border border-border p-3">
+            <div className="mb-2 text-xs text-text-secondary">Leads</div>
+            <div className="flex gap-4">
+              <span className="text-sm font-bold" style={{ color: 'var(--ft-status-danger)' }}>
+                {data.hot_leads}H
+              </span>
+              <span className="text-sm font-bold" style={{ color: 'var(--ft-primary)' }}>
+                {data.warm_leads}W
+              </span>
+              <span className="text-sm font-bold" style={{ color: 'var(--ft-secondary)' }}>
+                {data.cold_leads}C
+              </span>
+            </div>
+          </div>
+          <div className="col-span-2 rounded-btn border border-border p-3">
+            <div className="mb-1 text-xs text-text-secondary">Follow-up rate</div>
+            <div
+              className="text-xl font-bold"
+              style={{
+                color:
+                  data.follow_up_completion_rate >= 0.8
+                    ? 'var(--ft-status-active)'
+                    : data.follow_up_completion_rate >= 0.5
+                      ? 'var(--ft-status-battery)'
+                      : 'var(--ft-status-danger)',
+              }}
+            >
+              {pct(data.follow_ups_done, data.follow_ups_total)}
+            </div>
+            <div className="text-xs text-text-secondary">
+              {data.follow_ups_done}/{data.follow_ups_total} done
+            </div>
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }

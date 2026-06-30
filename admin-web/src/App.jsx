@@ -11,12 +11,20 @@ import LoginPage from './features/auth/LoginPage';
 import DashboardPage from './features/dashboard/DashboardPage';
 import EmployeesPage from './features/employees/EmployeesPage';
 import EmployeeDetailPage from './features/employees/EmployeeDetailPage';
+import FarmersPage from './features/farmers/FarmersPage';
+import PlanningPage from './features/planning/PlanningPage';
+import VisitPlansPage from './features/planning/VisitPlansPage';
+import FollowUpsPage from './features/followups/FollowUpsPage';
+import FollowUpCalendarPage from './features/followups/FollowUpCalendarPage';
+import LeadPipelinePage from './features/leads/LeadPipelinePage';
 import TeamsPage from './features/teams/TeamsPage';
 import AttendancePage from './features/attendance/AttendancePage';
 import MapPage from './features/map/MapPage';
 import GeofencesPage from './features/geofences/GeofencesPage';
 import ReportsPage from './features/reports/ReportsPage';
+import DailyReportsPage from './features/daily-reports/DailyReportsPage';
 import SettingsPage from './features/settings/SettingsPage';
+import GpsSettingsPage from './features/settings/GpsSettingsPage';
 
 /** Restore the session on load via the httpOnly refresh cookie. */
 function useSessionBootstrap() {
@@ -94,12 +102,19 @@ export default function App() {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/employees" element={<EmployeesPage />} />
         <Route path="/employees/:id" element={<EmployeeDetailPage />} />
+        <Route path="/farmers" element={<FarmersPage />} />
+        <Route path="/planning" element={<PlanningPage />} />
+        <Route path="/visit-plans" element={<VisitPlansPage />} />
+        <Route path="/leads" element={<LeadPipelinePage />} />
+        <Route path="/follow-ups" element={<FollowUpCalendarPage />} />
         <Route path="/teams" element={<TeamsPage />} />
         <Route path="/attendance" element={<AttendancePage />} />
         <Route path="/map" element={<MapPage />} />
         <Route path="/geofences" element={<GeofencesPage />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/daily-reports" element={<DailyReportsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings/gps" element={<GpsSettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

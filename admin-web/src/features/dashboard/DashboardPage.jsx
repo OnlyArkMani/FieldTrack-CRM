@@ -6,24 +6,31 @@ import {
   Legend,
   Tooltip,
 } from 'recharts';
-import { Users, UserCheck, UserX, Activity, Route } from 'lucide-react';
+import { Users, UserCheck, UserX, Activity, Route, MapPin, TrendingUp, ClipboardList, BellRing } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 import { useDashboard } from '@/hooks/useDashboard';
+import { useCrmDashboard } from '@/hooks/useCrm';
 import Card, { CardHeader } from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import Table from '@/components/ui/Table';
 import Avatar from '@/components/ui/Avatar';
 import PageHeader from '@/components/ui/PageHeader';
+import LeadPipelineCard from '@/features/leads/LeadPipelineCard';
 
-function StatCard({ icon: Icon, label, value, hint, tone = 'primary' }) {
+function StatCard({ icon: Icon, label, value, hint, tone = 'primary', onClick }) {
   const toneBg = {
     primary: 'bg-primary/15 text-primary',
     active: 'bg-status-active/15 text-status-active',
     danger: 'bg-danger/15 text-danger',
     secondary: 'bg-secondary/15 text-secondary',
-  }[tone];
+    amber: 'bg-amber-100 text-amber-600',
+  }[tone] || 'bg-primary/15 text-primary';
   return (
-    <Card className="flex items-center gap-4">
+    <Card
+      className={`flex items-center gap-4 ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
+      onClick={onClick}
+    >
       <div className={`grid h-12 w-12 place-items-center rounded-btn ${toneBg}`}>
         <Icon className="h-6 w-6" />
       </div>
@@ -43,7 +50,10 @@ const fmtLoc = (e) =>
 
 export default function DashboardPage() {
   const { data, isLoading } = useDashboard();
+  const { data: crm } = useCrmDashboard();
+  const navigate = useNavigate();
   const d = data || {};
+  const c = crm || {};
 
   const columns = [
     {
@@ -91,6 +101,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <PageHeader title="Dashboard" subtitle="Live overview of your workforce" />
 
+      {/* Workforce stats */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard icon={Users} label="Total Employees" value={d.totalEmployees ?? '—'} />
         <StatCard
@@ -106,6 +117,52 @@ export default function DashboardPage() {
           label="Active Field Staff"
           value={d.activeFieldStaff ?? '—'}
         />
+      </div>
+
+      {/* CRM snapshot */}
+      <div>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-widest text-text-secondary/70">
+          CRM Today
+        </h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            icon={MapPin}
+            tone="active"
+            label="Visits Today"
+            value={c.todayVisits ?? '—'}
+            onClick={() => navigate('/planning')}
+          />
+          <StatCard
+            icon={TrendingUp}
+            tone="primary"
+            label="Active Leads"
+            value={c.activeLeadsTotal ?? '—'}
+            hint={
+              c.activeLeadsTotal != null
+                ? `${c.activeLeadsHot ?? 0}H · ${c.activeLeadsWarm ?? 0}W · ${c.activeLeadsCold ?? 0}C`
+                : undefined
+            }
+            onClick={() => navigate('/leads')}
+          />
+          <StatCard
+            icon={ClipboardList}
+            tone="secondary"
+            label="DSRs Submitted"
+            value={
+              c.dsrsTotalToday != null
+                ? `${c.dsrsSubmittedToday ?? 0}/${c.dsrsTotalToday}`
+                : '—'
+            }
+            onClick={() => navigate('/daily-reports')}
+          />
+          <StatCard
+            icon={BellRing}
+            tone="amber"
+            label="Follow-ups Today"
+            value={c.followUpsToday ?? '—'}
+            onClick={() => navigate('/follow-ups')}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -162,6 +219,8 @@ export default function DashboardPage() {
           />
         </Card>
       </div>
+
+      <LeadPipelineCard />
     </div>
   );
 }
