@@ -42,6 +42,15 @@ class LocationService {
   static const kUserIdPref = 'sync_user_id';
   static const _kLastSavedAtPref = 'loc_last_saved_at_ms';
 
+  // Module 6 — per-team GPS config, fetched from GET /gps-config/my on
+  // attendance START and read by the background isolate (which has no network
+  // and no Riverpod) straight from SharedPreferences. The `*Interval` consts
+  // below are only fallback defaults for when no config has been fetched yet.
+  static const kMovingIntervalSecPref = 'gps_moving_interval_sec';
+  static const kStationaryIntervalSecPref = 'gps_stationary_interval_sec';
+  static const kLowBatteryIntervalSecPref = 'gps_low_battery_interval_sec';
+  static const kLowBatteryThresholdPref = 'gps_low_battery_threshold';
+
   static const movingThresholdMps = 0.5;
   static const movingInterval = Duration(minutes: 3);
   static const stationaryInterval = Duration(minutes: 12);
@@ -90,6 +99,7 @@ class LocationService {
     // still shows up online, on the live map, and in the trail.
     if (kIsWeb) {
       if (state.isWorking) {
+        await fetchAndApplyGpsConfig();
         await _startWebTracking();
       } else {
         await stop();
@@ -105,12 +115,55 @@ class LocationService {
 
     final running = await isTracking();
     if (state.isWorking && !running) {
+      // Pull the latest per-team GPS cadence before the isolate spins up.
+      await fetchAndApplyGpsConfig();
       await _start();
     } else if (!state.isWorking && running) {
       // ON_BREAK also stops the service — no tracking during breaks; RESUME
       // brings it back. ENDED flushes whatever is still queued.
       await stop();
       if (state.isEnded) await LocationSyncService.flushPendingLocations();
+    }
+  }
+
+  /// Module 6 — fetch this employee's team GPS cadence from the API and persist
+  /// it to SharedPreferences so the background isolate (no network, no Riverpod)
+  /// can read it on every fix. Called on attendance START. Best-effort: on any
+  /// failure the previously-stored values (or the const fallbacks) keep working.
+  Future<void> fetchAndApplyGpsConfig() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final baseUrl = prefs.getString(LocationSyncService.kApiBaseUrlPref);
+      final token = prefs.getString(LocationSyncService.kAccessTokenPref);
+      if (baseUrl == null || token == null) return;
+
+      final dio = Dio(BaseOptions(
+        baseUrl: baseUrl,
+        connectTimeout: const Duration(seconds: 8),
+        receiveTimeout: const Duration(seconds: 12),
+        headers: {'Authorization': 'Bearer $token'},
+      ));
+      final resp = await dio.get('/gps-config/my');
+      final data = resp.data as Map<String, dynamic>;
+
+      int? asInt(dynamic v) => v is num ? v.toInt() : null;
+      final moving = asInt(data['moving_interval_seconds']);
+      final stationary = asInt(data['stationary_interval_seconds']);
+      final lowBattery = asInt(data['low_battery_interval_seconds']);
+      final threshold = asInt(data['low_battery_threshold']);
+
+      if (moving != null) await prefs.setInt(kMovingIntervalSecPref, moving);
+      if (stationary != null) {
+        await prefs.setInt(kStationaryIntervalSecPref, stationary);
+      }
+      if (lowBattery != null) {
+        await prefs.setInt(kLowBatteryIntervalSecPref, lowBattery);
+      }
+      if (threshold != null) {
+        await prefs.setInt(kLowBatteryThresholdPref, threshold);
+      }
+    } catch (_) {
+      // Best-effort: keep last-known / default cadence. Never block START.
     }
   }
 
@@ -292,13 +345,29 @@ Future<void> locationCallbackDispatcher(LocationDto location) async {
     battery = null; // battery read must never cost us the point
   }
 
+  // Module 6 — read the per-team cadence written by fetchAndApplyGpsConfig().
+  // Fall back to the const defaults when no config has been fetched yet.
+  Duration prefDuration(String key, Duration fallback) {
+    final secs = prefs.getInt(key);
+    return secs != null && secs > 0 ? Duration(seconds: secs) : fallback;
+  }
+
+  final movingInterval =
+      prefDuration(LocationService.kMovingIntervalSecPref, LocationService.movingInterval);
+  final stationaryInterval = prefDuration(
+      LocationService.kStationaryIntervalSecPref, LocationService.stationaryInterval);
+  final lowBatteryInterval = prefDuration(
+      LocationService.kLowBatteryIntervalSecPref, LocationService.lowBatteryInterval);
+  final lowBatteryThreshold =
+      prefs.getInt(LocationService.kLowBatteryThresholdPref) ??
+          BatteryInfo.lowBatteryThreshold;
+
   final isMoving = (location.speed) > LocationService.movingThresholdMps;
-  final required = (battery != null &&
-          battery < BatteryInfo.lowBatteryThreshold)
-      ? LocationService.lowBatteryInterval // low battery: 20 min, period
+  final required = (battery != null && battery < lowBatteryThreshold)
+      ? lowBatteryInterval // low battery mode, movement ignored
       : isMoving
-          ? LocationService.movingInterval // moving: 3 min
-          : LocationService.stationaryInterval; // stationary: 12 min
+          ? movingInterval // moving cadence
+          : stationaryInterval; // stationary cadence
 
   final lastSavedMs = prefs.getInt(LocationService._kLastSavedAtPref);
   final nowMs = DateTime.now().millisecondsSinceEpoch;

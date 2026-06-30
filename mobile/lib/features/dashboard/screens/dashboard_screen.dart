@@ -35,6 +35,36 @@ class DashboardScreen extends ConsumerWidget {
           physics: const ClampingScrollPhysics(),
           padding: const EdgeInsets.all(AppDimens.grid * 2),
           children: [
+            // Prominent entry to pre-day visit planning (CRM).
+            _QuickAction(
+              icon: Icons.event_note_rounded,
+              label: 'Plan visits',
+              subtitle: "Plan tomorrow's farmer visits",
+              onTap: () => context.push('/planning'),
+            ),
+            const SizedBox(height: AppDimens.grid * 1.5),
+            Row(
+              children: [
+                Expanded(
+                  child: _QuickAction(
+                    icon: Icons.flag_rounded,
+                    label: 'Leads',
+                    subtitle: 'Hot / Warm / Cold pipeline',
+                    onTap: () => context.push('/leads'),
+                  ),
+                ),
+                const SizedBox(width: AppDimens.grid * 1.5),
+                Expanded(
+                  child: _QuickAction(
+                    icon: Icons.event_repeat_rounded,
+                    label: 'Follow-ups',
+                    subtitle: 'Upcoming reminders',
+                    onTap: () => context.push('/followups'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppDimens.grid * 1.5),
             if (isSupervisor) ...[
               Row(
                 children: [

@@ -12,6 +12,16 @@ enum AppNotificationType {
   geofenceEnter('GEOFENCE_ENTER'),
   geofenceExit('GEOFENCE_EXIT'),
   adminAnnouncement('ADMIN_ANNOUNCEMENT'),
+  // ── CRM extension (Module 2/4/5) — wire strings match the backend exactly ──
+  planReminder('PLAN_REMINDER'),
+  planNotSubmitted('PLAN_NOT_SUBMITTED'),
+  followUpReminder('FOLLOW_UP_REMINDER'),
+  followUpEscalated('FOLLOW_UP_ESCALATED'),
+  dsrSubmitted('DSR_SUBMITTED'),
+  dsrLate('DSR_LATE'),
+  dsrLateSupervisor('DSR_LATE_SUPERVISOR'),
+  dsrComment('DSR_COMMENT'),
+  orderCaptured('ORDER_CAPTURED'),
   unknown('UNKNOWN');
 
   const AppNotificationType(this.wire);
@@ -36,6 +46,20 @@ enum AppNotificationType {
         AppNotificationType.geofenceExit =>
           '/home/map',
         AppNotificationType.syncFailed => '/home/dashboard',
+        // CRM in-app routes (list screens — no per-entity id is stored on the
+        // in-app row; the FCM push-tap path deep-links to the farmer detail).
+        AppNotificationType.planReminder ||
+        AppNotificationType.planNotSubmitted =>
+          '/planning',
+        AppNotificationType.followUpReminder ||
+        AppNotificationType.followUpEscalated =>
+          '/followups',
+        AppNotificationType.dsrSubmitted ||
+        AppNotificationType.dsrLate ||
+        AppNotificationType.dsrLateSupervisor ||
+        AppNotificationType.dsrComment =>
+          '/dsr/history',
+        AppNotificationType.orderCaptured ||
         AppNotificationType.adminAnnouncement ||
         AppNotificationType.unknown =>
           null,
@@ -50,6 +74,17 @@ enum AppNotificationType {
         AppNotificationType.geofenceEnter => Icons.where_to_vote_rounded,
         AppNotificationType.geofenceExit => Icons.wrong_location_rounded,
         AppNotificationType.adminAnnouncement => Icons.campaign_rounded,
+        // CRM icons.
+        AppNotificationType.planReminder => Icons.event_note_rounded,
+        AppNotificationType.planNotSubmitted => Icons.event_busy_rounded,
+        AppNotificationType.followUpReminder =>
+          Icons.notifications_active_rounded,
+        AppNotificationType.followUpEscalated => Icons.warning_amber_rounded,
+        AppNotificationType.dsrSubmitted => Icons.assignment_turned_in_rounded,
+        AppNotificationType.dsrLate => Icons.schedule_rounded,
+        AppNotificationType.dsrLateSupervisor => Icons.report_problem_rounded,
+        AppNotificationType.dsrComment => Icons.comment_rounded,
+        AppNotificationType.orderCaptured => Icons.shopping_bag_rounded,
         AppNotificationType.unknown => Icons.notifications_rounded,
       };
 
@@ -58,6 +93,12 @@ enum AppNotificationType {
   Color? get accentColor => switch (this) {
         AppNotificationType.geofenceEnter => const Color(0xFF34C759), // green
         AppNotificationType.geofenceExit => const Color(0xFFE8645A), // coral
+        AppNotificationType.dsrSubmitted => const Color(0xFF34C759), // green
+        AppNotificationType.followUpEscalated ||
+        AppNotificationType.planNotSubmitted ||
+        AppNotificationType.dsrLate ||
+        AppNotificationType.dsrLateSupervisor =>
+          const Color(0xFFE8645A), // coral — needs attention
         _ => null,
       };
 }

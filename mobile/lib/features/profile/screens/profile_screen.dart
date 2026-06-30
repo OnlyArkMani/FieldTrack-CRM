@@ -4,8 +4,10 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../services/location/location_service.dart';
 import '../../../core/config/env.dart';
 import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -19,6 +21,20 @@ final _appVersionProvider = FutureProvider<String>((ref) async {
   return 'v${info.version} (${info.buildNumber})';
 });
 
+/// Read-only display of the per-team GPS cadence currently applied on this
+/// device. Written by LocationService.fetchAndApplyGpsConfig() on attendance
+/// START; falls back to the const defaults when no config has been fetched.
+final _gpsIntervalProvider = FutureProvider<String>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.reload();
+  final moving = prefs.getInt(LocationService.kMovingIntervalSecPref) ??
+      LocationService.movingInterval.inSeconds;
+  final stationary = prefs.getInt(LocationService.kStationaryIntervalSecPref) ??
+      LocationService.stationaryInterval.inSeconds;
+  String fmt(int s) => s % 60 == 0 ? '${s ~/ 60} min' : '$s s';
+  return 'Moving ${fmt(moving)} · Idle ${fmt(stationary)}';
+});
+
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
@@ -27,6 +43,7 @@ class ProfileScreen extends ConsumerWidget {
     final user = ref.watch(authProvider).user;
     final themeMode = ref.watch(themeModeProvider);
     final version = ref.watch(_appVersionProvider);
+    final gpsInterval = ref.watch(_gpsIntervalProvider);
     final scheme = Theme.of(context).colorScheme;
     final colors = context.appColors;
 
@@ -172,6 +189,17 @@ class ProfileScreen extends ConsumerWidget {
                     title: 'App Version',
                     trailing: Text(
                       version.valueOrNull ?? '…',
+                      style: Theme.of(context).textTheme.bodySmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Divider(),
+                  _SettingsTile(
+                    icon: Icons.gps_fixed_rounded,
+                    title: 'GPS Interval',
+                    trailing: Text(
+                      gpsInterval.valueOrNull ?? '…',
                       style: Theme.of(context).textTheme.bodySmall,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

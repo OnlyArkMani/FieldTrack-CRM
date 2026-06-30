@@ -6,6 +6,19 @@ import '../../features/attendance/screens/attendance_screen.dart';
 import '../../features/auth/models/user.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/screens/login_screen.dart';
+import '../../features/crm/farmers/screens/add_farmer_screen.dart';
+import '../../features/crm/farmers/screens/farmer_detail_screen.dart';
+import '../../features/crm/farmers/screens/farmer_list_screen.dart';
+import '../../features/crm/farmers/screens/farmer_visits_screen.dart';
+import '../../features/crm/farmers/screens/livestock_history_screen.dart';
+import '../../features/crm/planning/screens/plan_map_screen.dart';
+import '../../features/crm/planning/screens/visit_plan_screen.dart';
+import '../../features/crm/dsr/screens/dsr_history_screen.dart';
+import '../../features/crm/dsr/screens/dsr_review_screen.dart';
+import '../../features/crm/followups/screens/followups_screen.dart';
+import '../../features/crm/leads/screens/lead_pipeline_screen.dart';
+import '../../features/crm/visits/screens/visit_flow_screen.dart';
+import '../../features/crm/visits/screens/visit_summary_screen.dart';
 import '../../features/dashboard/screens/dashboard_screen.dart';
 import '../../features/employees/screens/employee_detail_screen.dart';
 import '../../features/employees/screens/employee_list_screen.dart';
@@ -106,6 +119,14 @@ final routerProvider = Provider<GoRouter>((ref) {
                   WaterPage(key: state.pageKey, child: const MapScreen()),
             ),
           ]),
+          // Farmers (CRM) — visible to every field user (employees + supervisors).
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: '/home/farmers',
+              pageBuilder: (context, state) =>
+                  WaterPage(key: state.pageKey, child: const FarmerListScreen()),
+            ),
+          ]),
           StatefulShellBranch(routes: [
             GoRoute(
               path: '/home/profile',
@@ -114,6 +135,87 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ]),
         ],
+      ),
+
+      // Farmer detail / create / sub-screens (pushed over the shell).
+      GoRoute(
+        path: '/farmer/add',
+        pageBuilder: (context, state) =>
+            WaterPage(key: state.pageKey, child: const AddFarmerScreen()),
+      ),
+      GoRoute(
+        path: '/farmer/:id',
+        pageBuilder: (context, state) => WaterPage(
+          key: state.pageKey,
+          child: FarmerDetailScreen(
+            farmerId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/farmer/:id/livestock',
+        pageBuilder: (context, state) => WaterPage(
+          key: state.pageKey,
+          child: LivestockHistoryScreen(
+            farmerId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/farmer/:id/visits',
+        pageBuilder: (context, state) => WaterPage(
+          key: state.pageKey,
+          child: FarmerVisitsScreen(
+            farmerId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
+          ),
+        ),
+      ),
+
+      // Visit planning (pre-day) + its map view.
+      GoRoute(
+        path: '/planning',
+        pageBuilder: (context, state) =>
+            WaterPage(key: state.pageKey, child: const VisitPlanScreen()),
+      ),
+      GoRoute(
+        path: '/planning/map',
+        pageBuilder: (context, state) =>
+            WaterPage(key: state.pageKey, child: const PlanMapScreen()),
+      ),
+
+      // Field visit execution (guided flow) + read-only summary.
+      GoRoute(
+        path: '/visit/start/:farmerId',
+        pageBuilder: (context, state) => WaterPage(
+          key: state.pageKey,
+          child: VisitFlowScreen(
+            farmerId:
+                int.tryParse(state.pathParameters['farmerId'] ?? '') ?? 0,
+            planItemId:
+                int.tryParse(state.uri.queryParameters['plan_item'] ?? ''),
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/visit/:id/summary',
+        pageBuilder: (context, state) => WaterPage(
+          key: state.pageKey,
+          child: VisitSummaryScreen(
+            visitId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
+          ),
+        ),
+      ),
+
+      // Lead pipeline + follow-ups (CRM Module 4).
+      GoRoute(
+        path: '/leads',
+        pageBuilder: (context, state) =>
+            WaterPage(key: state.pageKey, child: const LeadPipelineScreen()),
+      ),
+      GoRoute(
+        path: '/followups',
+        pageBuilder: (context, state) =>
+            WaterPage(key: state.pageKey, child: const FollowUpsScreen()),
       ),
 
       GoRoute(
@@ -144,6 +246,27 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/reports',
         pageBuilder: (context, state) =>
             WaterPage(key: state.pageKey, child: const ReportsScreen()),
+      ),
+
+      // DSR: review screen (pushed after attendance END)
+      GoRoute(
+        path: '/dsr/review',
+        pageBuilder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          return WaterPage(
+            key: state.pageKey,
+            child: DsrReviewScreen(
+              reportDate: extra['report_date'] as DateTime? ?? DateTime.now(),
+            ),
+          );
+        },
+      ),
+
+      // DSR history (accessible from profile tab)
+      GoRoute(
+        path: '/dsr/history',
+        pageBuilder: (context, state) =>
+            WaterPage(key: state.pageKey, child: const DsrHistoryScreen()),
       ),
     ],
   );

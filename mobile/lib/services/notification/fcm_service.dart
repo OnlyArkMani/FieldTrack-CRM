@@ -250,6 +250,7 @@ class FcmController extends Notifier<bool> {
     final router = ref.read(routerProvider);
     final screen = data['screen'] as String?;
     final employeeId = data['employee_id'];
+    final farmerId = data['farmer_id'];
 
     String path;
     switch (screen) {
@@ -261,11 +262,18 @@ class FcmController extends Notifier<bool> {
         path = '/home/map';
       case 'employee':
         path = employeeId != null ? '/employee/$employeeId' : '/notifications';
+      // CRM deep-links: a follow-up reminder opens the farmer's detail.
+      case 'farmer':
+        path = farmerId != null ? '/farmer/$farmerId' : '/notifications';
+      case 'planning':
+        path = '/planning';
       case 'notifications':
         path = '/notifications';
       default:
         path = switch (type) {
           'ATTENDANCE_REMINDER' || 'END_WORK_REMINDER' => '/home/attendance',
+          'FOLLOW_UP_REMINDER' || 'FOLLOW_UP_ESCALATED' =>
+            farmerId != null ? '/farmer/$farmerId' : '/notifications',
           'GPS_DISABLED' || 'GEOFENCE_ENTER' || 'GEOFENCE_EXIT' =>
             employeeId != null ? '/employee/$employeeId' : '/notifications',
           _ => '/notifications',

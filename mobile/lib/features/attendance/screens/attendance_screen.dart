@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_text_styles.dart';
@@ -46,6 +47,18 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
     final summary = await showWorkSummarySheet(context);
     if (summary == null || !mounted) return;
     await ref.read(attendanceProvider.notifier).end(summary);
+    if (!mounted) return;
+    // After END, poll the state once to get the attendance id, then go to DSR.
+    final attendanceState = ref.read(attendanceProvider);
+    final attendanceId = attendanceState.attendance?.id;
+    if (attendanceId != null && attendanceState.state.name == 'ended') {
+      final today = DateTime.now();
+      final reportDate = DateTime(today.year, today.month, today.day);
+      // Give the background DSR generation a moment to complete before loading.
+      await Future<void>.delayed(const Duration(seconds: 2));
+      if (!mounted) return;
+      context.push('/dsr/review', extra: {'report_date': reportDate});
+    }
   }
 
   @override
