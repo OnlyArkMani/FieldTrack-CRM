@@ -8,7 +8,7 @@ as 409 CONFLICT with a specific message from the service.
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import (
@@ -29,6 +29,7 @@ from app.schemas.attendance import (
 )
 from app.schemas.common import CursorPage, decode_cursor, encode_cursor
 from app.services.attendance_service import AttendanceService
+from app.services.dsr_service import generate_dsr
 
 router = APIRouter(prefix="/attendance", tags=["attendance"])
 
@@ -85,11 +86,18 @@ async def end(
     request: Request,
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
 ) -> AttendanceOut:
-    return await AttendanceService(db).transition_state(
+    from datetime import datetime, timezone
+
+    result = await AttendanceService(db).transition_state(
         user=user, action=SessionType.END, lat=body.lat, lng=body.lng,
         work_summary=body.work_summary, ip=_client_ip(request),
     )
+    # Generate DSR in the background — does not block the END response.
+    today = datetime.now(timezone.utc).date()
+    background_tasks.add_task(generate_dsr, user.id, result.id, today)
+    return result
 
 
 # ── Personal reads ───────────────────────────────────────────────────────

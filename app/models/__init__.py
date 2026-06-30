@@ -19,6 +19,19 @@ from app.models.misc import (
     Setting,
     SyncQueue,
 )
+from app.models.crm import (
+    DailyReport,
+    Farmer,
+    FollowUp,
+    GpsConfig,
+    Lead,
+    LivestockProfile,
+    Visit,
+    VisitNote,
+    VisitOrder,
+    VisitPlan,
+    VisitPlanItem,
+)
 
 __all__ = [
     "Base",
@@ -40,4 +53,16 @@ __all__ = [
     "SyncStatus",
     "SyncQueueStatus",
     "GeofenceEventType",
+    # CRM extension (migration 0005)
+    "Farmer",
+    "VisitPlan",
+    "VisitPlanItem",
+    "Visit",
+    "VisitNote",
+    "LivestockProfile",
+    "VisitOrder",
+    "Lead",
+    "FollowUp",
+    "DailyReport",
+    "GpsConfig",
 ]

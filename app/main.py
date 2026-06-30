@@ -12,14 +12,21 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api.v1 import (
     attendance,
     auth,
+    daily_reports,
     devices,
     employees,
+    farmers,
+    follow_ups,
     geofencing,
+    gps_config,
+    leads,
     location,
     notifications,
     reports,
     sync,
     teams,
+    visit_plans,
+    visits,
     ws,
 )
 from app.core.config import get_settings
@@ -141,5 +148,13 @@ app.include_router(sync.router, prefix=settings.api_v1_prefix)
 app.include_router(notifications.router, prefix=settings.api_v1_prefix)
 app.include_router(devices.router, prefix=settings.api_v1_prefix)
 app.include_router(reports.router, prefix=settings.api_v1_prefix)
+# ── FieldCRM extension routers (migration 0005) ──────────────────────────
+app.include_router(farmers.router, prefix=settings.api_v1_prefix)
+app.include_router(visit_plans.router, prefix=settings.api_v1_prefix)
+app.include_router(visits.router, prefix=settings.api_v1_prefix)
+app.include_router(leads.router, prefix=settings.api_v1_prefix)
+app.include_router(follow_ups.router, prefix=settings.api_v1_prefix)
+app.include_router(daily_reports.router, prefix=settings.api_v1_prefix)
+app.include_router(gps_config.router, prefix=settings.api_v1_prefix)
 # WebSocket router (no response_model/prefix conventions — paths are absolute).
 app.include_router(ws.router, prefix=settings.api_v1_prefix)
