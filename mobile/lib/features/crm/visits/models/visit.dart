@@ -86,6 +86,38 @@ class VisitOrder {
       );
 }
 
+/// One photo attached to a visit (checklist #24). The image bytes are fetched
+/// from [downloadUrl] (relative to the API base) with the bearer token.
+class VisitPhoto {
+  const VisitPhoto({
+    required this.id,
+    this.visitId,
+    this.caption,
+    this.contentType,
+    this.sizeBytes,
+    this.downloadUrl,
+    this.createdAt,
+  });
+
+  final int id;
+  final int? visitId;
+  final String? caption;
+  final String? contentType;
+  final int? sizeBytes;
+  final String? downloadUrl;
+  final DateTime? createdAt;
+
+  factory VisitPhoto.fromJson(Map<String, dynamic> json) => VisitPhoto(
+        id: json['id'] as int,
+        visitId: json['visit_id'] as int?,
+        caption: json['caption'] as String?,
+        contentType: json['content_type'] as String?,
+        sizeBytes: json['size_bytes'] as int?,
+        downloadUrl: json['download_url'] as String?,
+        createdAt: _dt(json['created_at']),
+      );
+}
+
 /// Full visit detail (GET /visits/{id}, /visits/active, and the result of
 /// check-out).
 class VisitDetail {
@@ -106,6 +138,7 @@ class VisitDetail {
     this.livestock,
     this.orders = const [],
     this.lead,
+    this.photos = const [],
   });
 
   final int id;
@@ -124,6 +157,7 @@ class VisitDetail {
   final LivestockProfile? livestock;
   final List<VisitOrder> orders;
   final LeadStatus? lead;
+  final List<VisitPhoto> photos;
 
   factory VisitDetail.fromJson(Map<String, dynamic> json) => VisitDetail(
         id: json['id'] as int,
@@ -152,5 +186,8 @@ class VisitDetail {
             ? LeadStatus.fromWire(
                 (json['lead'] as Map<String, dynamic>)['status'] as String?)
             : null,
+        photos: ((json['photos'] as List<dynamic>?) ?? [])
+            .map((e) => VisitPhoto.fromJson(e as Map<String, dynamic>))
+            .toList(),
       );
 }

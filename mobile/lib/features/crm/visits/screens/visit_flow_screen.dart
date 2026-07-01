@@ -19,6 +19,7 @@ import '../../planning/providers/visit_plan_provider.dart';
 import '../data/visit_repository.dart';
 import '../models/visit.dart';
 import '../widgets/step_indicator.dart';
+import '../widgets/visit_extras.dart';
 
 const _breeds = ['Sahiwal', 'Murrah', 'HF Cross', 'Gir', 'Local', 'Other'];
 const _ageGroups = ['Calf', 'Heifer', 'Adult', 'Senior', 'Mixed'];
@@ -428,6 +429,14 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       data: (farmer) => ListView(
         padding: const EdgeInsets.all(AppDimens.grid * 2),
         children: [
+          // Distance & ETA to the customer (checklist #18) — shown before
+          // check-in when we know the farmer's recorded location.
+          if (!_showWarning && farmer.lat != null && farmer.lng != null)
+            NextVisitEtaCard(
+              farmerLat: farmer.lat!,
+              farmerLng: farmer.lng!,
+              farmerName: farmer.name,
+            ),
           AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -579,6 +588,11 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
         Text('Auto-saves every 30 seconds.',
             style: AppTextStyles.caption
                 .copyWith(color: context.appColors.textSecondary)),
+        const SizedBox(height: AppDimens.grid * 2),
+        const Divider(),
+        const SizedBox(height: AppDimens.grid),
+        // Attach up to 5 photos to this visit (checklist #24).
+        if (_visitId != null) VisitPhotosSection(visitId: _visitId!),
       ],
     );
   }

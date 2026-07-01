@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_client.dart';
@@ -102,6 +103,39 @@ class VisitRepository {
   Future<VisitDetail> detail(int visitId) async {
     final data = await _api.get('/visits/$visitId');
     return VisitDetail.fromJson(data);
+  }
+
+  // ── Photos (checklist #24) ──────────────────────────────────────────────
+
+  /// Upload one photo to a visit. Uses the raw Dio (multipart) — the auth +
+  /// refresh interceptors still apply. Throws ApiException on failure (e.g. the
+  /// 6th photo / oversize file surface as a 400).
+  Future<VisitPhoto> uploadPhoto(
+    int visitId, {
+    required String filePath,
+    String? caption,
+  }) async {
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(filePath),
+      if (caption != null && caption.isNotEmpty) 'caption': caption,
+    });
+    try {
+      final res = await _api.dio.post('/visits/$visitId/photos', data: form);
+      return VisitPhoto.fromJson(res.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw ApiClient.mapError(e);
+    }
+  }
+
+  Future<List<VisitPhoto>> listPhotos(int visitId) async {
+    final data = await _api.getList('/visits/$visitId/photos');
+    return data
+        .map((e) => VisitPhoto.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> deletePhoto(int photoId) async {
+    await _api.delete('/visits/photos/$photoId');
   }
 
   /// The employee's open visit, or null if none.
