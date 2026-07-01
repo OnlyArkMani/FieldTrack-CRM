@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     report_storage_dir: str = "/srv/fieldtrack/reports"
     report_retention_minutes: int = 60
 
+    # Visit photos (checklist #24) — image bytes on the VPS filesystem; DB holds
+    # metadata only. Unlike reports these are permanent evidence, so no TTL prune.
+    visit_photo_storage_dir: str = "/srv/fieldtrack/visit_photos"
+    max_visit_photos: int = 5
+    max_visit_photo_bytes: int = 8 * 1024 * 1024  # 8 MB per photo
+
     # Data retention — location_logs is the hottest, highest-volume table.
     # 31 days keeps storage (and the VPS disk) small while still covering the
     # "last month" of employee trails the dashboard needs. Tune via env.

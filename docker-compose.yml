@@ -116,6 +116,9 @@ services:
       # files self-prune after REPORT_RETENTION_MINUTES. Path matches
       # REPORT_STORAGE_DIR in .env.
       - reports_data:/srv/fieldtrack/reports
+      # Visit photos (checklist #24). Permanent evidence — no TTL prune. Path
+      # matches VISIT_PHOTO_STORAGE_DIR in .env.
+      - visit_photos_data:/srv/fieldtrack/visit_photos
     expose:
       - "8000"          # internal only; Nginx is the public entrypoint
     healthcheck:
@@ -154,6 +157,7 @@ volumes:
   postgres_data:
   redis_data:
   reports_data:
+  visit_photos_data:
 
 networks:
   fieldtrack:

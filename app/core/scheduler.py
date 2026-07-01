@@ -22,7 +22,10 @@ notification row); we guard with a short Redis lock so only one worker runs
 each fire. coalesce + max_instances=1 guard against pile-ups within a process.
 """
 import logging
+from collections import defaultdict
+from datetime import date as date_type
 from datetime import datetime, time, timedelta, timezone
+from math import asin, cos, radians, sin, sqrt
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -32,10 +35,32 @@ from app.core.config import get_settings
 from app.core.database import async_session_factory
 from app.core.redis import Keys, get_redis
 from app.repositories.follow_up_repository import FollowUpRepository
+from app.repositories.location_repository import LocationRepository
 from app.repositories.notification_repository import NotificationRepository
+from app.repositories.report_repository import ReportRepository
 from app.repositories.visit_plan_repository import VisitPlanRepository
-from app.services.dsr_service import mark_late_reports
+from app.schemas.report import ReportFormat
+from app.services.dsr_service import _supervisor_ids_for_team, mark_late_reports
 from app.services.notification_service import NotificationService
+from app.services.report_service import generate_team_report_file
+
+# Stationary detection tuning: an on-clock executive whose trailing-window pings
+# all sit inside this radius for at least this long is flagged idle.
+_STATIONARY_RADIUS_M = 75.0
+_STATIONARY_MIN_MINUTES = 90
+# Weekly/monthly auto-report download links live this long (seconds).
+_WEEKLY_REPORT_TTL = 8 * 86400
+_MONTHLY_REPORT_TTL = 40 * 86400
+
+
+def _haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Great-circle distance in metres between two lat/lng points."""
+    radius = 6_371_000.0
+    p1, p2 = radians(lat1), radians(lat2)
+    dphi = radians(lat2 - lat1)
+    dlmb = radians(lng2 - lng1)
+    a = sin(dphi / 2) ** 2 + cos(p1) * cos(p2) * sin(dlmb / 2) ** 2
+    return 2 * radius * asin(min(1.0, sqrt(a)))
 
 logger = logging.getLogger("fieldtrack.scheduler")
 
@@ -366,6 +391,168 @@ async def refresh_gps_config_cache() -> None:
 
 
 # ── Wiring ──────────────────────────────────────────────────────────────────
+async def absentee_alert_job() -> None:
+    """09:30 — alert each supervisor about their team's executives who still have
+    no attendance today (checklist #62/#7). One aggregate notification per team,
+    mirroring the late-DSR fan-out. Distinct from the 09:00 self-nudge, which
+    goes to the employee; this goes to the manager."""
+    if not await _claim(f"absentee_alert:{_today_utc()}"):
+        return
+    async with async_session_factory() as db:
+        repo = NotificationRepository(db)
+        absentees = await repo.absent_field_users_today(_today_utc())
+        if not absentees:
+            return
+        by_team: dict[int, list[str]] = defaultdict(list)
+        for u in absentees:
+            if u.team_id is not None:
+                by_team[u.team_id].append(u.name)
+        if not by_team:
+            return
+        svc = NotificationService(db)
+        notified = 0
+        for team_id, names in by_team.items():
+            for sup_id in await _supervisor_ids_for_team(db, team_id):
+                await svc.absentee_alert(sup_id, absent_names=names, commit=False)
+                notified += 1
+        await db.commit()
+        logger.info(
+            "ABSENTEE_ALERT: %d team(s), notified %d supervisor(s)",
+            len(by_team), notified,
+        )
+
+
+async def stationary_alert_job() -> None:
+    """Every 30 min during field hours — flag on-clock executives whose trailing
+    ~90 min of GPS pings all sit within a small radius (checklist #21). Alerts
+    the team supervisor once per employee per day (Redis cooldown), so a genuinely
+    parked exec doesn't re-trigger every half hour."""
+    now = _business_now()
+    if not await _claim(f"stationary_alert:{now:%Y%m%d%H%M}"):
+        return
+    since = datetime.now(timezone.utc) - timedelta(minutes=_STATIONARY_MIN_MINUTES + 5)
+    async with async_session_factory() as db:
+        nrepo = NotificationRepository(db)
+        lrepo = LocationRepository(db)
+        on_clock = await nrepo.on_clock_field_users(_today_utc())
+        if not on_clock:
+            return
+        svc = NotificationService(db)
+        r = get_redis()
+        alerted = 0
+        for emp in on_clock:
+            pts = await lrepo.points_since(emp.id, since)
+            if len(pts) < 3:
+                continue  # too little data to judge movement
+            span_min = (pts[-1][2] - pts[0][2]).total_seconds() / 60.0
+            if span_min < _STATIONARY_MIN_MINUTES - 5:
+                continue  # window doesn't yet cover 90 min
+            lat0, lng0, _ = pts[0]
+            max_move = max(_haversine_m(lat0, lng0, la, ln) for la, ln, _ in pts)
+            if max_move > _STATIONARY_RADIUS_M:
+                continue  # they moved — not stationary
+            if emp.team_id is None:
+                continue
+            # Cooldown: one alert per employee per day.
+            cooldown_key = f"{Keys.PREFIX}:stationary_alerted:{emp.id}:{_today_utc()}"
+            try:
+                if not await r.set(cooldown_key, "1", nx=True, ex=7200):
+                    continue
+            except Exception:  # noqa: BLE001 — Redis down: still alert
+                logger.warning("stationary cooldown check failed; alerting anyway")
+            for sup_id in await _supervisor_ids_for_team(db, emp.team_id):
+                await svc.stationary_alert(
+                    sup_id,
+                    employee_id=emp.id,
+                    employee_name=emp.name,
+                    minutes=int(span_min),
+                    commit=False,
+                )
+                alerted += 1
+        if alerted:
+            await db.commit()
+            logger.info("STATIONARY_ALERT: sent %d alert(s)", alerted)
+
+
+async def _generate_and_notify_team_reports(
+    start: date_type,
+    end: date_type,
+    label: str,
+    *,
+    weekly: bool,
+    ttl_seconds: int,
+) -> None:
+    """Shared body for the weekly/monthly auto-report jobs: build one TEAM report
+    per active team for [start, end] and notify that team's supervisor(s) with a
+    download link. A failure for one team is logged and skipped."""
+    async with async_session_factory() as db:
+        rrepo = ReportRepository(db)
+        team_ids = await rrepo.active_team_ids()
+        if not team_ids:
+            return
+        svc = NotificationService(db)
+        generated = 0
+        for team_id in team_ids:
+            sup_ids = await _supervisor_ids_for_team(db, team_id)
+            if not sup_ids:
+                continue  # no supervisor to send it to
+            team = await rrepo.get_team(team_id)
+            scope = f"Team: {team.name if team else team_id}"
+            # owner = first supervisor (download authz); admins can always fetch.
+            result = await generate_team_report_file(
+                team_id=team_id,
+                start=start,
+                end=end,
+                period_label=label,
+                owner_id=sup_ids[0],
+                scope_label=scope,
+                fmt=ReportFormat.EXCEL,
+                ttl_seconds=ttl_seconds,
+            )
+            if result is None:
+                continue
+            _, url = result
+            for sup_id in sup_ids:
+                await svc.report_ready(
+                    sup_id, weekly=weekly, period_label=label,
+                    download_url=url, commit=False,
+                )
+            generated += 1
+        await db.commit()
+        logger.info(
+            "%s auto-report: generated %d team report(s)",
+            "WEEKLY" if weekly else "MONTHLY", generated,
+        )
+
+
+async def weekly_report_job() -> None:
+    """Monday 07:00 — generate each team's report for the prior week (checklist
+    #60): Mon–Sun ending yesterday, with visits/orders/conversion per exec."""
+    today = _business_now().date()
+    if not await _claim(f"weekly_report:{today}"):
+        return
+    end = today - timedelta(days=1)
+    start = end - timedelta(days=6)
+    label = f"Week of {start:%d %b} – {end:%d %b %Y}"
+    await _generate_and_notify_team_reports(
+        start, end, label, weekly=True, ttl_seconds=_WEEKLY_REPORT_TTL
+    )
+
+
+async def monthly_report_job() -> None:
+    """1st of month 06:00 — generate each team's report for the previous calendar
+    month (checklist #61)."""
+    today = _business_now().date()
+    if not await _claim(f"monthly_report:{today:%Y%m}"):
+        return
+    end = today.replace(day=1) - timedelta(days=1)  # last day of previous month
+    start = end.replace(day=1)
+    label = start.strftime("%B %Y")
+    await _generate_and_notify_team_reports(
+        start, end, label, weekly=False, ttl_seconds=_MONTHLY_REPORT_TTL
+    )
+
+
 def build_reminder_scheduler() -> AsyncIOScheduler:
     """Construct (but don't start) the reminders scheduler. main.py starts it in
     the lifespan and shuts it down on exit."""
@@ -439,6 +626,39 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
         refresh_gps_config_cache,
         CronTrigger(hour=0, minute=0),
         id="refresh_gps_config_cache",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=3600,
+    )
+    scheduler.add_job(
+        absentee_alert_job,
+        CronTrigger(hour=9, minute=30),
+        id="absentee_alert",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=3600,
+    )
+    scheduler.add_job(
+        stationary_alert_job,
+        # Every 30 min across field hours (10:00–17:30 business tz).
+        CronTrigger(hour="10-17", minute="0,30"),
+        id="stationary_alert",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=600,
+    )
+    scheduler.add_job(
+        weekly_report_job,
+        CronTrigger(day_of_week="mon", hour=7, minute=0),
+        id="weekly_report",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=3600,
+    )
+    scheduler.add_job(
+        monthly_report_job,
+        CronTrigger(day=1, hour=6, minute=0),
+        id="monthly_report",
         max_instances=1,
         coalesce=True,
         misfire_grace_time=3600,

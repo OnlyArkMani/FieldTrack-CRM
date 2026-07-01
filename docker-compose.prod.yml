@@ -149,6 +149,7 @@ services:
         condition: service_healthy
     volumes:
       - reports_data:/srv/fieldtrack/reports
+      - visit_photos_data:/srv/fieldtrack/visit_photos  # visit photos (#24)
     # NO ports: — only Nginx talks to `app` over fieldtrack_network.
     expose:
       - "8000"
@@ -191,6 +192,7 @@ volumes:
   postgres_data:
   redis_data:
   reports_data:
+  visit_photos_data:
   nginx_logs:
 
 networks:
