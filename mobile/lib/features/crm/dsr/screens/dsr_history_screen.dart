@@ -116,7 +116,7 @@ class _DsrHistoryScreenState extends ConsumerState<DsrHistoryScreen> {
                   ),
                   Text(
                     monthLabel,
-                    style: AppTextStyles.titleMedium(context),
+                    style: AppTextStyles.heading,
                   ),
                   IconButton(
                     icon: const Icon(Icons.chevron_right),
@@ -147,7 +147,7 @@ class _DsrHistoryScreenState extends ConsumerState<DsrHistoryScreen> {
       return Center(
         child: Text(
           'No reports for this month',
-          style: AppTextStyles.bodyMedium(context).copyWith(
+          style: AppTextStyles.bodyMedium.copyWith(
             color: context.appColors.textSecondary,
           ),
         ),
@@ -199,7 +199,7 @@ class _DsrListItem extends StatelessWidget {
                   children: [
                     Text(
                       dateLabel,
-                      style: AppTextStyles.bodyMedium(context)
+                      style: AppTextStyles.bodyMedium
                           .copyWith(fontWeight: FontWeight.w600),
                     ),
                     if (summary.isLate) ...[
@@ -213,7 +213,7 @@ class _DsrListItem extends StatelessWidget {
                   '${summary.visitsCompleted} visits  ·  '
                   '${summary.ordersCaptures} orders  ·  '
                   '${summary.hotLeads + summary.warmLeads + summary.coldLeads} leads',
-                  style: AppTextStyles.labelSmall(context)
+                  style: AppTextStyles.caption
                       .copyWith(color: colors.textSecondary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -394,13 +394,13 @@ class _DsrDetailViewState extends ConsumerState<_DsrDetailView> {
                           v.farmerName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.bodyMedium(context)
+                          style: AppTextStyles.bodyMedium
                               .copyWith(fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           '${v.purposeLabel}  ·  ${v.timeLabel}',
-                          style: AppTextStyles.labelSmall(context)
+                          style: AppTextStyles.caption
                               .copyWith(color: colors.textSecondary),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -434,12 +434,12 @@ class _DsrDetailViewState extends ConsumerState<_DsrDetailView> {
                       o.farmerName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodyMedium(context),
+                      style: AppTextStyles.bodyMedium,
                     ),
                   ),
                   Text(
                     '${o.bagsCount} bags',
-                    style: AppTextStyles.bodyMedium(context).copyWith(
+                    style: AppTextStyles.bodyMedium.copyWith(
                       color: const Color(0xFF4CAF7D),
                       fontWeight: FontWeight.w700,
                     ),
@@ -457,7 +457,7 @@ class _DsrDetailViewState extends ConsumerState<_DsrDetailView> {
           AppCard(
             child: Text(
               d.endOfDayNote!,
-              style: AppTextStyles.bodyMedium(context),
+              style: AppTextStyles.bodyMedium,
             ),
           ),
           const SizedBox(height: 12),
@@ -477,7 +477,7 @@ class _DsrDetailViewState extends ConsumerState<_DsrDetailView> {
                 Expanded(
                   child: Text(
                     d.managerComment!,
-                    style: AppTextStyles.bodyMedium(context),
+                    style: AppTextStyles.bodyMedium,
                   ),
                 ),
               ],
@@ -499,7 +499,7 @@ class _SectionLabel extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 8, top: 4),
         child: Text(
           label,
-          style: AppTextStyles.labelMedium(context)
+          style: AppTextStyles.caption
               .copyWith(fontWeight: FontWeight.w600),
         ),
       );

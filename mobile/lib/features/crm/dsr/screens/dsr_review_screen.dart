@@ -131,7 +131,7 @@ class _DsrReviewScreenState extends ConsumerState<DsrReviewScreen>
         automaticallyImplyLeading: false,
         title: Text(
           "Today's Summary",
-          style: AppTextStyles.titleMedium(context),
+          style: AppTextStyles.heading,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -176,7 +176,7 @@ class _DsrReviewScreenState extends ConsumerState<DsrReviewScreen>
           const SizedBox(height: 20),
           Text(
             'Report submitted to manager',
-            style: AppTextStyles.titleMedium(context),
+            style: AppTextStyles.heading,
           ),
         ],
       ),
@@ -208,7 +208,7 @@ class _DsrReviewScreenState extends ConsumerState<DsrReviewScreen>
         // Date sub-header
         Text(
           dateLabel,
-          style: AppTextStyles.labelSmall(context).copyWith(
+          style: AppTextStyles.caption.copyWith(
             color: context.appColors.textSecondary,
           ),
         ),
@@ -258,7 +258,7 @@ class _DsrReviewScreenState extends ConsumerState<DsrReviewScreen>
                       border: InputBorder.none,
                       counterText: '',
                     ),
-                    style: AppTextStyles.bodyMedium(context),
+                    style: AppTextStyles.bodyMedium,
                   );
                 },
               ),
@@ -272,7 +272,7 @@ class _DsrReviewScreenState extends ConsumerState<DsrReviewScreen>
                       padding: const EdgeInsets.only(bottom: 6),
                       child: Text(
                         '$count / 300',
-                        style: AppTextStyles.labelSmall(context).copyWith(
+                        style: AppTextStyles.caption.copyWith(
                           color: count > 280
                               ? Theme.of(context).colorScheme.error
                               : context.appColors.textSecondary,
@@ -376,12 +376,12 @@ class _StatCard extends StatelessWidget {
             const SizedBox(height: 2),
           Text(
             value,
-            style: AppTextStyles.titleMedium(context)
+            style: AppTextStyles.heading
                 .copyWith(color: accent, fontWeight: FontWeight.w700),
           ),
           Text(
             label,
-            style: AppTextStyles.labelSmall(context)
+            style: AppTextStyles.caption
                 .copyWith(color: accent, fontSize: 10),
           ),
         ],
@@ -402,7 +402,7 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         label,
-        style: AppTextStyles.labelMedium(context).copyWith(
+        style: AppTextStyles.caption.copyWith(
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -439,13 +439,13 @@ class _VisitCard extends StatelessWidget {
                   visit.farmerName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodyMedium(context)
+                  style: AppTextStyles.bodyMedium
                       .copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   '${visit.purposeLabel}  ·  ${visit.timeLabel}',
-                  style: AppTextStyles.labelSmall(context)
+                  style: AppTextStyles.caption
                       .copyWith(color: colors.textSecondary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -514,14 +514,14 @@ class _OrderCard extends StatelessWidget {
                   order.farmerName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodyMedium(context)
+                  style: AppTextStyles.bodyMedium
                       .copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   'Delivery: $dateLabel'
                   '${order.paymentMode != null ? '  ·  ${order.paymentMode}' : ''}',
-                  style: AppTextStyles.labelSmall(context).copyWith(
+                  style: AppTextStyles.caption.copyWith(
                     color: context.appColors.textSecondary,
                   ),
                   maxLines: 1,
@@ -533,7 +533,7 @@ class _OrderCard extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             '${order.bagsCount} bags',
-            style: AppTextStyles.bodyMedium(context).copyWith(
+            style: AppTextStyles.bodyMedium.copyWith(
               color: const Color(0xFF4CAF7D),
               fontWeight: FontWeight.w700,
             ),
@@ -568,7 +568,7 @@ class _FollowUpCard extends StatelessWidget {
                   followUp.farmerName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodyMedium(context)
+                  style: AppTextStyles.bodyMedium
                       .copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 2),
@@ -576,7 +576,7 @@ class _FollowUpCard extends StatelessWidget {
                   '$dateLabel'
                   '${followUp.scheduledTime != null ? '  ·  ${followUp.scheduledTime}' : ''}'
                   '${followUp.purpose != null ? '  ·  ${followUp.purpose}' : ''}',
-                  style: AppTextStyles.labelSmall(context).copyWith(
+                  style: AppTextStyles.caption.copyWith(
                     color: context.appColors.textSecondary,
                   ),
                   maxLines: 1,
