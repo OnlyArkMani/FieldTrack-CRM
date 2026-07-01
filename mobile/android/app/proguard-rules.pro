@@ -54,6 +54,17 @@
 -keep class com.dexterous.** { *; }
 -dontwarn com.dexterous.**
 
+# ── Play Core (Flutter deferred components) ──────────────────────────────
+# Flutter's embedding references com.google.android.play.core.* for deferred
+# component / split-install support. This app does NOT use deferred components
+# and doesn't ship the Play Core library, so R8 reports these as missing
+# classes and fails. Keep the referencing Flutter classes and silence the
+# warnings for the absent Play Core APIs.
+-keep class com.google.android.play.core.** { *; }
+-dontwarn com.google.android.play.core.**
+-keep class io.flutter.embedding.engine.deferredcomponents.** { *; }
+-keep class io.flutter.embedding.android.FlutterPlayStoreSplitApplication { *; }
+
 # ── General Dart/Kotlin reflection safety ────────────────────────────────
 -keepattributes Signature, *Annotation*, EnclosingMethod, InnerClasses
 -keepclassmembers class * {
