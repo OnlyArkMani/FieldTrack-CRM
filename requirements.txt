@@ -1,5 +1,6 @@
 # FieldTrack backend dependencies — pinned majors, production-grade set.
 fastapi==0.115.12
+python-multipart==0.0.20      # multipart/form-data — visit photo uploads
 uvicorn[standard]==0.34.2
 gunicorn==23.0.0               # prod process manager — supervises uvicorn workers
 prometheus-fastapi-instrumentator==7.0.0  # exposes /metrics for Prometheus

@@ -193,6 +193,33 @@ class VisitNote(Base, TimestampMixin):
         return f"<VisitNote id={self.id} visit_id={self.visit_id} step={self.step_completed}>"
 
 
+class VisitPhoto(Base):
+    """A photograph attached to a visit (checklist #24). Up to 5 per visit —
+    the cap is enforced in the service. Only metadata lives here; the image
+    bytes live on the VPS filesystem (settings.visit_photo_storage_dir) and are
+    streamed via the download endpoint (owner/team scoped)."""
+
+    __tablename__ = "visit_photos"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    visit_id: Mapped[int | None] = mapped_column(
+        ForeignKey("visits.id", ondelete="CASCADE")
+    )
+    uploaded_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    content_type: Mapped[str | None] = mapped_column(String(100))
+    size_bytes: Mapped[int | None] = mapped_column(Integer)
+    caption: Mapped[str | None] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (Index("ix_visit_photos_visit_id", "visit_id"),)
+
+    def __repr__(self) -> str:
+        return f"<VisitPhoto id={self.id} visit_id={self.visit_id}>"
+
+
 class LivestockProfile(Base):
     """Point-in-time livestock snapshot — new row per visit (history preserved)."""
 

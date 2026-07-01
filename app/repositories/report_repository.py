@@ -3,13 +3,14 @@
 These are read-heavy range scans. They reuse the existing composite indexes:
 attendance (user_id, date) and location_logs (user_id, timestamp).
 """
-from datetime import date, datetime
+from datetime import date, datetime, time, timezone
 
 from sqlalchemy import and_, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.attendance import Attendance
+from app.models.crm import Visit, VisitOrder
 from app.models.enums import AttendanceStatus, GeofenceEventType, UserRole
 from app.models.geofence import Geofence, GeofenceEvent
 from app.models.location import LocationLog
@@ -174,6 +175,62 @@ class ReportRepository:
             {"team_id": team_id},
         )
         return [dict(r) for r in rows.mappings().all()]
+
+    async def crm_metrics_in_range(
+        self, *, start: date, end: date, team_id: int
+    ) -> dict[int, dict[str, int]]:
+        """Per-employee CRM activity for a team over [start, end] (inclusive):
+        completed visits, orders captured, and total bags. Keyed by employee_id.
+        Timestamps are UTC (Visit.check_in_at / VisitOrder.created_at); the day
+        window is [start 00:00, end+1 00:00) in UTC, matching the report bounds.
+
+        Used by the weekly/monthly auto-report to show visits/orders/conversion
+        alongside attendance."""
+        day_start = datetime.combine(start, time.min, tzinfo=timezone.utc)
+        day_end = datetime.combine(end, time.max, tzinfo=timezone.utc)
+        out: dict[int, dict[str, int]] = {}
+
+        visits_q = await self.db.execute(
+            select(Visit.employee_id, func.count(Visit.id))
+            .join(User, User.id == Visit.employee_id)
+            .where(
+                User.team_id == team_id,
+                Visit.status == "COMPLETED",
+                Visit.check_in_at >= day_start,
+                Visit.check_in_at <= day_end,
+            )
+            .group_by(Visit.employee_id)
+        )
+        for uid, cnt in visits_q.all():
+            if uid is not None:
+                out.setdefault(int(uid), {"visits": 0, "orders": 0, "bags": 0})["visits"] = int(cnt)
+
+        orders_q = await self.db.execute(
+            select(
+                VisitOrder.employee_id,
+                func.count(VisitOrder.id),
+                func.coalesce(func.sum(VisitOrder.bags_count), 0),
+            )
+            .join(User, User.id == VisitOrder.employee_id)
+            .where(
+                User.team_id == team_id,
+                VisitOrder.created_at >= day_start,
+                VisitOrder.created_at <= day_end,
+            )
+            .group_by(VisitOrder.employee_id)
+        )
+        for uid, cnt, bags in orders_q.all():
+            if uid is not None:
+                row = out.setdefault(int(uid), {"visits": 0, "orders": 0, "bags": 0})
+                row["orders"] = int(cnt)
+                row["bags"] = int(bags or 0)
+        return out
+
+    async def active_team_ids(self) -> list[int]:
+        """All active teams — the audience for the weekly/monthly auto-report
+        scheduler jobs."""
+        stmt = select(Team.id).where(Team.is_active.is_(True)).order_by(Team.id.asc())
+        return [int(i) for i in (await self.db.execute(stmt)).scalars().all()]
 
     async def get_team(self, team_id: int) -> Team | None:
         return await self.db.get(Team, team_id)

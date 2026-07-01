@@ -29,6 +29,11 @@ class NotificationType(str, Enum):
     GEOFENCE_ENTER = "GEOFENCE_ENTER"
     GEOFENCE_EXIT = "GEOFENCE_EXIT"
     ADMIN_ANNOUNCEMENT = "ADMIN_ANNOUNCEMENT"
+    # CRM manager-facing alerts (scheduler-driven).
+    ABSENTEE_ALERT = "ABSENTEE_ALERT"        # exec not checked in by 09:30
+    STATIONARY_ALERT = "STATIONARY_ALERT"    # exec not moving 90+ min in field hours
+    WEEKLY_REPORT = "WEEKLY_REPORT"          # Monday auto team report ready
+    MONTHLY_REPORT = "MONTHLY_REPORT"        # 1st-of-month auto team report ready
 
 
 class NotificationOut(BaseModel):

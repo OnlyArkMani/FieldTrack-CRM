@@ -3,6 +3,8 @@ commits, no HTTP (services own those)."""
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import func
+
 from app.models.crm import (
     Farmer,
     Lead,
@@ -10,6 +12,7 @@ from app.models.crm import (
     Visit,
     VisitNote,
     VisitOrder,
+    VisitPhoto,
     VisitPlanItem,
 )
 
@@ -95,6 +98,27 @@ class VisitRepository:
             .limit(1)
         )
         return (await self.db.execute(stmt)).scalar_one_or_none()
+
+    # ── photos (checklist #24) ───────────────────────────────────────────
+    async def photos_for(self, visit_id: int) -> list[VisitPhoto]:
+        stmt = (
+            select(VisitPhoto)
+            .where(VisitPhoto.visit_id == visit_id)
+            .order_by(VisitPhoto.id.asc())
+        )
+        return list((await self.db.execute(stmt)).scalars().all())
+
+    async def photo_count(self, visit_id: int) -> int:
+        stmt = select(func.count(VisitPhoto.id)).where(
+            VisitPhoto.visit_id == visit_id
+        )
+        return int((await self.db.execute(stmt)).scalar_one())
+
+    async def get_photo(self, photo_id: int) -> VisitPhoto | None:
+        return await self.db.get(VisitPhoto, photo_id)
+
+    async def delete_photo(self, photo: VisitPhoto) -> None:
+        await self.db.delete(photo)
 
     # ── writes (no commit — service owns the transaction) ────────────────
     def add(self, obj) -> None:

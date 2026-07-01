@@ -87,6 +87,9 @@ class NormalizedReport:
     status: AttendanceStatus | None
     scope_label: str
     month: date | None = None
+    # Overrides the auto-derived subtitle (used by weekly auto-reports where the
+    # window isn't a whole calendar month, e.g. "Week of 22 Jun – 28 Jun 2026").
+    period_label: str | None = None
 
 
 # ── Service ──────────────────────────────────────────────────────────────
@@ -654,6 +657,9 @@ class ReportService:
         rows = await self.repo.attendance_in_range(
             start=n.start, end=n.end, team_id=n.team_id, user_id=None, status=None,
         )
+        crm = await self.repo.crm_metrics_in_range(
+            start=n.start, end=n.end, team_id=n.team_id
+        )
 
         # Working days = distinct dates the team had any attendance activity.
         working_days = len({att.date for att, _ in rows})
@@ -688,14 +694,22 @@ class ReportService:
         breakdown: list[list[Any]] = []
         top = {"name": "—", "score": -1.0}
         most_absent = {"name": "—", "absent": -1}
-        for a in sorted(agg.values(), key=lambda x: x["name"]):
+        total_visits = total_orders = total_bags = 0
+        for uid, a in sorted(agg.items(), key=lambda kv: kv[1]["name"]):
             credited_m = a["present"] + 0.5 * a["half"]
             rate = (credited_m / working_days * 100) if working_days else 0.0
             derived_absent = max(working_days - int(credited_m), 0) if working_days else a["absent"]
+            m = crm.get(uid, {"visits": 0, "orders": 0, "bags": 0})
+            visits, orders, bags = m["visits"], m["orders"], m["bags"]
+            conversion = (orders / visits * 100) if visits else 0.0
+            total_visits += visits
+            total_orders += orders
+            total_bags += bags
             breakdown.append([
                 a["name"], a["present"], a["half"], a["absent"],
                 self._fmt_duration(a["minutes"]),
                 round(a["distance"] / 1000, 2), f"{rate:.0f}%",
+                visits, orders, bags, f"{conversion:.0f}%",
             ])
             score = credited_m * 1000 + a["minutes"]  # tie-break by hours
             if score > top["score"]:
@@ -703,15 +717,21 @@ class ReportService:
             if derived_absent > most_absent["absent"]:
                 most_absent = {"name": a["name"], "absent": derived_absent}
 
-        month_label = (n.month or n.start).strftime("%B %Y")
+        # Subtitle: explicit period_label (weekly) wins; else the calendar month.
+        month_label = n.period_label or (n.month or n.start).strftime("%B %Y")
+        team_conversion = (total_orders / total_visits * 100) if total_visits else 0.0
         summary = [
             ("Team", team.name if team else str(n.team_id)),
-            ("Month", month_label),
+            ("Period", month_label),
             ("Members", str(len(members))),
             ("Working days", str(working_days)),
             ("Attendance rate", f"{team_rate:.0f}%"),
             ("Total hours", self._fmt_duration(total_minutes)),
             ("Total distance", f"{total_distance / 1000:.2f} km"),
+            ("Visits completed", str(total_visits)),
+            ("Orders captured", str(total_orders)),
+            ("Bags ordered", str(total_bags)),
+            ("Conversion rate", f"{team_conversion:.0f}%"),
             ("Top performer", top["name"]),
             ("Most absences", most_absent["name"]),
         ]
@@ -724,9 +744,10 @@ class ReportService:
             tables=[ReportTable(
                 name="Individual Breakdown",
                 columns=["Employee", "Present", "Half", "Absent",
-                         "Hours", "Distance (km)", "Attendance %"],
+                         "Hours", "Distance (km)", "Attendance %",
+                         "Visits", "Orders", "Bags", "Conversion %"],
                 rows=breakdown,
-                numeric_cols={1, 2, 3, 5},
+                numeric_cols={1, 2, 3, 5, 7, 8, 9},
             )],
             filename_stem=f"team_{n.team_id}_{(n.month or n.start):%Y-%m}",
         )
@@ -897,11 +918,17 @@ class ReportStore:
         return f"{self.settings.api_v1_prefix}/reports/{report_id}/download"
 
     async def create(
-        self, owner_id: int, type_: ReportType, fmt: ReportFormat
+        self,
+        owner_id: int,
+        type_: ReportType,
+        fmt: ReportFormat,
+        *,
+        ttl_seconds: int | None = None,
     ) -> str:
         report_id = uuid.uuid4().hex
         now = datetime.now(timezone.utc)
-        expires = now + timedelta(seconds=self._ttl)
+        ttl = ttl_seconds or self._ttl
+        expires = now + timedelta(seconds=ttl)
         mapping = {
             "status": ReportStatus.PROCESSING.value,
             "type": type_.value,
@@ -912,11 +939,11 @@ class ReportStore:
         }
         key = Keys.report(report_id)
         await self.redis.hset(key, mapping=mapping)
-        await self.redis.expire(key, self._ttl)
+        await self.redis.expire(key, ttl)
         return report_id
 
     async def mark_ready(
-        self, report_id: str, *, path: str, filename: str
+        self, report_id: str, *, path: str, filename: str, ttl_seconds: int | None = None
     ) -> None:
         key = Keys.report(report_id)
         await self.redis.hset(
@@ -928,7 +955,7 @@ class ReportStore:
                 "download_url": self.download_url(report_id),
             },
         )
-        await self.redis.expire(key, self._ttl)  # refresh from completion time
+        await self.redis.expire(key, ttl_seconds or self._ttl)  # refresh from completion time
 
     async def mark_failed(self, report_id: str, *, error: str) -> None:
         key = Keys.report(report_id)
@@ -986,3 +1013,59 @@ async def run_report_job(
     except Exception as exc:  # noqa: BLE001
         logger.exception("report %s failed", report_id)
         await store.mark_failed(report_id, error=str(exc))
+
+
+async def generate_team_report_file(
+    *,
+    team_id: int,
+    start: date,
+    end: date,
+    period_label: str,
+    owner_id: int,
+    scope_label: str,
+    fmt: ReportFormat = ReportFormat.EXCEL,
+    ttl_seconds: int,
+) -> tuple[str, str] | None:
+    """Synchronously build + render + persist a TEAM report for a date window and
+    return (report_id, download_url). Used by the weekly/monthly auto-report
+    scheduler jobs (no HTTP request, no polling). Files are written to an
+    ``auto/`` subdir so the short-TTL on-demand pruner never touches them; the
+    Redis status carries the long `ttl_seconds` so the download link survives
+    until the supervisor fetches it. Returns None (and logs) on failure so one
+    bad team never aborts the whole fan-out."""
+    from app.services.report_exporters import render_report  # lazy: heavy libs
+
+    store = ReportStore()
+    normalized = NormalizedReport(
+        type=ReportType.TEAM,
+        start=start,
+        end=end,
+        team_id=team_id,
+        user_id=None,
+        status=None,
+        scope_label=scope_label,
+        month=start.replace(day=1),
+        period_label=period_label,
+    )
+    try:
+        report_id = await store.create(
+            owner_id, ReportType.TEAM, fmt, ttl_seconds=ttl_seconds
+        )
+        async with async_session_factory() as db:
+            data = await ReportService(db).build_data(normalized)
+        content: bytes = await asyncio.to_thread(render_report, data, fmt)
+        # Persist under auto/ so prune_expired_files (top-level only) skips it.
+        auto_dir = os.path.join(store.settings.report_storage_dir, "auto")
+        os.makedirs(auto_dir, exist_ok=True)
+        path = os.path.join(auto_dir, f"{report_id}.{fmt.extension}")
+        with open(path, "wb") as fh:
+            fh.write(content)
+        filename = f"{data.filename_stem}.{fmt.extension}"
+        await store.mark_ready(
+            report_id, path=path, filename=filename, ttl_seconds=ttl_seconds
+        )
+        logger.info("auto team report %s ready (team=%s, %s)", report_id, team_id, period_label)
+        return report_id, store.download_url(report_id)
+    except Exception:  # noqa: BLE001
+        logger.exception("auto team report failed for team=%s", team_id)
+        return None

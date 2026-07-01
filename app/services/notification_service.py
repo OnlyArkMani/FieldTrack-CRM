@@ -157,6 +157,70 @@ class NotificationService:
             commit=commit,
         )
 
+    async def absentee_alert(
+        self, supervisor_id: int, *, absent_names: list[str], commit: bool = False
+    ) -> Notification:
+        """09:30 alert to a supervisor: which of their executives haven't clocked
+        in. One aggregate notification per team (mirrors the late-DSR fan-out)."""
+        n = len(absent_names)
+        preview = ", ".join(absent_names[:3])
+        if n > 3:
+            preview += f" +{n - 3} more"
+        body = (
+            f"{n} team member(s) not checked in by 09:30: {preview}."
+            if preview
+            else f"{n} team member(s) not checked in by 09:30."
+        )
+        return await self.send_fcm(
+            supervisor_id,
+            title="Attendance alert",
+            body=body,
+            type=NotificationType.ABSENTEE_ALERT,
+            data={"screen": "attendance"},
+            commit=commit,
+        )
+
+    async def stationary_alert(
+        self,
+        supervisor_id: int,
+        *,
+        employee_id: int,
+        employee_name: str,
+        minutes: int,
+        commit: bool = False,
+    ) -> Notification:
+        """Alert a supervisor that an on-clock executive hasn't moved for
+        `minutes` during field hours (anti-idling visibility)."""
+        return await self.send_fcm(
+            supervisor_id,
+            title="Executive stationary",
+            body=f"{employee_name} hasn't moved for {minutes}+ min during field hours.",
+            type=NotificationType.STATIONARY_ALERT,
+            data={"screen": "employee", "employee_id": str(employee_id)},
+            commit=commit,
+        )
+
+    async def report_ready(
+        self,
+        user_id: int,
+        *,
+        weekly: bool,
+        period_label: str,
+        download_url: str,
+        commit: bool = False,
+    ) -> Notification:
+        """Notify a supervisor that an auto-generated weekly/monthly team report
+        is ready to download."""
+        kind = "Weekly" if weekly else "Monthly"
+        return await self.send_fcm(
+            user_id,
+            title=f"{kind} report ready",
+            body=f"Your {kind.lower()} team report for {period_label} is ready to download.",
+            type=NotificationType.WEEKLY_REPORT if weekly else NotificationType.MONTHLY_REPORT,
+            data={"screen": "reports", "download_url": download_url},
+            commit=commit,
+        )
+
     async def sync_failed(self, user_id: int, *, commit: bool = True) -> Notification:
         """After 3 consecutive sync failures (called by the sync layer)."""
         return await self.send_fcm(

@@ -15,11 +15,14 @@ KEY RULES:
 """
 import logging
 import math
+import os
+import uuid
 from datetime import date as date_type
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.exceptions import bad_request, forbidden, not_found
 from app.models.crm import (
     Farmer,
@@ -29,6 +32,7 @@ from app.models.crm import (
     Visit,
     VisitNote,
     VisitOrder,
+    VisitPhoto,
 )
 from app.models.enums import UserRole
 from app.models.user import User
@@ -45,6 +49,7 @@ from app.schemas.crm import (
     VisitNoteResponse,
     VisitNotesUpsert,
     VisitOrderResponse,
+    VisitPhotoResponse,
     VisitResponse,
 )
 
@@ -53,6 +58,19 @@ logger = logging.getLogger("fieldtrack.visit")
 LOCATION_WARNING_METERS = 200.0
 ORDER_MIN_LEAD_DAYS = 7
 _EARTH_RADIUS_M = 6371000.0
+_ALLOWED_PHOTO_TYPES = {"image/jpeg", "image/png", "image/webp", "image/heic"}
+_PHOTO_EXT = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/heic": "heic",
+}
+
+
+def _photo_download_url(photo_id: int) -> str:
+    """API path the mobile app / dashboard fetches the image bytes from."""
+    prefix = get_settings().api_v1_prefix
+    return f"{prefix}/visits/photos/{photo_id}/file"
 
 
 def haversine_meters(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -328,6 +346,104 @@ class VisitService:
         await self.db.refresh(visit)
         return await self._build_detail(visit)
 
+    # ── photos (checklist #24) ───────────────────────────────────────────
+    async def add_photo(
+        self,
+        user: User,
+        visit_id: int,
+        *,
+        content: bytes,
+        content_type: str | None,
+        caption: str | None = None,
+    ) -> VisitPhotoResponse:
+        """Attach a photo to a visit. Enforces the per-visit cap, allowed image
+        types, and the size limit. Bytes are written under
+        visit_photo_storage_dir/{visit_id}/; only metadata is persisted in DB."""
+        visit = await self._load_owned_visit(visit_id, user)
+        settings = get_settings()
+
+        ctype = (content_type or "").split(";")[0].strip().lower()
+        if ctype not in _ALLOWED_PHOTO_TYPES:
+            raise bad_request("Photo must be a JPEG, PNG, WEBP or HEIC image")
+        if not content:
+            raise bad_request("Empty file")
+        if len(content) > settings.max_visit_photo_bytes:
+            mb = settings.max_visit_photo_bytes // (1024 * 1024)
+            raise bad_request(f"Photo exceeds the {mb} MB limit")
+
+        existing = await self.repo.photo_count(visit.id)
+        if existing >= settings.max_visit_photos:
+            raise bad_request(
+                f"A visit can have at most {settings.max_visit_photos} photos"
+            )
+
+        visit_dir = os.path.join(settings.visit_photo_storage_dir, str(visit.id))
+        os.makedirs(visit_dir, exist_ok=True)
+        ext = _PHOTO_EXT.get(ctype, "jpg")
+        path = os.path.join(visit_dir, f"{uuid.uuid4().hex}.{ext}")
+        with open(path, "wb") as fh:
+            fh.write(content)
+
+        photo = VisitPhoto(
+            visit_id=visit.id,
+            uploaded_by=user.id,
+            file_path=path,
+            content_type=ctype,
+            size_bytes=len(content),
+            caption=(caption.strip()[:200] if caption else None),
+        )
+        self.repo.add(photo)
+        await self.db.commit()
+        await self.db.refresh(photo)
+        return self._photo_response(photo)
+
+    async def list_photos(
+        self, user: User, visit_id: int
+    ) -> list[VisitPhotoResponse]:
+        visit = await self._load_owned_visit(visit_id, user)
+        photos = await self.repo.photos_for(visit.id)
+        return [self._photo_response(p) for p in photos]
+
+    async def get_photo_file(
+        self, user: User, photo_id: int
+    ) -> tuple[str, str, str]:
+        """Return (absolute_path, media_type, download_filename) for streaming.
+        Authorizes via the parent visit's ownership rules."""
+        photo = await self.repo.get_photo(photo_id)
+        if photo is None:
+            raise not_found("Photo not found")
+        # Reuse visit ownership scoping.
+        await self._load_owned_visit(photo.visit_id, user)
+        if not photo.file_path or not os.path.isfile(photo.file_path):
+            raise not_found("Photo file is missing")
+        ext = _PHOTO_EXT.get(photo.content_type or "", "jpg")
+        return (
+            photo.file_path,
+            photo.content_type or "application/octet-stream",
+            f"visit_{photo.visit_id}_photo_{photo.id}.{ext}",
+        )
+
+    async def delete_photo(self, user: User, photo_id: int) -> None:
+        photo = await self.repo.get_photo(photo_id)
+        if photo is None:
+            raise not_found("Photo not found")
+        await self._load_owned_visit(photo.visit_id, user)
+        path = photo.file_path
+        await self.repo.delete_photo(photo)
+        await self.db.commit()
+        # Remove the file after the DB row is gone (best-effort).
+        try:
+            if path and os.path.isfile(path):
+                os.remove(path)
+        except OSError:
+            logger.warning("could not remove photo file %s", path)
+
+    @staticmethod
+    def _photo_response(photo: VisitPhoto) -> VisitPhotoResponse:
+        resp = VisitPhotoResponse.model_validate(photo)
+        resp.download_url = _photo_download_url(photo.id)
+        return resp
+
     # ── reads ────────────────────────────────────────────────────────────
     async def get_detail(self, user: User, visit_id: int) -> VisitDetailResponse:
         visit = await self._load_owned_visit(visit_id, user)
@@ -345,6 +461,7 @@ class VisitService:
         livestock = await self.repo.livestock_for_visit(visit.id)
         orders = await self.repo.orders_for(visit.id)
         lead = await self.repo.lead_for_visit(visit.id)
+        photos = await self.repo.photos_for(visit.id)
         base = VisitResponse.model_validate(visit).model_dump()
         return VisitDetailResponse(
             **base,
@@ -357,6 +474,7 @@ class VisitService:
             ),
             orders=[VisitOrderResponse.model_validate(o) for o in orders],
             lead=LeadResponse.model_validate(lead) if lead else None,
+            photos=[self._photo_response(p) for p in photos],
         )
 
     # ── small helpers ────────────────────────────────────────────────────

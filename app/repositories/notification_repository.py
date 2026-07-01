@@ -175,6 +175,62 @@ class NotificationRepository:
         )
         return list((await self.db.execute(stmt)).scalars().all())
 
+    async def absent_field_users_today(self, day: date) -> list[User]:
+        """Active EMPLOYEES (field executives) with NO attendance row for `day`.
+        Feeds the 09:30 manager absentee alert — supervisors are notified ABOUT
+        their team's absent executives, so we scope to EMPLOYEE role (supervisors
+        and admins are excluded here). team_id is loaded so the caller can map
+        each absentee to their team's supervisor."""
+        has_today = (
+            select(Attendance.user_id)
+            .where(Attendance.date == day)
+            .scalar_subquery()
+        )
+        stmt = (
+            select(User)
+            .where(
+                User.is_active.is_(True),
+                User.role == UserRole.EMPLOYEE,
+                User.id.not_in(has_today),
+            )
+            .order_by(User.team_id.asc(), User.name.asc())
+        )
+        return list((await self.db.execute(stmt)).scalars().all())
+
+    async def on_clock_field_users(self, day: date) -> list[User]:
+        """Active field executives currently ON the clock (a START/RESUME today
+        and no END yet). Feeds the stationary-90min check — only people expected
+        to be moving in the field are evaluated."""
+        started = (
+            select(Attendance.user_id)
+            .join(AttendanceSession, AttendanceSession.attendance_id == Attendance.id)
+            .where(
+                Attendance.date == day,
+                AttendanceSession.type.in_([SessionType.START, SessionType.RESUME]),
+            )
+            .scalar_subquery()
+        )
+        ended = (
+            select(Attendance.user_id)
+            .join(AttendanceSession, AttendanceSession.attendance_id == Attendance.id)
+            .where(
+                Attendance.date == day,
+                AttendanceSession.type == SessionType.END,
+            )
+            .scalar_subquery()
+        )
+        stmt = (
+            select(User)
+            .where(
+                User.is_active.is_(True),
+                User.role == UserRole.EMPLOYEE,
+                User.id.in_(started),
+                User.id.not_in(ended),
+            )
+            .order_by(User.id.asc())
+        )
+        return list((await self.db.execute(stmt)).scalars().all())
+
     async def active_field_user_ids(self) -> list[int]:
         """All active non-admin user ids — the broadcast announcement audience."""
         stmt = select(User.id).where(

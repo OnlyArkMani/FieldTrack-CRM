@@ -535,6 +535,22 @@ class VisitOrderResponse(BaseModel):
     created_at: datetime
 
 
+class VisitPhotoResponse(BaseModel):
+    """Metadata for one photo attached to a visit. The image itself is fetched
+    from `download_url` (streamed, owner/team scoped)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    visit_id: int | None
+    uploaded_by: int | None
+    content_type: str | None
+    size_bytes: int | None
+    caption: str | None
+    created_at: datetime
+    download_url: str | None = None
+
+
 class VisitCompleteRequest(BaseModel):
     lead_status: LeadStatus
     # Required (service-enforced) when lead_status is WARM or COLD.
@@ -571,6 +587,7 @@ class VisitDetailResponse(BaseModel):
     livestock: LivestockProfileResponse | None = None
     orders: list[VisitOrderResponse] = Field(default_factory=list)
     lead: LeadResponse | None = None
+    photos: list[VisitPhotoResponse] = Field(default_factory=list)
 
 
 # ── Lead management (Module 4) ───────────────────────────────────────────

@@ -30,6 +30,23 @@ class LocationRepository:
         )
         return result.scalar_one_or_none()
 
+    async def points_since(
+        self, user_id: int, since: datetime
+    ) -> list[tuple[float, float, datetime]]:
+        """(lat, lng, timestamp) for a user with device-capture timestamp >=
+        `since`, oldest-first. Feeds the stationary-90min check: if every point
+        in the trailing window sits within a small radius, the exec hasn't moved.
+        Uses the (user_id, timestamp) composite index."""
+        result = await self.db.execute(
+            select(LocationLog.lat, LocationLog.lng, LocationLog.timestamp)
+            .where(
+                LocationLog.user_id == user_id,
+                LocationLog.timestamp >= since,
+            )
+            .order_by(LocationLog.timestamp.asc())
+        )
+        return [(float(lat), float(lng), ts) for lat, lng, ts in result.all()]
+
     async def history(
         self,
         user_id: int,

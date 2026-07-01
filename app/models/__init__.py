@@ -29,6 +29,7 @@ from app.models.crm import (
     Visit,
     VisitNote,
     VisitOrder,
+    VisitPhoto,
     VisitPlan,
     VisitPlanItem,
 )
@@ -59,6 +60,7 @@ __all__ = [
     "VisitPlanItem",
     "Visit",
     "VisitNote",
+    "VisitPhoto",
     "LivestockProfile",
     "VisitOrder",
     "Lead",
