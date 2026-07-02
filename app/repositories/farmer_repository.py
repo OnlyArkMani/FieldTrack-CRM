@@ -59,10 +59,18 @@ class FarmerRepository:
     ) -> Select:
         if team_id is not None:
             stmt = stmt.where(Farmer.team_id == team_id)
-        if team_ids is not None:
-            stmt = stmt.where(Farmer.team_id.in_(team_ids))
-        if created_by is not None:
-            stmt = stmt.where(Farmer.created_by == created_by)
+        elif team_ids is not None and created_by is not None:
+            stmt = stmt.where(
+                or_(
+                    Farmer.team_id.in_(team_ids),
+                    Farmer.created_by == created_by,
+                )
+            )
+        else:
+            if team_ids is not None:
+                stmt = stmt.where(Farmer.team_id.in_(team_ids))
+            if created_by is not None:
+                stmt = stmt.where(Farmer.created_by == created_by)
         if search and search.strip():
             like = f"%{search.strip()}%"
             stmt = stmt.where(

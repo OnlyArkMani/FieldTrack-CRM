@@ -226,7 +226,7 @@ async def test_farmer_service_supervisor_scoping():
     mock_db.execute = AsyncMock(return_value=MockResult([10, 11]))
 
     scope = await service._scope_for(supervisor)
-    assert scope == {"team_ids": [10, 11]}
+    assert scope == {"team_ids": [10, 11], "created_by": 2}
 
     farmer_in_team = Farmer(id=1, team_id=10, created_by=99)
     farmer_out_team = Farmer(id=2, team_id=12, created_by=99)

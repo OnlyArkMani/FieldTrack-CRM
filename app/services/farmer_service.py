@@ -57,7 +57,7 @@ class FarmerService:
         if user.role == UserRole.SUPERVISOR:
             stmt = select(Team.id).where(Team.supervisor_id == user.id)
             team_ids = list((await self.db.execute(stmt)).scalars().all())
-            return {"team_ids": team_ids}
+            return {"team_ids": team_ids, "created_by": user.id}
         if user.team_id is not None:
             return {"team_id": user.team_id}
         # No team: restrict to what this user created.
