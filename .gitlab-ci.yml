@@ -325,6 +325,8 @@ Build-&-Deployment-Dev:
     - scp -r * .env $DEV_SERVER_USER@$DEV_HOST:/home/$DEV_SERVER_USER/backend/"WIL-"$CI_PROJECT_NAME"-dev"
     - ssh $DEV_SERVER_USER@$DEV_HOST "
         cd /home/$DEV_SERVER_USER/backend/"WIL-"$CI_PROJECT_NAME"-dev" && docker-compose -f $COMPOSE_DEV up -d --build "
+    - ssh $DEV_SERVER_USER@$DEV_HOST "
+        cd /home/$DEV_SERVER_USER/backend/"WIL-"$CI_PROJECT_NAME"-dev" && docker-compose -f $COMPOSE_DEV exec -T cattle-feed-gatipay-backend-dev alembic upgrade head "
     - aws configure set aws_access_key_id $AWS_ACCESS_KEY; aws configure set aws_secret_access_key $AWS_SECRET_KEY; aws configure set default.region $AWS_ZONE
     - ssh $DEV_SERVER_USER@$DEV_HOST " ./scripts/nginx-backend.sh $PROJECT_NAME"-dev" $VAULT_TOKEN $PORT_DEV "
     - echo "" > ~/.aws/config
