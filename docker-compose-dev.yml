@@ -12,7 +12,7 @@ services:
       - .env
 
     ports:
-      - "3889:8000"
+      - "3999:8000"
 
     volumes:
       - /home/wiladmin/ALL_VOLUMES/cattle-feed-gatipay-backend-dev/reports:/srv/fieldtrack/reports
