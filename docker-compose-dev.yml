@@ -34,6 +34,35 @@ services:
     networks:
       - cattle-feed-gatipay-backend-network-dev
 
+  cattle-feed-gatipay-backend-admin-web-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+
+    container_name: cattle-feed-gatipay-backend-admin-web-dev
+
+    restart: always
+
+    depends_on:
+      cattle-feed-gatipay-backend-dev:
+        condition: service_healthy
+
+    ports:
+      - "3992:80"
+
+    volumes:
+      - ./nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro
+
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/nginx-health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    networks:
+      - cattle-feed-gatipay-backend-network-dev
+
 networks:
   cattle-feed-gatipay-backend-network-dev:
     external: true
