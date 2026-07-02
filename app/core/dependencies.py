@@ -43,7 +43,7 @@ __all__ = [
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
-LOGIN_MAX_ATTEMPTS = 5
+LOGIN_MAX_ATTEMPTS = 50
 LOGIN_WINDOW_SECONDS = 15 * 60
 
 

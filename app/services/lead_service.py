@@ -55,7 +55,12 @@ class LeadService:
     async def get_my_leads(
         self, user: User, *, status: str | None
     ) -> list[LeadListItem]:
-        if user.team_id is not None:
+        if user.role == UserRole.ADMIN:
+            scope = {}
+        elif user.role == UserRole.SUPERVISOR:
+            team_ids = await self.repo.supervised_team_ids(user.id)
+            scope = {"team_ids": team_ids}
+        elif user.team_id is not None:
             scope = {"team_ids": [user.team_id]}
         else:
             scope = {"created_by": user.id}

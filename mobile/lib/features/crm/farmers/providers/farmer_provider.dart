@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_exceptions.dart';
+import '../../../auth/providers/auth_provider.dart';
 import '../data/farmer_repository.dart';
 import '../models/farmer.dart';
 
@@ -24,8 +25,8 @@ class FarmerListState {
 
   final List<FarmerListItem> items;
   final bool isLoading;
-  final bool isLoadingMore;
   final bool isRefreshing;
+  final bool isLoadingMore;
   final String? error;
   final String? nextCursor;
   final bool hasMore;
@@ -73,6 +74,10 @@ class FarmerListNotifier extends Notifier<FarmerListState> {
   @override
   FarmerListState build() {
     ref.onDispose(() => _debounce?.cancel());
+    final auth = ref.watch(authProvider);
+    if (auth.status != AuthStatus.authenticated) {
+      return const FarmerListState();
+    }
     Future.microtask(refresh);
     return const FarmerListState(isLoading: true);
   }

@@ -11,12 +11,13 @@ under another team); admins/supervisors may set team_id explicitly.
 """
 import logging
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import bad_request, forbidden, not_found
 from app.models.crm import Farmer, Lead
 from app.models.enums import UserRole
-from app.models.user import User
+from app.models.user import Team, User
 from app.repositories.farmer_repository import FarmerRepository
 from app.schemas.common import CursorPage, decode_cursor, encode_cursor
 from app.schemas.crm import (
@@ -49,18 +50,27 @@ class FarmerService:
     def _is_admin(user: User) -> bool:
         return user.role == UserRole.ADMIN
 
-    def _scope_for(self, user: User) -> dict:
+    async def _scope_for(self, user: User) -> dict:
         """List filter kwargs that enforce visibility for a non-admin user."""
         if self._is_admin(user):
             return {}
+        if user.role == UserRole.SUPERVISOR:
+            stmt = select(Team.id).where(Team.supervisor_id == user.id)
+            team_ids = list((await self.db.execute(stmt)).scalars().all())
+            return {"team_ids": team_ids}
         if user.team_id is not None:
             return {"team_id": user.team_id}
         # No team: restrict to what this user created.
         return {"created_by": user.id}
 
-    def _assert_can_view(self, farmer: Farmer, user: User) -> None:
+    async def _assert_can_view(self, farmer: Farmer, user: User) -> None:
         if self._is_admin(user):
             return
+        if user.role == UserRole.SUPERVISOR:
+            stmt = select(Team.id).where(Team.supervisor_id == user.id)
+            team_ids = list((await self.db.execute(stmt)).scalars().all())
+            if farmer.team_id in team_ids:
+                return
         if user.team_id is not None and farmer.team_id == user.team_id:
             return
         if farmer.created_by == user.id:
@@ -78,7 +88,7 @@ class FarmerService:
         lead_status: str | None,
         search: str | None,
     ) -> CursorPage[FarmerListItem]:
-        scope = self._scope_for(user)
+        scope = await self._scope_for(user)
         # Admins may filter by an explicit team; non-admins are pinned to scope.
         if self._is_admin(user) and team_id is not None:
             scope = {"team_id": team_id}
@@ -127,7 +137,7 @@ class FarmerService:
         if found is None:
             raise not_found("Farmer not found")
         farmer, team_name = found
-        self._assert_can_view(farmer, requesting_user)
+        await self._assert_can_view(farmer, requesting_user)
 
         latest_lead = await self.repo.latest_lead(farmer_id)
         recent = await self.repo.recent_visits(farmer_id, limit=RECENT_VISITS_LIMIT)
@@ -207,7 +217,7 @@ class FarmerService:
         farmer = await self.repo.get_by_id(farmer_id)
         if farmer is None:
             raise not_found("Farmer not found")
-        self._assert_can_view(farmer, user)
+        await self._assert_can_view(farmer, user)
 
         fields = payload.model_dump(exclude_unset=True)
         # team reassignment is admin/supervisor only.
@@ -251,7 +261,7 @@ class FarmerService:
         farmer = await self.repo.get_by_id(farmer_id)
         if farmer is None:
             raise not_found("Farmer not found")
-        self._assert_can_view(farmer, user)
+        await self._assert_can_view(farmer, user)
 
         rows, total = await self.repo.list_visits(
             farmer_id, cursor_id=decode_cursor(cursor), limit=limit
@@ -273,7 +283,7 @@ class FarmerService:
         farmer = await self.repo.get_by_id(farmer_id)
         if farmer is None:
             raise not_found("Farmer not found")
-        self._assert_can_view(farmer, user)
+        await self._assert_can_view(farmer, user)
         rows = await self.repo.livestock_history(farmer_id)
         return [LivestockProfileResponse.model_validate(r) for r in rows]
 
@@ -284,7 +294,7 @@ class FarmerService:
         farmer = await self.repo.get_by_id(farmer_id)
         if farmer is None:
             raise not_found("Farmer not found")
-        self._assert_can_view(farmer, user)
+        await self._assert_can_view(farmer, user)
         rows = await self.repo.lead_history(farmer_id)
         return [LeadHistoryItem.model_validate(r) for r in rows]
 
@@ -295,7 +305,7 @@ class FarmerService:
         farmer = await self.repo.get_by_id(farmer_id)
         if farmer is None:
             raise not_found("Farmer not found")
-        self._assert_can_view(farmer, user)
+        await self._assert_can_view(farmer, user)
 
         lead = Lead(
             farmer_id=farmer_id,

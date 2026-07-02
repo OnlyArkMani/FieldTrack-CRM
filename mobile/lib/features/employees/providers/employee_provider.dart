@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exceptions.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../data/employee_repository.dart';
 import '../models/employee.dart';
 
@@ -74,6 +75,10 @@ class EmployeeNotifier extends Notifier<EmployeeListState> {
   @override
   EmployeeListState build() {
     ref.onDispose(() => _debounce?.cancel());
+    final auth = ref.watch(authProvider);
+    if (auth.status != AuthStatus.authenticated) {
+      return const EmployeeListState();
+    }
     // Kick off the first load after construction.
     Future.microtask(refresh);
     return const EmployeeListState(isLoading: true);

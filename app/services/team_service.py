@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import bad_request, conflict, not_found
+from app.core.exceptions import bad_request, conflict, forbidden, not_found
 from app.core.redis import Keys, get_redis
 from app.models.enums import UserRole
 from app.models.user import Team, User
@@ -93,15 +93,29 @@ class TeamService:
         )
 
     # ── List ──────────────────────────────────────────────────────────────
-    async def list_teams(self) -> list[TeamOut]:
-        rows = await self.repo.list_with_stats(today=date.today(), only_active=True)
+    async def list_teams(self, actor: User) -> list[TeamOut]:
+        supervisor_id = actor.id if actor.role == UserRole.SUPERVISOR else None
+        rows = await self.repo.list_with_stats(
+            today=date.today(),
+            only_active=True,
+            supervisor_id=supervisor_id,
+        )
+        if actor.role == UserRole.EMPLOYEE:
+            rows = [r for r in rows if r.id == actor.team_id]
         return [self._to_out(r) for r in rows]
 
     # ── Detail ────────────────────────────────────────────────────────────
-    async def get_detail(self, team_id: int) -> TeamDetailOut:
+    async def get_detail(self, team_id: int, actor: User) -> TeamDetailOut:
         row = await self.repo.get_stats_for(team_id, today=date.today())
         if row is None or not row.is_active:
             raise not_found("Team not found")
+
+        # Access control
+        if actor.role == UserRole.SUPERVISOR and row.supervisor_id != actor.id:
+            raise forbidden("You do not supervise this team")
+        if actor.role == UserRole.EMPLOYEE and row.id != actor.team_id:
+            raise forbidden("You are not a member of this team")
+
         members = await self.repo.get_members(team_id)
         live = await self._live_status_for([m.id for m in members])
         base = self._to_out(row)
@@ -145,7 +159,7 @@ class TeamService:
             metadata={"name": team.name},
         )
         await self.db.commit()
-        return await self.get_detail(team.id)
+        return await self.get_detail(team.id, actor)
 
     # ── Update ───────────────────────────────────────────────────────────
     async def update(
@@ -179,7 +193,7 @@ class TeamService:
             metadata={"fields": sorted(fields.keys())},
         )
         await self.db.commit()
-        return await self.get_detail(team.id)
+        return await self.get_detail(team.id, actor)
 
     # ── Soft delete ──────────────────────────────────────────────────────
     async def soft_delete(
@@ -226,7 +240,7 @@ class TeamService:
             metadata={"member_id": user.id},
         )
         await self.db.commit()
-        return await self.get_detail(team_id)
+        return await self.get_detail(team_id, actor)
 
     async def remove_member(
         self, team_id: int, user_id: int, *, actor: User, ip: str | None
@@ -248,7 +262,7 @@ class TeamService:
             metadata={"member_id": user.id},
         )
         await self.db.commit()
-        return await self.get_detail(team_id)
+        return await self.get_detail(team_id, actor)
 
     # ── Helpers ──────────────────────────────────────────────────────────
     async def _validate_supervisor(self, supervisor_id: int) -> None:

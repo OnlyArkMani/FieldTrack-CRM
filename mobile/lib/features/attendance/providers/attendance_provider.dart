@@ -74,9 +74,13 @@ class AttendanceNotifier extends Notifier<AttendanceUiState> {
 
   @override
   AttendanceUiState build() {
+    final auth = ref.watch(authProvider);
     _observer = _Resumed(_onResume);
     WidgetsBinding.instance.addObserver(_observer);
     ref.onDispose(() => WidgetsBinding.instance.removeObserver(_observer));
+    if (auth.status != AuthStatus.authenticated) {
+      return const AttendanceUiState(isLoading: false);
+    }
     Future.microtask(load);
     return const AttendanceUiState();
   }

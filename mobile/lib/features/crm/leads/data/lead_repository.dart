@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_client.dart';
+import '../../../auth/providers/auth_provider.dart';
 import '../../farmers/models/farmer.dart' show LeadStatus;
 import '../models/lead.dart';
 
@@ -51,9 +54,25 @@ class LeadRepository {
 
 /// All of the current employee's leads (HOT→WARM→COLD). The pipeline screen
 /// derives counts from this and filters client-side.
-final myLeadsProvider = FutureProvider<List<LeadItem>>((ref) async {
-  return ref.watch(leadRepositoryProvider).myLeads();
-});
+class MyLeadsNotifier extends AutoDisposeAsyncNotifier<List<LeadItem>> {
+  @override
+  FutureOr<List<LeadItem>> build() async {
+    final auth = ref.watch(authProvider);
+    if (auth.status != AuthStatus.authenticated) {
+      return const [];
+    }
+    return ref.watch(leadRepositoryProvider).myLeads();
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() => ref.read(leadRepositoryProvider).myLeads());
+  }
+}
+
+final myLeadsProvider =
+    AsyncNotifierProvider.autoDispose<MyLeadsNotifier, List<LeadItem>>(
+        MyLeadsNotifier.new);
 
 /// Selected status filter on the pipeline screen (null = All).
 final leadFilterProvider = StateProvider<LeadStatus?>((ref) => null);

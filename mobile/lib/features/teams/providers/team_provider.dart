@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exceptions.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../data/team_repository.dart';
 import '../models/team.dart';
 
@@ -37,6 +38,10 @@ class TeamListState {
 class TeamNotifier extends Notifier<TeamListState> {
   @override
   TeamListState build() {
+    final auth = ref.watch(authProvider);
+    if (auth.status != AuthStatus.authenticated) {
+      return const TeamListState();
+    }
     Future.microtask(load);
     return const TeamListState(isLoading: true);
   }

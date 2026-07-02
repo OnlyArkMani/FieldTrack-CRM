@@ -32,19 +32,19 @@ def _client_ip(request: Request) -> str | None:
 
 @router.get("", response_model=list[TeamOut])
 async def list_teams(
-    _user: CurrentUser,
+    user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[TeamOut]:
-    return await TeamService(db).list_teams()
+    return await TeamService(db).list_teams(user)
 
 
 @router.get("/{team_id}", response_model=TeamDetailOut)
 async def get_team(
     team_id: int,
-    _user: CurrentUser,
+    user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TeamDetailOut:
-    return await TeamService(db).get_detail(team_id)
+    return await TeamService(db).get_detail(team_id, user)
 
 
 @router.post("", response_model=TeamDetailOut, status_code=201)

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exceptions.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../data/notification_repository.dart';
 import '../models/app_notification.dart';
 
@@ -53,6 +54,10 @@ class NotificationsState {
 class NotificationsNotifier extends Notifier<NotificationsState> {
   @override
   NotificationsState build() {
+    final auth = ref.watch(authProvider);
+    if (auth.status != AuthStatus.authenticated) {
+      return const NotificationsState(isLoading: false);
+    }
     Future.microtask(load);
     return const NotificationsState();
   }

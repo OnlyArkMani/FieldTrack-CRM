@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exceptions.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../data/report_downloader.dart';
 import '../data/report_repository.dart';
 import '../models/report_models.dart';
@@ -79,8 +80,15 @@ class ReportNotifier extends Notifier<ReportUiState> {
 
   @override
   ReportUiState build() {
+    final auth = ref.watch(authProvider);
     final now = DateTime.now();
     final end = DateTime(now.year, now.month, now.day);
+    if (auth.status != AuthStatus.authenticated) {
+      return ReportUiState(
+        range: DateTimeRange(start: end.subtract(const Duration(days: 29)), end: end),
+        month: DateTime(now.year, now.month, 1),
+      );
+    }
     return ReportUiState(
       range: DateTimeRange(start: end.subtract(const Duration(days: 29)), end: end),
       month: DateTime(now.year, now.month, 1),

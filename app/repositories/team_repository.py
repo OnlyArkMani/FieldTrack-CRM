@@ -44,7 +44,7 @@ class TeamRepository:
 
     # ── Reads ─────────────────────────────────────────────────────────────
     async def list_with_stats(
-        self, *, today: date, only_active: bool = True
+        self, *, today: date, only_active: bool = True, supervisor_id: int | None = None
     ) -> list[TeamRow]:
         """One pass: team + supervisor name + member count + present-today
         count. Members are users with team_id = team.id (role-agnostic).
@@ -93,6 +93,8 @@ class TeamRepository:
         )
         if only_active:
             stmt = stmt.where(Team.is_active.is_(True))
+        if supervisor_id is not None:
+            stmt = stmt.where(Team.supervisor_id == supervisor_id)
 
         result = await self.db.execute(stmt)
         return [

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_exceptions.dart';
+import '../../../auth/providers/auth_provider.dart';
 import '../data/visit_plan_repository.dart';
 import '../models/visit_plan.dart';
 
@@ -55,6 +56,10 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
   @override
   VisitPlanState build() {
     final date = _initialDate();
+    final auth = ref.watch(authProvider);
+    if (auth.status != AuthStatus.authenticated) {
+      return VisitPlanState(date: date);
+    }
     Future.microtask(load);
     return VisitPlanState(date: date, isLoading: true);
   }

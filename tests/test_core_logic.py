@@ -99,3 +99,163 @@ def test_report_range_validator_ceiling():
     # Beyond the 1-year sanity ceiling is rejected.
     with pytest.raises(ValueError):
         ReportFilters(start_date=date(2025, 1, 1), end_date=date(2026, 6, 1))
+
+
+@pytest.mark.asyncio
+async def test_team_service_list_filtering_by_role():
+    from unittest.mock import AsyncMock
+    from app.services.team_service import TeamService
+    from app.models.user import User, Team
+    from app.models.enums import UserRole
+    from app.repositories.team_repository import TeamRow
+
+    admin_user = User(id=1, name="Admin", role=UserRole.ADMIN)
+    supervisor_user = User(id=2, name="Supervisor", role=UserRole.SUPERVISOR)
+    employee_user = User(id=3, name="Employee", role=UserRole.EMPLOYEE, team_id=10)
+
+    t1 = Team(id=10, name="Team A", supervisor_id=2, is_active=True)
+    t2 = Team(id=11, name="Team B", supervisor_id=4, is_active=True)
+    row1 = TeamRow(t1, supervisor_name="Supervisor", member_count=5, present_today=2)
+    row2 = TeamRow(t2, supervisor_name="Other", member_count=3, present_today=1)
+
+    mock_db = AsyncMock()
+    service = TeamService(mock_db)
+
+    async def mock_list_with_stats(*args, **kwargs):
+        supervisor_id = kwargs.get("supervisor_id")
+        if supervisor_id == 2:
+            return [row1]
+        elif supervisor_id is None:
+            return [row1, row2]
+        return []
+
+    service.repo.list_with_stats = mock_list_with_stats
+
+    # Test Admin: should list all teams
+    admin_teams = await service.list_teams(admin_user)
+    assert len(admin_teams) == 2
+    assert admin_teams[0].id == 10
+    assert admin_teams[1].id == 11
+
+    # Test Supervisor: should only list teams they supervise (ID 2)
+    sup_teams = await service.list_teams(supervisor_user)
+    assert len(sup_teams) == 1
+    assert sup_teams[0].id == 10
+
+    # Test Employee: should only list the team they belong to (ID 10)
+    emp_teams = await service.list_teams(employee_user)
+    assert len(emp_teams) == 1
+    assert emp_teams[0].id == 10
+
+
+@pytest.mark.asyncio
+async def test_team_service_get_detail_permissions():
+    from unittest.mock import AsyncMock
+    from app.services.team_service import TeamService
+    from app.models.user import User, Team
+    from app.models.enums import UserRole
+    from app.repositories.team_repository import TeamRow
+    from app.core.exceptions import ApiError
+
+    supervisor_user = User(id=2, name="Supervisor", role=UserRole.SUPERVISOR)
+    other_supervisor = User(id=4, name="Other Supervisor", role=UserRole.SUPERVISOR)
+    employee_user = User(id=3, name="Employee", role=UserRole.EMPLOYEE, team_id=10)
+    other_employee = User(id=5, name="Other Employee", role=UserRole.EMPLOYEE, team_id=11)
+
+    t1 = Team(id=10, name="Team A", supervisor_id=2, is_active=True)
+    row = TeamRow(t1, supervisor_name="Supervisor", member_count=5, present_today=2)
+
+    mock_db = AsyncMock()
+    service = TeamService(mock_db)
+
+    async def mock_get_stats_for(team_id, today):
+        if team_id == 10:
+            return row
+        return None
+
+    async def mock_get_members(team_id):
+        return []
+
+    service.repo.get_stats_for = mock_get_stats_for
+    service.repo.get_members = mock_get_members
+    service._live_status_for = AsyncMock(return_value={})
+
+    # Supervisor owns it -> Success
+    detail = await service.get_detail(10, supervisor_user)
+    assert detail.id == 10
+
+    # Supervisor does not own it -> 403 Forbidden
+    with pytest.raises(ApiError) as exc_info:
+        await service.get_detail(10, other_supervisor)
+    assert exc_info.value.status_code == 403
+
+    # Employee belongs to the team -> Success
+    detail = await service.get_detail(10, employee_user)
+    assert detail.id == 10
+
+    # Employee does not belong to the team -> 403 Forbidden
+    with pytest.raises(ApiError) as exc_info:
+        await service.get_detail(10, other_employee)
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_farmer_service_supervisor_scoping():
+    from unittest.mock import AsyncMock
+    from app.services.farmer_service import FarmerService
+    from app.models.user import User
+    from app.models.crm import Farmer
+    from app.models.enums import UserRole
+    from app.core.exceptions import ApiError
+
+    supervisor = User(id=2, name="Supervisor", role=UserRole.SUPERVISOR)
+    mock_db = AsyncMock()
+    service = FarmerService(mock_db)
+
+    class MockResult:
+        def __init__(self, data):
+            self.data = data
+        def scalars(self):
+            class MockScalars:
+                def __init__(self, data):
+                    self.data = data
+                def all(self):
+                    return self.data
+            return MockScalars(self.data)
+
+    mock_db.execute = AsyncMock(return_value=MockResult([10, 11]))
+
+    scope = await service._scope_for(supervisor)
+    assert scope == {"team_ids": [10, 11]}
+
+    farmer_in_team = Farmer(id=1, team_id=10, created_by=99)
+    farmer_out_team = Farmer(id=2, team_id=12, created_by=99)
+
+    mock_db.execute = AsyncMock(return_value=MockResult([10, 11]))
+    await service._assert_can_view(farmer_in_team, supervisor)
+
+    mock_db.execute = AsyncMock(return_value=MockResult([10, 11]))
+    with pytest.raises(ApiError) as exc_info:
+        await service._assert_can_view(farmer_out_team, supervisor)
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_lead_service_supervisor_scoping():
+    from unittest.mock import AsyncMock
+    from app.services.lead_service import LeadService
+    from app.models.user import User
+    from app.models.enums import UserRole
+
+    supervisor = User(id=2, name="Supervisor", role=UserRole.SUPERVISOR)
+    mock_db = AsyncMock()
+    service = LeadService(mock_db)
+
+    service.repo.supervised_team_ids = AsyncMock(return_value=[10, 11])
+    service.repo.latest_lead_rows = AsyncMock(return_value=[])
+
+    leads = await service.get_my_leads(supervisor, status=None)
+    service.repo.supervised_team_ids.assert_awaited_once_with(2)
+    service.repo.latest_lead_rows.assert_awaited_once_with(status=None, team_ids=[10, 11])
+    assert leads == []
+

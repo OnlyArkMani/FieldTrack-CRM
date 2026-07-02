@@ -52,12 +52,15 @@ class FarmerRepository:
         stmt: Select,
         *,
         team_id: int | None,
+        team_ids: list[int] | None = None,
         created_by: int | None,
         search: str | None,
         lead_status: str | None,
     ) -> Select:
         if team_id is not None:
             stmt = stmt.where(Farmer.team_id == team_id)
+        if team_ids is not None:
+            stmt = stmt.where(Farmer.team_id.in_(team_ids))
         if created_by is not None:
             stmt = stmt.where(Farmer.created_by == created_by)
         if search and search.strip():
@@ -75,6 +78,7 @@ class FarmerRepository:
         cursor_id: int | None,
         limit: int,
         team_id: int | None = None,
+        team_ids: list[int] | None = None,
         created_by: int | None = None,
         search: str | None = None,
         lead_status: str | None = None,
@@ -95,6 +99,7 @@ class FarmerRepository:
         stmt = self._apply_list_filters(
             stmt,
             team_id=team_id,
+            team_ids=team_ids,
             created_by=created_by,
             search=search,
             lead_status=lead_status,
@@ -107,6 +112,7 @@ class FarmerRepository:
         count_stmt = self._apply_list_filters(
             select(func.count(Farmer.id)),
             team_id=team_id,
+            team_ids=team_ids,
             created_by=created_by,
             search=search,
             lead_status=lead_status,
