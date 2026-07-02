@@ -88,6 +88,13 @@ class DashboardScreen extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: AppDimens.grid * 1.5),
+              _QuickAction(
+                icon: Icons.receipt_long_rounded,
+                label: 'Team DSR',
+                subtitle: 'Daily sales reports by member',
+                onTap: () => context.push('/dsr/team'),
+              ),
+              const SizedBox(height: AppDimens.grid * 1.5),
             ],
             _QuickAction(
               icon: Icons.assessment_rounded,

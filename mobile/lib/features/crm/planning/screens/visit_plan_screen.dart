@@ -43,31 +43,38 @@ class VisitPlanScreen extends ConsumerWidget {
     final state = ref.watch(visitPlanProvider);
     final notifier = ref.read(visitPlanProvider.notifier);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Visit plan',
-            maxLines: 1, overflow: TextOverflow.ellipsis),
-        actions: [
-          IconButton(
-            tooltip: 'Map view',
-            icon: const Icon(Icons.map_rounded),
-            onPressed: () => context.push('/planning/map'),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _DateSelector(
-              label: _dateLabel(state.date),
-              canGoPrev: notifier.canGoPrev,
-              onPrev: notifier.prevDay,
-              onNext: notifier.nextDay,
+    // Scoped ScaffoldMessenger: without this, "removed"/"saved" SnackBars are
+    // hosted by the app-root messenger (above the Navigator) and keep showing
+    // — undismissed, timer still running — on whatever screen the user
+    // navigates to next. Popping this route now tears the messenger (and any
+    // pending SnackBar/timer) down with it instead of leaking it forward.
+    return ScaffoldMessenger(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Visit plan',
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          actions: [
+            IconButton(
+              tooltip: 'Map view',
+              icon: const Icon(Icons.map_rounded),
+              onPressed: () => context.push('/planning/map'),
             ),
-            _StatusBar(state: state),
-            Expanded(child: _body(context, ref, state, notifier)),
-            _BottomBar(state: state, notifier: notifier),
           ],
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              _DateSelector(
+                label: _dateLabel(state.date),
+                canGoPrev: notifier.canGoPrev,
+                onPrev: notifier.prevDay,
+                onNext: notifier.nextDay,
+              ),
+              _StatusBar(state: state),
+              Expanded(child: _body(context, ref, state, notifier)),
+              _BottomBar(state: state, notifier: notifier),
+            ],
+          ),
         ),
       ),
     );
@@ -95,41 +102,134 @@ class VisitPlanScreen extends ConsumerWidget {
       );
     }
 
-    return ReorderableListView.builder(
+    final active = notifier.activeItems;
+    final completed = notifier.completedItems;
+
+    // Planning mode (nothing completed yet): keep the full reorderable /
+    // swipe-to-remove editing experience.
+    if (completed.isEmpty) {
+      return ReorderableListView.builder(
+        padding: const EdgeInsets.fromLTRB(
+          AppDimens.grid * 2,
+          AppDimens.grid,
+          AppDimens.grid * 2,
+          AppDimens.grid * 2,
+        ),
+        itemCount: active.length,
+        onReorder: notifier.reorder,
+        itemBuilder: (context, index) {
+          final item = active[index];
+          return Padding(
+            key: ValueKey(item.key),
+            padding: const EdgeInsets.only(bottom: AppDimens.grid * 1.5),
+            child: Dismissible(
+              key: ValueKey('dismiss-${item.key}'),
+              direction: DismissDirection.endToStart,
+              background: _swipeBg(context),
+              onDismissed: (_) =>
+                  _removeWithUndo(context, notifier, index, item),
+              child: PlanItemCard(
+                item: item,
+                index: index,
+                onStartVisit: () => _startVisit(context, item, completed),
+                trailing: ReorderableDragStartListener(
+                  index: index,
+                  child: Icon(Icons.drag_handle_rounded,
+                      color: context.appColors.textSecondary),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    // Execution mode: Active (actionable) and Completed (done today) sections.
+    return ListView(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.grid * 2,
         AppDimens.grid,
         AppDimens.grid * 2,
         AppDimens.grid * 2,
       ),
-      itemCount: state.items.length,
-      onReorder: notifier.reorder,
-      itemBuilder: (context, index) {
-        final item = state.items[index];
-        return Padding(
-          key: ValueKey(item.key),
-          padding: const EdgeInsets.only(bottom: AppDimens.grid * 1.5),
-          child: Dismissible(
-            key: ValueKey('dismiss-${item.key}'),
-            direction: DismissDirection.endToStart,
-            background: _swipeBg(context),
-            onDismissed: (_) => _removeWithUndo(context, notifier, index, item),
-            child: PlanItemCard(
-              item: item,
-              index: index,
-              onStartVisit: () => context.push(
-                '/visit/start/${item.farmerId}'
-                '${item.isFollowUp ? '' : '?plan_item=${item.id}'}',
-              ),
-              trailing: ReorderableDragStartListener(
-                index: index,
-                child: Icon(Icons.drag_handle_rounded,
-                    color: context.appColors.textSecondary),
+      children: [
+        if (active.isNotEmpty) ...[
+          _sectionHeader(context, 'Active', active.length),
+          for (var i = 0; i < active.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppDimens.grid * 1.5),
+              child: PlanItemCard(
+                item: active[i],
+                index: i,
+                onStartVisit: () => _startVisit(context, active[i], completed),
               ),
             ),
+        ],
+        if (completed.isNotEmpty) ...[
+          const SizedBox(height: AppDimens.grid),
+          _sectionHeader(context, 'Completed today', completed.length),
+          for (var i = 0; i < completed.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppDimens.grid * 1.5),
+              child: Opacity(
+                opacity: 0.7,
+                child: PlanItemCard(item: completed[i], index: i),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+
+  Widget _sectionHeader(BuildContext context, String label, int count) {
+    return Padding(
+      padding: const EdgeInsets.only(
+          top: AppDimens.grid, bottom: AppDimens.grid),
+      child: Text(
+        '$label · $count',
+        style: AppTextStyles.caption.copyWith(
+          color: context.appColors.textSecondary,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.3,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  /// Same-day revisit guard: if this farmer was already completed today, warn
+  /// (soft — the user can continue) before launching the visit flow.
+  Future<void> _startVisit(
+    BuildContext context,
+    PlanItem item,
+    List<PlanItem> completedToday,
+  ) async {
+    final already = completedToday.any((c) => c.farmerId == item.farmerId);
+    if (already) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Already visited today'),
+          content: Text(
+            'You have already visited ${item.farmerName} today. '
+            'Do you want to continue?',
           ),
-        );
-      },
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Continue')),
+          ],
+        ),
+      );
+      if (proceed != true || !context.mounted) return;
+    }
+    context.push(
+      '/visit/start/${item.farmerId}'
+      '${item.isFollowUp ? '' : '?plan_item=${item.id}'}',
     );
   }
 
@@ -308,7 +408,10 @@ class _BottomBar extends StatelessWidget {
               label: 'Save Plan',
               icon: Icons.check_rounded,
               isLoading: state.isSaving,
-              onPressed: state.items.isEmpty ? null : () => _save(context),
+              onPressed: state.items.any(
+                      (i) => !i.isFollowUp && !VisitPlanNotifier.isDone(i))
+                  ? () => _save(context)
+                  : null,
             ),
           ),
         ],

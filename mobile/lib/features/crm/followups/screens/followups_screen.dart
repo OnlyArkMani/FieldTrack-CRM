@@ -248,7 +248,7 @@ class _FollowUpCard extends StatelessWidget {
                         const SizedBox(width: AppDimens.grid),
                       ],
                       Expanded(
-                        child: Text(item.farmerName ?? 'Farmer',
+                        child: Text(item.farmerName ?? 'FPO',
                             style: AppTextStyles.bodyMedium
                                 .copyWith(color: scheme.onSurface),
                             maxLines: 1,

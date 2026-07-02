@@ -66,6 +66,20 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
 
   VisitPlanRepository get _repo => ref.read(visitPlanRepositoryProvider);
 
+  /// A stop is "resolved" (not actionable) once completed or skipped.
+  static bool isDone(PlanItem i) {
+    final s = i.status.toUpperCase();
+    return s == 'COMPLETED' || s == 'SKIPPED';
+  }
+
+  /// Actionable stops (PLANNED / IN_PROGRESS + pending follow-ups).
+  List<PlanItem> get activeItems =>
+      state.items.where((i) => !isDone(i)).toList();
+
+  /// Resolved stops (COMPLETED / SKIPPED) — shown in a separate section.
+  List<PlanItem> get completedItems =>
+      state.items.where(isDone).toList();
+
   /// Defaults to tomorrow after 4 PM (planning for the next day), else today.
   static DateTime _initialDate() {
     final now = DateTime.now();
@@ -109,33 +123,40 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
     state = state.copyWith(items: [...state.items, item], dirty: true);
   }
 
-  /// Removes the item at [index] and returns it (for undo).
+  /// Removes the active item at [index] (index into activeItems) and returns
+  /// it (for undo). Completed items are untouched.
   PlanItem removeAt(int index) {
-    final removed = state.items[index];
-    final next = [...state.items]..removeAt(index);
-    state = state.copyWith(items: next, dirty: true);
+    final active = activeItems;
+    final removed = active.removeAt(index);
+    state = state.copyWith(items: [...active, ...completedItems], dirty: true);
     return removed;
   }
 
   void insertAt(int index, PlanItem item) {
-    final next = [...state.items];
-    next.insert(index.clamp(0, next.length), item);
-    state = state.copyWith(items: next, dirty: true);
+    final active = activeItems;
+    active.insert(index.clamp(0, active.length), item);
+    state = state.copyWith(items: [...active, ...completedItems], dirty: true);
   }
 
+  /// Reorder within the active list only (completed stay in their section).
   void reorder(int oldIndex, int newIndex) {
-    final next = [...state.items];
+    final active = activeItems;
     if (newIndex > oldIndex) newIndex -= 1;
-    final moved = next.removeAt(oldIndex);
-    next.insert(newIndex, moved);
-    state = state.copyWith(items: next, dirty: true);
+    final moved = active.removeAt(oldIndex);
+    active.insert(newIndex, moved);
+    state = state.copyWith(items: [...active, ...completedItems], dirty: true);
   }
 
   Future<bool> save() async {
-    if (state.items.isEmpty || state.isSaving) return false;
+    // Only real, unresolved plan stops are persisted — follow-ups (which the
+    // server injects for the date) and completed/skipped stops must not be
+    // re-submitted as plan items.
+    final toSave =
+        state.items.where((i) => !i.isFollowUp && !isDone(i)).toList();
+    if (toSave.isEmpty || state.isSaving) return false;
     state = state.copyWith(isSaving: true, clearError: true);
     try {
-      final plan = await _repo.savePlan(state.date, state.items);
+      final plan = await _repo.savePlan(state.date, toSave);
       state = state.copyWith(
         plan: plan,
         items: plan.items,

@@ -15,6 +15,7 @@ import '../../features/crm/planning/screens/plan_map_screen.dart';
 import '../../features/crm/planning/screens/visit_plan_screen.dart';
 import '../../features/crm/dsr/screens/dsr_history_screen.dart';
 import '../../features/crm/dsr/screens/dsr_review_screen.dart';
+import '../../features/crm/dsr/screens/team_dsr_screen.dart';
 import '../../features/crm/followups/screens/followups_screen.dart';
 import '../../features/crm/leads/screens/lead_pipeline_screen.dart';
 import '../../features/crm/visits/screens/visit_flow_screen.dart';
@@ -267,6 +268,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/dsr/history',
         pageBuilder: (context, state) =>
             WaterPage(key: state.pageKey, child: const DsrHistoryScreen()),
+      ),
+
+      // Team DSR (supervisor only — reached from the dashboard)
+      GoRoute(
+        path: '/dsr/team',
+        pageBuilder: (context, state) =>
+            WaterPage(key: state.pageKey, child: const TeamDsrScreen()),
       ),
     ],
   );

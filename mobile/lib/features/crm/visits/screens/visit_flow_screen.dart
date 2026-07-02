@@ -319,12 +319,12 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
         followUpTime: needsFollowUp ? time : null,
         followUpPurpose: needsFollowUp ? _followUpPurpose.text.trim() : null,
       );
-      // Refresh downstream views.
+      // Refresh downstream views. Always reload the plan so the completed stop
+      // moves out of Active (and any fulfilled follow-up disappears) — this
+      // matters for follow-up visits too, which carry no plan_item_id.
       ref.invalidate(farmerDetailProvider(widget.farmerId));
       ref.read(farmerListProvider.notifier).refresh(isRefresh: true);
-      if (widget.planItemId != null) {
-        ref.read(visitPlanProvider.notifier).load();
-      }
+      ref.read(visitPlanProvider.notifier).load();
       if (!mounted) return;
       HapticFeedback.heavyImpact();
       await _showSuccess();
@@ -366,7 +366,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Farmer: ${_checkIn?.farmerName ?? ''}'),
+            Text('FPO: ${_checkIn?.farmerName ?? ''}'),
             Text('Lead: ${_lead?.label ?? ''}'),
             if (fu != null) Text('Follow-up: $fu'),
           ],

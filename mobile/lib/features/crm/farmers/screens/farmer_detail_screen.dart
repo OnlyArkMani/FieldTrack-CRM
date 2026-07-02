@@ -1,8 +1,13 @@
+import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/network/api_exceptions.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
@@ -10,6 +15,9 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../../auth/models/user.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../../reports/data/report_downloader.dart';
+import '../../../reports/data/report_repository.dart';
+import '../../../reports/models/report_models.dart';
 import '../models/farmer.dart';
 import '../providers/farmer_provider.dart';
 import '../utils.dart';
@@ -37,6 +45,12 @@ String prettyPurpose(String? purpose) {
       .join(' ');
 }
 
+/// Internal marker for a user-facing export failure message.
+class _ExportError implements Exception {
+  const _ExportError(this.message);
+  final String message;
+}
+
 class FarmerDetailScreen extends ConsumerWidget {
   const FarmerDetailScreen({super.key, required this.farmerId});
 
@@ -47,7 +61,7 @@ class FarmerDetailScreen extends ConsumerWidget {
     final async = ref.watch(farmerDetailProvider(farmerId));
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Farmer', maxLines: 1, overflow: TextOverflow.ellipsis),
+        title: const Text('FPO', maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
       body: SafeArea(
         child: async.when(
@@ -85,10 +99,75 @@ class _Content extends ConsumerWidget {
     }
   }
 
-  void _comingSoon(BuildContext context, String what) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$what is coming soon')),
+  /// Generate + download the FPO's full-history Excel export. Shows a blocking
+  /// spinner while the backend renders it, then hands the file to the browser
+  /// (web) or the share sheet (mobile).
+  Future<void> _exportReport(BuildContext context, WidgetRef ref) async {
+    final repo = ref.read(reportRepositoryProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    var dialogOpen = true;
+    void closeDialog() {
+      if (dialogOpen && context.mounted) {
+        dialogOpen = false;
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    }
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2.5),
+            ),
+            SizedBox(width: 16),
+            Expanded(child: Text('Preparing export…')),
+          ],
+        ),
+      ),
     );
+
+    try {
+      final reportId = await repo.generateFarmerExport(farmer.id);
+      final deadline = DateTime.now().add(const Duration(seconds: 60));
+      while (true) {
+        await Future.delayed(const Duration(seconds: 3));
+        final st = await repo.status(reportId);
+        if (st.status == ReportJobStatus.ready) break;
+        if (st.status == ReportJobStatus.failed ||
+            st.status == ReportJobStatus.expired) {
+          throw _ExportError(st.error ?? 'Export failed. Please try again.');
+        }
+        if (DateTime.now().isAfter(deadline)) {
+          throw _ExportError('Still preparing after 60s. Please try again.');
+        }
+      }
+
+      final filename = 'fieldtrack_fpo_${farmer.id}.xlsx';
+      const mime =
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      if (kIsWeb) {
+        final bytes = await repo.downloadBytes(reportId);
+        closeDialog();
+        triggerBrowserDownload(Uint8List.fromList(bytes), filename, mime);
+      } else {
+        final file = await repo.download(reportId, filename: filename);
+        closeDialog();
+        await Share.shareXFiles([XFile(file.path)], subject: filename);
+      }
+    } catch (e) {
+      closeDialog();
+      final msg = e is ApiException
+          ? e.message
+          : e is _ExportError
+              ? e.message
+              : 'Export failed. Please try again.';
+      messenger.showSnackBar(SnackBar(content: Text(msg)));
+    }
   }
 
   @override
@@ -138,7 +217,7 @@ class _Content extends ConsumerWidget {
           _ActionButtons(
             onPlan: () => context.push('/planning'),
             onStart: () => context.push('/visit/start/${farmer.id}'),
-            onReport: () => _comingSoon(context, 'Farmer reports'),
+            onReport: () => _exportReport(context, ref),
           ),
           const SizedBox(height: AppDimens.grid * 2),
         ],

@@ -85,7 +85,7 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
     final colors = context.appColors;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Farmer',
+        title: const Text('Add FPO',
             maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
       body: SafeArea(
@@ -95,7 +95,7 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
             AppTextField(
               label: 'Name *',
               controller: _name,
-              hint: 'Farmer or vendor name',
+              hint: 'FPO or vendor name',
               errorText: _nameError,
               textInputAction: TextInputAction.next,
               prefixIcon: Icons.person_rounded,

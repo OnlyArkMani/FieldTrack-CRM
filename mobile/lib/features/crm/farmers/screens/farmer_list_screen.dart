@@ -57,12 +57,12 @@ class _FarmerListScreenState extends ConsumerState<FarmerListScreen> {
     return Scaffold(
       appBar: AppBar(
         title:
-            const Text('Farmers', maxLines: 1, overflow: TextOverflow.ellipsis),
+            const Text('FPO', maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openAdd,
         icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Farmer'),
+        label: const Text('Add FPO'),
       ),
       body: SafeArea(
         child: Column(
@@ -114,11 +114,11 @@ class _FarmerListScreenState extends ConsumerState<FarmerListScreen> {
               icon: searching
                   ? Icons.search_off_rounded
                   : Icons.agriculture_rounded,
-              title: searching ? 'No matches' : 'No farmers yet',
+              title: searching ? 'No matches' : 'No FPOs yet',
               message: searching
                   ? 'Try a different name, village, or lead filter.'
-                  : 'Add your first farmer.',
-              actionLabel: searching ? null : 'Add Farmer',
+                  : 'Add your first FPO.',
+              actionLabel: searching ? null : 'Add FPO',
               onAction: searching ? null : _openAdd,
             ),
           ],
@@ -197,7 +197,7 @@ class _SearchBar extends StatelessWidget {
         style: AppTextStyles.body
             .copyWith(color: Theme.of(context).colorScheme.onSurface),
         decoration: InputDecoration(
-          hintText: total > 0 ? 'Search $total farmers' : 'Search farmers',
+          hintText: total > 0 ? 'Search $total FPOs' : 'Search FPOs',
           prefixIcon:
               Icon(Icons.search_rounded, size: 20, color: colors.textSecondary),
           suffixIcon: ValueListenableBuilder<TextEditingValue>(
