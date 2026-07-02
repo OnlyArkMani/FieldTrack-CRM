@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
@@ -10,6 +11,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/shimmer_card.dart';
+import '../../../services/permission/permission_service.dart';
 import '../../../widgets/sync_status_indicator.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../models/attendance.dart';
@@ -36,11 +38,27 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
   );
 
   int _lastErrorNonce = 0;
+  bool _bgLimited = false; // foreground-only location → background tracking limited
 
   @override
   void dispose() {
     _shake.dispose();
     super.dispose();
+  }
+
+  /// Gate attendance START behind the location-permission flow. Only calls the
+  /// START API once permission is (at least) foreground-granted.
+  Future<void> _startWithPermission() async {
+    final result =
+        await PermissionService.instance.requestLocationPermissions(context);
+    if (!mounted) return;
+    if (result == PermissionResult.denied ||
+        result == PermissionResult.deniedForever) {
+      return; // PermissionService already showed the messaging.
+    }
+    setState(() =>
+        _bgLimited = result == PermissionResult.grantedForegroundOnly);
+    await ref.read(attendanceProvider.notifier).start();
   }
 
   void _onEndTap() async {
@@ -104,8 +122,16 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
               else
                 _ShakeWrapper(
                   controller: _shake,
-                  child: _StatusCard(state: state, onEndTap: _onEndTap),
+                  child: _StatusCard(
+                    state: state,
+                    onEndTap: _onEndTap,
+                    onStart: _startWithPermission,
+                  ),
                 ),
+              if (_bgLimited && !state.isLoading) ...[
+                const SizedBox(height: AppDimens.grid * 1.5),
+                const _BackgroundWarningCard(),
+              ],
               const SizedBox(height: AppDimens.grid * 3),
               if (!state.isLoading) ...[
                 Text(
@@ -169,10 +195,15 @@ class _Greeting extends StatelessWidget {
 /// The prominent card. AnimatedSwitcher cross-fades between the four visual
 /// states (not started / working / on break / ended).
 class _StatusCard extends StatelessWidget {
-  const _StatusCard({required this.state, required this.onEndTap});
+  const _StatusCard({
+    required this.state,
+    required this.onEndTap,
+    required this.onStart,
+  });
 
   final AttendanceUiState state;
   final VoidCallback onEndTap;
+  final VoidCallback onStart;
 
   @override
   Widget build(BuildContext context) {
@@ -198,7 +229,11 @@ class _StatusCard extends StatelessWidget {
   Widget _content(BuildContext context) {
     final s = state.state;
     if (state.attendance == null || s.notStarted) {
-      return _NotStarted(key: const ValueKey('not_started'), state: state);
+      return _NotStarted(
+        key: const ValueKey('not_started'),
+        state: state,
+        onStart: onStart,
+      );
     }
     if (s.isWorking) {
       return _Working(
@@ -215,8 +250,9 @@ class _StatusCard extends StatelessWidget {
 // ── Visual states ──────────────────────────────────────────────────────────
 
 class _NotStarted extends ConsumerWidget {
-  const _NotStarted({super.key, required this.state});
+  const _NotStarted({super.key, required this.state, required this.onStart});
   final AttendanceUiState state;
+  final VoidCallback onStart;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -249,9 +285,7 @@ class _NotStarted extends ConsumerWidget {
           label: 'Start',
           icon: Icons.play_arrow_rounded,
           isLoading: starting,
-          onPressed: starting
-              ? null
-              : () => ref.read(attendanceProvider.notifier).start(),
+          onPressed: starting ? null : onStart,
         ),
       ],
     );
@@ -588,6 +622,43 @@ class _ShakeWrapper extends StatelessWidget {
         return Transform.translate(offset: Offset(dx, 0), child: child);
       },
       child: child,
+    );
+  }
+}
+
+/// Persistent nudge shown while location is foreground-only — background
+/// tracking may pause when the screen is off.
+class _BackgroundWarningCard extends StatelessWidget {
+  const _BackgroundWarningCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AppCard(
+      color: scheme.error.withValues(alpha: 0.08),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: scheme.error, size: 20),
+          const SizedBox(width: AppDimens.grid),
+          Expanded(
+            child: Text(
+              "Background tracking limited — grant 'Always' location for full accuracy",
+              style: AppTextStyles.caption.copyWith(color: scheme.onSurface),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: AppDimens.grid),
+          TextButton(
+            onPressed: () => Geolocator.openLocationSettings(),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: const Size(0, 32),
+            ),
+            child: const Text('Fix', maxLines: 1),
+          ),
+        ],
+      ),
     );
   }
 }
