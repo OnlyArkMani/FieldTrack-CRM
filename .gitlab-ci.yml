@@ -18,6 +18,19 @@ deploy_develop:
   only:
     - develop
   before_script:
+    - |
+      if [ -z "$SSH_PRIVATE_KEY" ]; then
+        echo "ERROR: SSH_PRIVATE_KEY variable is missing in GitLab CI/CD settings."
+        exit 1
+      fi
+      if [ -z "$SSH_HOST" ]; then
+        echo "ERROR: SSH_HOST variable is missing in GitLab CI/CD settings."
+        exit 1
+      fi
+      if [ -z "$SSH_USER" ]; then
+        echo "ERROR: SSH_USER variable is missing in GitLab CI/CD settings."
+        exit 1
+      fi
     - eval $(ssh-agent -s)
     - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
     - mkdir -p ~/.ssh
