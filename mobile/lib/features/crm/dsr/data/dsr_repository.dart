@@ -30,7 +30,25 @@ class DsrRepository {
   /// Full DSR detail for a specific date.
   Future<DsrDetail> myForDate(DateTime date) async {
     final data = await _api.get('/daily-reports/my/${_ymd(date)}');
-    return DsrDetail.fromJson(data as Map<String, dynamic>);
+    return DsrDetail.fromJson(data);
+  }
+
+  /// Supervisor: team DSR status for a date. Scope is auto-filtered to the
+  /// caller's team on the backend.
+  Future<List<TeamDsrItem>> teamDsrs(DateTime date) async {
+    final data = await _api.getList('/daily-reports/team', query: {
+      'report_date': _ymd(date),
+    });
+    return data
+        .map((e) => TeamDsrItem.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Supervisor: read-only DSR detail for one team member on a date.
+  Future<DsrDetail> teamMemberDsr(int employeeId, DateTime date) async {
+    final data =
+        await _api.get('/daily-reports/team/$employeeId/${_ymd(date)}');
+    return DsrDetail.fromJson(data);
   }
 
   /// Submit the DSR (employee action).
@@ -39,6 +57,6 @@ class DsrRepository {
       if (endOfDayNote != null && endOfDayNote.isNotEmpty)
         'end_of_day_note': endOfDayNote,
     });
-    return DsrSummary.fromJson(data as Map<String, dynamic>);
+    return DsrSummary.fromJson(data);
   }
 }

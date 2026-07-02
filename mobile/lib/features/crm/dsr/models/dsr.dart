@@ -52,6 +52,46 @@ class DsrSummary {
       );
 }
 
+/// One team member's DSR status for a date (supervisor team view).
+class TeamDsrItem {
+  const TeamDsrItem({
+    required this.employeeId,
+    required this.employeeName,
+    required this.status,
+    required this.visitsCompleted,
+    required this.ordersCaptured,
+    required this.hotLeads,
+    required this.warmLeads,
+    required this.coldLeads,
+    required this.isLate,
+    this.reportId,
+  });
+
+  final int employeeId;
+  final String employeeName;
+  final String status; // SUBMITTED / DRAFT / MISSING
+  final int visitsCompleted;
+  final int ordersCaptured;
+  final int hotLeads;
+  final int warmLeads;
+  final int coldLeads;
+  final bool isLate;
+  final int? reportId;
+
+  factory TeamDsrItem.fromJson(Map<String, dynamic> j) => TeamDsrItem(
+        employeeId: j['employee_id'] as int,
+        employeeName: j['employee_name'] as String? ?? 'Employee',
+        status: j['status'] as String? ?? 'MISSING',
+        visitsCompleted: j['visits_completed'] as int? ?? 0,
+        ordersCaptured: j['orders_captured'] as int? ?? 0,
+        hotLeads: j['hot_leads'] as int? ?? 0,
+        warmLeads: j['warm_leads'] as int? ?? 0,
+        coldLeads: j['cold_leads'] as int? ?? 0,
+        isLate: j['is_late'] as bool? ?? false,
+        reportId: j['report_id'] as int?,
+      );
+}
+
 /// Full DSR including per-visit, order, and follow-up lists.
 class DsrDetail extends DsrSummary {
   const DsrDetail({

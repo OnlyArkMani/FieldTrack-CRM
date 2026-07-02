@@ -29,6 +29,18 @@ class ReportRepository {
     return data['report_id'] as String;
   }
 
+  /// Kick off a single-FPO/farmer Excel export (full history). Returns the
+  /// report_id to poll. FARMER_EXPORT is Excel-only + farmer-scoped, so it's a
+  /// dedicated helper rather than a selectable type in the reports screen.
+  Future<String> generateFarmerExport(int farmerId) async {
+    final data = await _api.post('/reports/generate', body: {
+      'type': 'FARMER_EXPORT',
+      'format': 'EXCEL',
+      'filters': {'farmer_id': farmerId},
+    });
+    return data['report_id'] as String;
+  }
+
   Future<ReportStatusResult> status(String reportId) async {
     final data = await _api.get('/reports/$reportId/status');
     return ReportStatusResult.fromJson(data);

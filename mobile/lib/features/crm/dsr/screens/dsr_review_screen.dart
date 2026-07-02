@@ -175,7 +175,7 @@ class _DsrReviewScreenState extends ConsumerState<DsrReviewScreen>
           ),
           const SizedBox(height: 20),
           Text(
-            'Report submitted to manager',
+            'DSR submitted to manager',
             style: AppTextStyles.heading,
           ),
         ],
@@ -289,7 +289,7 @@ class _DsrReviewScreenState extends ConsumerState<DsrReviewScreen>
 
         // ── Submit button ─────────────────────────────────────────────
         AppButton(
-          label: 'Submit Daily Report',
+          label: 'Submit DSR',
           isLoading: _submitting,
           onPressed: _submitting ? null : _submit,
         ),

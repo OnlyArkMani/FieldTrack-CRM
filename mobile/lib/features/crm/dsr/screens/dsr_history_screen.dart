@@ -95,7 +95,7 @@ class _DsrHistoryScreenState extends ConsumerState<DsrHistoryScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Daily Reports',
+          'DSR',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
