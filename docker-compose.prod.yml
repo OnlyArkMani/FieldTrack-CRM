@@ -107,6 +107,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     mem_limit: 256m
     networks:
       - fieldtrack_network
@@ -164,7 +166,9 @@ services:
       - fieldtrack_network
 
   nginx:
-    image: nginx:1.27-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
     container_name: fieldtrack-nginx
     restart: always
     depends_on:
@@ -175,7 +179,7 @@ services:
       - "443:443"
     volumes:
       - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
-      - ./admin-web/dist:/var/www/admin:ro
+      # Static files are now baked into the image from Dockerfile.nginx
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - nginx_logs:/var/log/nginx
     healthcheck:

@@ -14,3 +14,6 @@ nginx
 docker-compose.yml
 .mypy_cache
 .ruff_cache
+**/node_modules
+admin-web/dist
+admin-web/.env.production

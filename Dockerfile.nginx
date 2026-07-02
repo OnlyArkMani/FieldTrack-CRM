@@ -1,0 +1,27 @@
+# ==========================================
+# Stage 1: Build the React frontend
+# ==========================================
+FROM node:18-alpine AS builder
+WORKDIR /app
+
+# Copy package definitions and install dependencies
+COPY admin-web/package*.json ./
+RUN npm ci
+
+# Copy the rest of the frontend source code
+COPY admin-web/ ./
+
+# Create Vite production configuration (uses relative API paths behind Nginx proxy)
+RUN echo "VITE_API_PREFIX=/api/v1" > .env.production && \
+    echo "VITE_WS_URL=" >> .env.production
+
+# Compile the React app into static files (HTML/JS/CSS)
+RUN npm run build
+
+# ==========================================
+# Stage 2: Serve the files using Nginx
+# ==========================================
+FROM nginx:1.27-alpine
+
+# Copy the static assets from the builder stage
+COPY --from=builder /app/dist /var/www/admin
