@@ -1,0 +1,24 @@
+# FieldTrack — admin dashboard static file server (dev).
+#
+# Plain static hosting only — no reverse proxy, no /api routing. The dev
+# host's own Nginx splits traffic by path (see the DEV_SETUP note in
+# docker-compose-dev.yml): /api/* goes straight to the backend container,
+# everything else comes here. `serve -s` handles the SPA fallback (any
+# unmatched path resolves to index.html) so client-side routing works.
+
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY admin-web/package*.json ./
+RUN npm ci
+COPY admin-web/ ./
+RUN echo "VITE_API_PREFIX=/api/v1" > .env.production && \
+    echo "VITE_WS_URL=" >> .env.production
+RUN npm run build
+
+FROM node:18-alpine
+RUN npm install -g serve@14
+COPY --from=builder /app/dist /app/dist
+# node:18-alpine ships a non-root "node" user — never run app containers as root.
+USER node
+EXPOSE 3000
+CMD ["serve", "-s", "/app/dist", "-l", "3000"]
