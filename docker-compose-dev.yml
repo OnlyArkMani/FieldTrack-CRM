@@ -34,31 +34,21 @@ services:
     networks:
       - cattle-feed-gatipay-backend-network-dev
 
+  # DEV_SETUP: devops splits the public domain by path on their own host
+  # Nginx — /api/* -> localhost:3991 (above), everything else -> localhost:3993
+  # (this service). No reverse-proxy logic lives in this container; it just
+  # serves the built SPA with client-side-routing fallback via `serve -s`.
   cattle-feed-gatipay-backend-admin-web-dev:
     build:
       context: .
-      dockerfile: Dockerfile.nginx
+      dockerfile: Dockerfile.admin-web
 
     container_name: cattle-feed-gatipay-backend-admin-web-dev
 
     restart: always
 
-    depends_on:
-      cattle-feed-gatipay-backend-dev:
-        condition: service_healthy
-
     ports:
-      - "3992:80"
-
-    volumes:
-      - ./nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro
-
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost/nginx-health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      - "3993:3000"
 
     networks:
       - cattle-feed-gatipay-backend-network-dev
