@@ -134,7 +134,7 @@ export default function FollowUpsPage() {
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium text-text-primary">
-                          {f.farmer_name || 'Farmer'}
+                          {f.farmer_name || 'FPO'}
                         </div>
                         <div className="truncate text-xs text-text-secondary">
                           {f.employee_name || '—'}

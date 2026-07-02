@@ -86,7 +86,7 @@ function PlanRow({ plan }) {
                   <li key={item.id} className="flex items-center gap-3">
                     <MapPin className="h-3.5 w-3.5 shrink-0" style={{ color: vcfg.color }} />
                     <span className="flex-1 truncate text-sm text-text-primary">
-                      {item.farmer_name ?? `Farmer #${item.farmer_id}`}
+                      {item.farmer_name ?? `FPO #${item.farmer_id}`}
                     </span>
                     <span className="text-xs" style={{ color: vcfg.color }}>{vcfg.label}</span>
                     {item.notes && (

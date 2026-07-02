@@ -1,15 +1,24 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import dayjs from 'dayjs';
 import { X, MessageSquare } from 'lucide-react';
 
-import { useTeamDsrs, useDsrDetail, useAddManagerComment } from '@/hooks/useDailyReports';
+import {
+  useTeamDsrs,
+  useDsrDetail,
+  useAddManagerComment,
+  useDsrArchive,
+} from '@/hooks/useDailyReports';
+import { useTeams } from '@/hooks/useTeams';
+import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/ui/PageHeader';
 import Card from '@/components/ui/Card';
 import Table from '@/components/ui/Table';
 import Badge from '@/components/ui/Badge';
 import Spinner from '@/components/ui/Spinner';
-import { Input } from '@/components/ui/Input';
+import { Input, Select } from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
+
+const MAX_RANGE_DAYS = 31;
 
 // ── Status helpers ────────────────────────────────────────────────────────────
 
@@ -35,99 +44,150 @@ function LateBadge() {
   );
 }
 
+function LeadPills({ h, w, c }) {
+  if (h + w + c === 0) return <span className="text-text-secondary">—</span>;
+  return (
+    <span className="flex gap-1">
+      {h > 0 && <span className="rounded px-1.5 py-0.5 text-xs font-semibold bg-danger/10 text-danger">{h}H</span>}
+      {w > 0 && <span className="rounded px-1.5 py-0.5 text-xs font-semibold bg-primary/10 text-primary">{w}W</span>}
+      {c > 0 && <span className="rounded px-1.5 py-0.5 text-xs font-semibold bg-secondary/10 text-secondary">{c}C</span>}
+    </span>
+  );
+}
+
+function fmtTime(v) {
+  return v ? dayjs(v).format('HH:mm') : '—';
+}
+
+// ── Summary cards ─────────────────────────────────────────────────────────────
+
+function SummaryCards({ rows }) {
+  const submitted = rows.filter((r) => r.status === 'SUBMITTED').length;
+  const draft = rows.filter((r) => r.status === 'DRAFT').length;
+  const missing = rows.filter((r) => r.status === 'MISSING').length;
+  const late = rows.filter((r) => r.is_late).length;
+  const cards = [
+    { label: 'Submitted', value: submitted, cls: 'text-status-active' },
+    { label: 'Draft', value: draft, cls: 'text-primary' },
+    { label: 'Missing', value: missing, cls: 'text-danger' },
+    { label: 'Late', value: late, cls: 'text-danger' },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {cards.map((c) => (
+        <Card key={c.label} className="py-3">
+          <div className={`text-2xl font-bold ${c.cls}`}>{c.value}</div>
+          <div className="text-xs text-text-secondary">{c.label}</div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function DailyReportsPage() {
-  const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
-  const [selectedRow, setSelectedRow] = useState(null); // { employee_id, employee_name, report_id }
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.role === 'ADMIN';
+  const { data: teams = [] } = useTeams();
 
-  const { data: rows = [], isLoading } = useTeamDsrs(date);
+  const [view, setView] = useState('daily'); // 'daily' | 'range'
+
+  return (
+    <div className="flex h-full flex-col gap-4">
+      <PageHeader
+        title="Daily Sales Reports (DSR)"
+        subtitle="Team CRM activity and visit summaries"
+      />
+
+      {/* View toggle */}
+      <div className="flex gap-2">
+        {[
+          { k: 'daily', label: 'Daily View' },
+          { k: 'range', label: 'Date Range' },
+        ].map((t) => (
+          <button
+            key={t.k}
+            onClick={() => setView(t.k)}
+            className={`rounded-btn px-3 py-1.5 text-sm font-medium transition-colors ${
+              view === t.k
+                ? 'bg-primary text-white'
+                : 'bg-surface text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'daily' ? (
+        <DailyView isAdmin={isAdmin} teams={teams} />
+      ) : (
+        <RangeView isAdmin={isAdmin} teams={teams} />
+      )}
+    </div>
+  );
+}
+
+// ── Daily view (per-employee status for one date) ──────────────────────────────
+
+function DailyView({ isAdmin, teams }) {
+  const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
+  const [teamId, setTeamId] = useState('');
+  const [selectedRow, setSelectedRow] = useState(null);
+
+  const { data: rows = [], isLoading } = useTeamDsrs(date, isAdmin ? teamId : undefined);
 
   const columns = [
-    {
-      key: 'employee',
-      header: 'Employee',
-      render: (r) => (
-        <span className="font-medium text-text-primary">
-          {r.employee_name}
-        </span>
-      ),
-    },
-    {
-      key: 'visits',
-      header: 'Visits',
-      render: (r) => r.visits_completed,
-    },
-    {
-      key: 'orders',
-      header: 'Orders',
-      render: (r) => r.orders_captured,
-    },
-    {
-      key: 'leads',
-      header: 'Leads',
-      render: (r) => (
-        <span className="flex gap-1">
-          {r.hot_leads > 0 && (
-            <span className="rounded px-1.5 py-0.5 text-xs font-semibold bg-danger/10 text-danger">
-              {r.hot_leads}H
-            </span>
-          )}
-          {r.warm_leads > 0 && (
-            <span className="rounded px-1.5 py-0.5 text-xs font-semibold bg-primary/10 text-primary">
-              {r.warm_leads}W
-            </span>
-          )}
-          {r.cold_leads > 0 && (
-            <span className="rounded px-1.5 py-0.5 text-xs font-semibold bg-secondary/10 text-secondary">
-              {r.cold_leads}C
-            </span>
-          )}
-          {r.hot_leads + r.warm_leads + r.cold_leads === 0 && (
-            <span className="text-text-secondary">—</span>
-          )}
-        </span>
-      ),
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (r) => (
-        <span className="flex items-center">
-          <StatusBadge status={r.status} />
-          {r.is_late && <LateBadge />}
-        </span>
-      ),
-    },
+    { key: 'employee', header: 'Employee', render: (r) => (
+      <span className="font-medium text-text-primary">{r.employee_name}</span>
+    )},
+    { key: 'in', header: 'Check In', render: (r) => fmtTime(r.check_in_time) },
+    { key: 'out', header: 'Check Out', render: (r) => fmtTime(r.check_out_time) },
+    { key: 'visits', header: 'Visits', render: (r) => r.visits_completed },
+    { key: 'orders', header: 'Orders', render: (r) => r.orders_captured },
+    { key: 'leads', header: 'Leads (H/W/C)', render: (r) => (
+      <LeadPills h={r.hot_leads} w={r.warm_leads} c={r.cold_leads} />
+    )},
+    { key: 'status', header: 'DSR Status', render: (r) => (
+      <span className="flex items-center">
+        <StatusBadge status={r.status} />
+        {r.is_late && <LateBadge />}
+      </span>
+    )},
   ];
 
   return (
     <div className="flex h-full gap-4">
-      {/* ── Main table ─────────────────────────────────────────────── */}
       <div className={`flex flex-col gap-4 transition-all duration-300 ${selectedRow ? 'w-1/2' : 'w-full'}`}>
-        <PageHeader
-          title="Daily Reports"
-          subtitle="Team DSR submissions by date"
-        />
-
         <Card>
-          <div className="mb-4 flex items-center gap-3">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
             <label className="text-sm font-medium text-text-secondary">Date</label>
             <Input
               type="date"
               value={date}
-              onChange={(e) => {
-                setDate(e.target.value);
-                setSelectedRow(null);
-              }}
+              max={dayjs().format('YYYY-MM-DD')}
+              onChange={(e) => { setDate(e.target.value); setSelectedRow(null); }}
               className="w-44"
             />
+            {isAdmin && (
+              <div className="w-52">
+                <Select value={teamId} onChange={(e) => { setTeamId(e.target.value); setSelectedRow(null); }}>
+                  <option value="">All teams</option>
+                  {teams.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </Select>
+              </div>
+            )}
           </div>
 
+          {!isLoading && rows.length > 0 && (
+            <div className="mb-4"><SummaryCards rows={rows} /></div>
+          )}
+
           {isLoading ? (
-            <div className="flex justify-center py-12">
-              <Spinner />
-            </div>
+            <div className="flex justify-center py-12"><Spinner /></div>
           ) : rows.length === 0 ? (
             <p className="py-8 text-center text-sm text-text-secondary">
               No employees found for this date.
@@ -150,7 +210,6 @@ export default function DailyReportsPage() {
         </Card>
       </div>
 
-      {/* ── Slide-in detail panel ──────────────────────────────────── */}
       {selectedRow && (
         <DsrDetailPanel
           employeeId={selectedRow.employee_id}
@@ -164,6 +223,73 @@ export default function DailyReportsPage() {
   );
 }
 
+// ── Range view (up to 31 days, one row per employee-day) ───────────────────────
+
+function RangeView({ isAdmin, teams }) {
+  const [start, setStart] = useState(dayjs().subtract(6, 'day').format('YYYY-MM-DD'));
+  const [end, setEnd] = useState(dayjs().format('YYYY-MM-DD'));
+  const [teamId, setTeamId] = useState('');
+
+  const rangeTooLong = dayjs(end).diff(dayjs(start), 'day') > MAX_RANGE_DAYS;
+
+  const { data, isLoading } = useDsrArchive({
+    enabled: !rangeTooLong,
+    date_from: start,
+    date_to: end,
+    ...(isAdmin && teamId ? { team_id: teamId } : {}),
+  });
+  const items = data?.items ?? [];
+
+  const columns = [
+    { key: 'employee', header: 'Employee', render: (r) => (
+      <span className="font-medium text-text-primary">{r.employee_name}</span>
+    )},
+    { key: 'date', header: 'Date', render: (r) => dayjs(r.report_date).format('DD MMM') },
+    { key: 'status', header: 'Status', render: (r) => (
+      <span className="flex items-center"><StatusBadge status={r.status} />{r.is_late && <LateBadge />}</span>
+    )},
+    { key: 'visits', header: 'Visits', render: (r) => r.visits_completed },
+    { key: 'orders', header: 'Orders', render: (r) => r.orders_captured },
+    { key: 'leads', header: 'Leads (H/W/C)', render: (r) => (
+      <LeadPills h={r.hot_leads} w={r.warm_leads} c={r.cold_leads} />
+    )},
+  ];
+
+  return (
+    <Card>
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <div className="w-44">
+          <Input label="Start" type="date" value={start} max={end}
+            onChange={(e) => setStart(e.target.value)} />
+        </div>
+        <div className="w-44">
+          <Input label="End" type="date" value={end} min={start} max={dayjs().format('YYYY-MM-DD')}
+            onChange={(e) => setEnd(e.target.value)} />
+        </div>
+        {isAdmin && (
+          <div className="w-52">
+            <Select label="Team" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+              <option value="">All teams</option>
+              {teams.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}
+            </Select>
+          </div>
+        )}
+      </div>
+      <p className="mb-3 text-xs italic text-text-secondary">Max 31 days per range.</p>
+
+      {rangeTooLong ? (
+        <p className="py-8 text-center text-sm text-danger">Please select a range of 31 days or less.</p>
+      ) : isLoading ? (
+        <div className="flex justify-center py-12"><Spinner /></div>
+      ) : items.length === 0 ? (
+        <p className="py-8 text-center text-sm text-text-secondary">No DSRs in this range.</p>
+      ) : (
+        <Table columns={columns} rows={items} rowKey={(r) => `${r.employee_id}-${r.report_date}`} />
+      )}
+    </Card>
+  );
+}
+
 // ── Detail panel ──────────────────────────────────────────────────────────────
 
 function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
@@ -172,7 +298,6 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Prefill if manager already left a comment
   const existingComment = dsr?.manager_comment || '';
 
   async function handleAddComment() {
@@ -188,42 +313,33 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
 
   return (
     <div className="flex w-1/2 flex-col rounded-card border border-border bg-card shadow-md overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div>
           <h3 className="font-semibold text-text-primary">{employeeName}</h3>
           <p className="text-xs text-text-secondary">{dayjs(date).format('D MMMM YYYY')}</p>
         </div>
-        <button
-          onClick={onClose}
-          className="rounded p-1 text-text-secondary hover:bg-border/40 hover:text-text-primary"
-        >
+        <button onClick={onClose} className="rounded p-1 text-text-secondary hover:bg-border/40 hover:text-text-primary">
           <X className="h-4 w-4" />
         </button>
       </div>
 
-      {/* Body */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {isLoading ? (
           <div className="flex justify-center py-8"><Spinner /></div>
         ) : !dsr ? (
           <p className="text-center text-sm text-text-secondary py-8">
-            No DSR found.
+            No DSR submitted yet for this employee.
           </p>
         ) : (
           <>
-            {/* Status + late */}
             <div className="flex items-center gap-2">
               <StatusBadge status={dsr.status} />
               {dsr.is_late && <LateBadge />}
               {dsr.submitted_at && (
-                <span className="text-xs text-text-secondary">
-                  Submitted {dayjs(dsr.submitted_at).format('HH:mm')}
-                </span>
+                <span className="text-xs text-text-secondary">Submitted {dayjs(dsr.submitted_at).format('HH:mm')}</span>
               )}
             </div>
 
-            {/* Stat row */}
             <div className="grid grid-cols-3 gap-2">
               {[
                 { label: 'Visits', val: dsr.visits_completed },
@@ -240,7 +356,6 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
               ))}
             </div>
 
-            {/* Visits list */}
             {dsr.visits?.length > 0 && (
               <Section title={`Visits (${dsr.visits.length})`}>
                 {dsr.visits.map((v) => (
@@ -252,9 +367,7 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
                         <span className={`ml-2 font-semibold ${
                           v.lead_status === 'HOT' ? 'text-danger' :
                           v.lead_status === 'WARM' ? 'text-primary' : 'text-secondary'
-                        }`}>
-                          {v.lead_status}
-                        </span>
+                        }`}>{v.lead_status}</span>
                       )}
                     </span>
                   </RowItem>
@@ -262,41 +375,49 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
               </Section>
             )}
 
-            {/* Orders list */}
             {dsr.orders?.length > 0 && (
               <Section title={`Orders (${dsr.orders.length})`}>
                 {dsr.orders.map((o) => (
                   <RowItem key={o.id}>
                     <span className="font-medium text-text-primary truncate">{o.farmer_name}</span>
                     <span className="text-xs font-bold text-success shrink-0">
-                      {o.bags_count} bags
+                      {o.bags_count} bags · {dayjs(o.delivery_date).format('DD MMM')}
                     </span>
                   </RowItem>
                 ))}
               </Section>
             )}
 
-            {/* End-of-day note */}
+            {dsr.follow_ups?.length > 0 && (
+              <Section title={`Follow-ups (${dsr.follow_ups.length})`}>
+                {dsr.follow_ups.map((f) => (
+                  <RowItem key={f.id}>
+                    <span className="font-medium text-text-primary truncate">{f.farmer_name}</span>
+                    <span className="text-xs text-text-secondary shrink-0">
+                      {dayjs(f.scheduled_date).format('DD MMM')}
+                      {f.scheduled_time ? ` · ${String(f.scheduled_time).slice(0, 5)}` : ''}
+                    </span>
+                  </RowItem>
+                ))}
+              </Section>
+            )}
+
             {dsr.end_of_day_note && (
-              <Section title="End-of-Day Note">
-                <p className="text-sm text-text-primary whitespace-pre-wrap">
+              <Section title="Employee's Note">
+                <p className="text-sm italic text-text-primary whitespace-pre-wrap rounded-card bg-bg p-3">
                   {dsr.end_of_day_note}
                 </p>
               </Section>
             )}
 
-            {/* Existing manager comment */}
             {existingComment && (
               <Section title="Your Previous Comment">
-                <p className="text-sm text-text-primary whitespace-pre-wrap">
-                  {existingComment}
-                </p>
+                <p className="text-sm text-text-primary whitespace-pre-wrap">{existingComment}</p>
               </Section>
             )}
 
-            {/* Add / update manager comment */}
             {reportId && (
-              <Section title="Add Comment">
+              <Section title="Manager Comment">
                 <textarea
                   rows={3}
                   value={comment}
@@ -306,14 +427,9 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
                   className="w-full rounded-btn border border-border bg-bg p-2 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                 />
                 <div className="mt-2 flex justify-end">
-                  <Button
-                    size="sm"
-                    disabled={!comment.trim() || saving}
-                    isLoading={saving}
-                    onClick={handleAddComment}
-                  >
+                  <Button size="sm" disabled={!comment.trim() || saving} isLoading={saving} onClick={handleAddComment}>
                     <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
-                    Add comment
+                    Save Comment
                   </Button>
                 </div>
               </Section>
@@ -328,9 +444,7 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
 function Section({ title, children }) {
   return (
     <div>
-      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-        {title}
-      </h4>
+      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">{title}</h4>
       <div className="space-y-1">{children}</div>
     </div>
   );

@@ -172,7 +172,7 @@ export default function LeadPipelinePage() {
             <table className="w-full text-left text-sm">
               <thead className="border-b border-border bg-surface/60 text-text-secondary">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Farmer</th>
+                  <th className="px-4 py-3 font-semibold">FPO</th>
                   <th className="px-4 py-3 font-semibold">Employee</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold">Last Visit</th>

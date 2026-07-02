@@ -53,7 +53,7 @@ export default function FarmerDetailPanel({ farmerId, open, onClose }) {
       >
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="truncate text-lg font-semibold text-text-primary">
-            {farmer?.name || 'Farmer'}
+            {farmer?.name || 'FPO'}
           </h2>
           <button
             onClick={onClose}

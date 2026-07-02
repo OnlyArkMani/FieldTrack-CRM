@@ -21,7 +21,7 @@ function FollowUpItem({ fu }) {
       <Icon className="mt-0.5 h-4 w-4 shrink-0" style={{ color: cfg.color }} />
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium text-text-primary">
-          {fu.farmer_name ?? `Farmer #${fu.farmer_id}`}
+          {fu.farmer_name ?? `FPO #${fu.farmer_id}`}
         </div>
         <div className="truncate text-xs text-text-secondary">
           {fu.employee_name ?? `Employee #${fu.employee_id}`}

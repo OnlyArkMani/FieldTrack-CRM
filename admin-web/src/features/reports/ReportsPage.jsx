@@ -10,6 +10,7 @@ import { Download, FileSpreadsheet, AlertCircle, Loader2, X } from 'lucide-react
 
 import { api, apiErrorMessage } from '@/services/api/client';
 import { useTeams } from '@/hooks/useTeams';
+import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/ui/PageHeader';
 import Card, { CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -25,6 +26,7 @@ const REPORT_TYPES = [
   { value: 'DISTANCE', label: 'Distance' },
   { value: 'DISTANCE_ZONES', label: 'Distance & Zone Time' },
   { value: 'GEOFENCE_COMPLIANCE', label: 'Geofence Compliance' },
+  { value: 'EMPLOYEE_CONSOLIDATED', label: 'Employee — all activity' },
 ];
 
 const ALL_FORMATS = [
@@ -37,6 +39,9 @@ const ALL_FORMATS = [
 const NO_PDF_TYPES = new Set(['DISTANCE_ZONES', 'GEOFENCE_COMPLIANCE']);
 // Report types that REQUIRE a team_id filter.
 const TEAM_REQUIRED_TYPES = new Set(['GEOFENCE_COMPLIANCE']);
+// Multi-sheet consolidations: Excel only + a specific employee (server-enforced).
+const EXCEL_ONLY_TYPES = new Set(['EMPLOYEE_CONSOLIDATED']);
+const EMPLOYEE_REQUIRED_TYPES = new Set(['EMPLOYEE_CONSOLIDATED']);
 
 // ── Employee autocomplete ─────────────────────────────────────────────────
 function EmployeeSearch({ value, onChange, disabled }) {
@@ -176,12 +181,12 @@ function EmployeeSearch({ value, onChange, disabled }) {
 }
 
 // ── Scope toggle ──────────────────────────────────────────────────────────
-function ScopeToggle({ scope, onChange, disabled }) {
+function ScopeToggle({ scope, onChange, disabled, hideAll }) {
   const opts = [
     { value: 'all', label: 'All employees' },
     { value: 'team', label: 'By team' },
     { value: 'employee', label: 'By employee' },
-  ];
+  ].filter((o) => !(hideAll && o.value === 'all'));
   return (
     <div className="flex items-center gap-3 flex-wrap">
       {opts.map((o) => (
@@ -208,11 +213,14 @@ function ScopeToggle({ scope, onChange, disabled }) {
 export default function ReportsPage() {
   const today = dayjs().format('YYYY-MM-DD');
   const { data: teams = [] } = useTeams();
+  const user = useAuthStore((s) => s.user);
+  const isSupervisor = user?.role === 'SUPERVISOR';
+  const myTeamId = user?.team_id ?? null;
   const [type, setType] = useState('ATTENDANCE');
   const [format, setFormat] = useState('EXCEL');
 
-  // Scope: 'all' | 'team' | 'employee'
-  const [scope, setScope] = useState('all');
+  // Scope: 'all' | 'team' | 'employee'. Supervisors never get 'all'.
+  const [scope, setScope] = useState(isSupervisor ? 'team' : 'all');
   const [teamId, setTeamId] = useState('');
   const [employee, setEmployee] = useState(null); // { id, name, team_name }
 
@@ -231,13 +239,31 @@ export default function ReportsPage() {
   };
   useEffect(() => clearPoll, []);
 
+  const excelOnly = EXCEL_ONLY_TYPES.has(type);
   const noPdf = NO_PDF_TYPES.has(type);
-  const formats = noPdf ? ALL_FORMATS.filter((f) => f.value !== 'PDF') : ALL_FORMATS;
+  const formats = excelOnly
+    ? ALL_FORMATS.filter((f) => f.value === 'EXCEL')
+    : noPdf
+      ? ALL_FORMATS.filter((f) => f.value !== 'PDF')
+      : ALL_FORMATS;
 
   // For GEOFENCE_COMPLIANCE, force scope to 'team'.
   const forceTeam = TEAM_REQUIRED_TYPES.has(type);
+  // For EMPLOYEE_CONSOLIDATED, force scope to a single employee.
+  const forceEmployee = EMPLOYEE_REQUIRED_TYPES.has(type);
 
-  const effectiveScope = forceTeam ? 'team' : scope;
+  // Supervisors: never "all employees" — coerce to their team scope.
+  const roleScope = isSupervisor && scope === 'all' ? 'team' : scope;
+  const effectiveScope = forceTeam ? 'team' : forceEmployee ? 'employee' : roleScope;
+
+  // Supervisor: pin the team filter to their own team.
+  useEffect(() => {
+    if (isSupervisor && myTeamId && String(teamId) !== String(myTeamId)) {
+      setTeamId(String(myTeamId));
+    }
+    if (isSupervisor && scope === 'all') setScope('team');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSupervisor, myTeamId]);
 
   const teamMissing = effectiveScope === 'team' && !teamId;
   const employeeMissing = effectiveScope === 'employee' && !employee;
@@ -259,9 +285,12 @@ export default function ReportsPage() {
 
   const onTypeChange = (value) => {
     setType(value);
-    if (NO_PDF_TYPES.has(value) && format === 'PDF') setFormat('EXCEL');
+    if (EXCEL_ONLY_TYPES.has(value)) setFormat('EXCEL');
+    else if (NO_PDF_TYPES.has(value) && format === 'PDF') setFormat('EXCEL');
     // GEOFENCE_COMPLIANCE forces team scope — reset to team if needed.
     if (TEAM_REQUIRED_TYPES.has(value) && scope !== 'team') setScope('team');
+    // EMPLOYEE_CONSOLIDATED forces employee scope.
+    if (EMPLOYEE_REQUIRED_TYPES.has(value) && scope !== 'employee') setScope('employee');
     resetResult();
   };
 
@@ -411,8 +440,13 @@ export default function ReportsPage() {
 
         {/* Row 2: Scope toggle + conditional team/employee picker */}
         <div className="mt-4 space-y-3">
-          {!forceTeam && (
-            <ScopeToggle scope={scope} onChange={onScopeChange} disabled={busy} />
+          {!forceTeam && !forceEmployee && (
+            <ScopeToggle
+              scope={roleScope}
+              onChange={onScopeChange}
+              disabled={busy}
+              hideAll={isSupervisor}
+            />
           )}
 
           {effectiveScope === 'team' && (
@@ -421,15 +455,21 @@ export default function ReportsPage() {
                 label={
                   <>
                     Team{' '}
-                    {forceTeam && <span className="text-danger">*</span>}
+                    {(forceTeam || isSupervisor) && <span className="text-danger">*</span>}
+                    {isSupervisor && (
+                      <span className="ml-1 font-normal text-text-secondary">(your team)</span>
+                    )}
                   </>
                 }
                 value={teamId}
                 onChange={(e) => { setTeamId(e.target.value); resetResult(); }}
-                disabled={busy}
+                disabled={busy || isSupervisor}
               >
-                <option value="">Select a team…</option>
-                {teams.map((t) => (
+                {!isSupervisor && <option value="">Select a team…</option>}
+                {(isSupervisor
+                  ? teams.filter((t) => String(t.id) === String(myTeamId))
+                  : teams
+                ).map((t) => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </Select>
@@ -479,7 +519,14 @@ export default function ReportsPage() {
             Requires a team. Available in Excel and CSV only.
           </p>
         )}
-        {!isCompliance && noPdf && (
+        {forceEmployee && (
+          <p className="mt-1 text-xs text-text-secondary">
+            One Excel workbook for the selected employee: Summary, Attendance,
+            Distance &amp; Zones, Visits, Orders and Leads. Pick an employee and a
+            date range (max 31 days).
+          </p>
+        )}
+        {!isCompliance && !excelOnly && noPdf && (
           <p className="mt-1 text-xs text-text-secondary">
             Shows distance traveled and time spent in each geofence zone per employee per day.
             Available in Excel and CSV only.

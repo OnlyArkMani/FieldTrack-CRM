@@ -31,11 +31,11 @@ const NAV = [
   { to: '/geofences', label: 'Geofences', icon: Hexagon },
   { to: '/reports', label: 'Reports', icon: FileBarChart },
   { section: 'CRM' },
-  { to: '/farmers', label: 'Farmers', icon: Sprout },
+  { to: '/farmers', label: 'FPO', icon: Sprout },
   { to: '/planning', label: 'Visit Plans', icon: CalendarCheck },
   { to: '/leads', label: 'Lead Pipeline', icon: TrendingUp },
   { to: '/follow-ups', label: 'Follow-ups', icon: BellRing },
-  { to: '/daily-reports', label: 'Daily Reports', icon: ClipboardList },
+  { to: '/daily-reports', label: 'DSR', icon: ClipboardList },
   { to: '/settings', label: 'Settings', icon: Settings },
   { to: '/settings/gps', label: 'GPS Tracking', icon: Radio },
 ];

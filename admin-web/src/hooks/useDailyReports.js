@@ -8,13 +8,13 @@ import { api } from '@/services/api/client';
 
 const KEY = 'daily-reports';
 
-/** Team DSRs for a given date (supervisor/admin). */
-export function useTeamDsrs(date) {
+/** Team DSRs for a given date (supervisor/admin). Admin may pass a teamId. */
+export function useTeamDsrs(date, teamId) {
   return useQuery({
-    queryKey: [KEY, 'team', date],
+    queryKey: [KEY, 'team', date, teamId ?? null],
     queryFn: async () => {
       const { data } = await api.get('/daily-reports/team', {
-        params: { report_date: date },
+        params: { report_date: date, ...(teamId ? { team_id: teamId } : {}) },
       });
       return data; // array of TeamDsrItem
     },
@@ -37,20 +37,19 @@ export function useDsrDetail(employeeId, date) {
   });
 }
 
-/** Paginated admin archive. */
-export function useDsrArchive(filters) {
+/** Paginated DSR archive (admin: all/team; supervisor: own team). Pass
+ *  { enabled, ...filters } — `enabled` gates the query and is not sent. */
+export function useDsrArchive({ enabled = true, ...filters } = {}) {
   return useQuery({
     queryKey: [KEY, 'archive', filters],
     queryFn: async () => {
       const { data } = await api.get('/daily-reports/archive', {
-        params: {
-          ...filters,
-          limit: 30,
-        },
+        params: { ...filters, limit: 100 },
       });
       return data;
     },
     placeholderData: keepPreviousData,
+    enabled,
   });
 }
 

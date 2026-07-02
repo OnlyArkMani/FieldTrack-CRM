@@ -79,7 +79,7 @@ export default function FarmersPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Farmers" subtitle={`${data?.total ?? 0} total`} />
+      <PageHeader title="FPO" subtitle={`${data?.total ?? 0} total`} />
 
       <Card className="flex flex-wrap items-end gap-3">
         <div className="w-48">
@@ -114,7 +114,7 @@ export default function FarmersPage() {
         rows={rows}
         loading={isLoading}
         onRowClick={(f) => setSelectedId(f.id)}
-        empty="No farmers match these filters"
+        empty="No FPOs match these filters"
       />
 
       <FarmerDetailPanel

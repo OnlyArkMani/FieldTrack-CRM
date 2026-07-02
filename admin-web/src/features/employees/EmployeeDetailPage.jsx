@@ -713,7 +713,7 @@ function CrmScorecard({ employeeId }) {
             color="var(--ft-primary)"
           />
           <Mini
-            label="Farmers"
+            label="FPOs"
             value={data.unique_farmers_visited}
             color="var(--ft-secondary)"
           />
