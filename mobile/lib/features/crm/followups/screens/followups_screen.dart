@@ -140,7 +140,7 @@ class _DateStrip extends StatelessWidget {
     final colors = context.appColors;
     final scheme = Theme.of(context).colorScheme;
     return SizedBox(
-      height: 76,
+      height: 86,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(
