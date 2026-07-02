@@ -20,6 +20,7 @@ import uuid
 from datetime import date as date_type
 from datetime import datetime, timezone
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -276,7 +277,7 @@ class VisitService:
                         await notif.send_fcm(
                             sup_id,
                             title="Order captured",
-                            body=f"{user.full_name} captured an order "
+                            body=f"{user.name} captured an order "
                             f"({payload.bags_count} bags) from {farmer_name}.",
                             type="ORDER_CAPTURED",
                             data={
@@ -304,6 +305,7 @@ class VisitService:
             )
 
         now = datetime.now(timezone.utc)
+        today = self._today()
         visit.status = "COMPLETED"
         visit.check_out_at = now
         self.repo.add(visit)
@@ -317,18 +319,52 @@ class VisitService:
             )
         )
 
-        if needs_follow_up:
-            self.repo.add(
-                FollowUp(
-                    farmer_id=visit.farmer_id,
-                    employee_id=user.id,
-                    visit_id=visit.id,
-                    scheduled_date=payload.follow_up_date,
-                    scheduled_time=payload.follow_up_time,
-                    purpose=payload.follow_up_purpose,
-                    status="PENDING",
+        # Close any pending follow-up this visit fulfils: a follow-up due
+        # on/before today for this farmer+employee. Without this a follow-up
+        # visit (started with no plan_item_id) would leave the FollowUp PENDING
+        # and it would re-appear in today's plan forever.
+        due_follow_ups = (
+            await self.db.execute(
+                select(FollowUp).where(
+                    FollowUp.farmer_id == visit.farmer_id,
+                    FollowUp.employee_id == user.id,
+                    FollowUp.status == "PENDING",
+                    FollowUp.scheduled_date <= today,
                 )
             )
+        ).scalars().all()
+        for fu in due_follow_ups:
+            fu.status = "COMPLETED"
+            fu.completed_visit_id = visit.id
+            self.repo.add(fu)
+
+        if needs_follow_up:
+            # No duplicate: skip if an identical PENDING follow-up (same farmer,
+            # employee, date) already exists.
+            dup_id = (
+                await self.db.execute(
+                    select(FollowUp.id)
+                    .where(
+                        FollowUp.farmer_id == visit.farmer_id,
+                        FollowUp.employee_id == user.id,
+                        FollowUp.status == "PENDING",
+                        FollowUp.scheduled_date == payload.follow_up_date,
+                    )
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if dup_id is None:
+                self.repo.add(
+                    FollowUp(
+                        farmer_id=visit.farmer_id,
+                        employee_id=user.id,
+                        visit_id=visit.id,
+                        scheduled_date=payload.follow_up_date,
+                        scheduled_time=payload.follow_up_time,
+                        purpose=payload.follow_up_purpose,
+                        status="PENDING",
+                    )
+                )
 
         if visit.plan_item_id is not None:
             item = await self.repo.get_plan_item(visit.plan_item_id)
@@ -341,6 +377,37 @@ class VisitService:
         if farmer is not None:
             farmer.updated_at = now
             self.repo.add(farmer)
+
+        await self.db.flush()
+
+        # Supervisor awareness: notify the employee's team supervisor(s) that a
+        # visit was completed (mirrors ORDER_CAPTURED). Best-effort — never block.
+        try:
+            if user.team_id is not None:
+                from app.services.dsr_service import _supervisor_ids_for_team
+                from app.services.notification_service import NotificationService
+
+                farmer_name = farmer.name if farmer else "a farmer"
+                sup_ids = await _supervisor_ids_for_team(self.db, user.team_id)
+                if sup_ids:
+                    notif = NotificationService(self.db)
+                    for sup_id in sup_ids:
+                        if sup_id == user.id:
+                            continue
+                        await notif.send_fcm(
+                            sup_id,
+                            title="Visit completed",
+                            body=f"{user.name} completed a visit to {farmer_name} "
+                            f"({payload.lead_status}).",
+                            type="VISIT_COMPLETED",
+                            data={
+                                "screen": "farmer",
+                                "farmer_id": str(visit.farmer_id),
+                            },
+                            commit=False,
+                        )
+        except Exception:  # noqa: BLE001 — notification must never break completion
+            logger.exception("VISIT_COMPLETED notification failed")
 
         await self.db.commit()
         await self.db.refresh(visit)

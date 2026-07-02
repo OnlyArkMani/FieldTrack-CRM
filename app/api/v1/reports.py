@@ -75,6 +75,15 @@ async def generate_report(
             headers={"X-Error-Code": "FORMAT_NOT_SUPPORTED"},
         )
 
+    # Multi-sheet consolidations only make sense as an Excel workbook.
+    _EXCEL_ONLY = {ReportType.EMPLOYEE_CONSOLIDATED, ReportType.FARMER_EXPORT}
+    if body.type in _EXCEL_ONLY and body.format is not ReportFormat.EXCEL:
+        raise HTTPException(
+            status_code=400,
+            detail="This report is available in Excel only",
+            headers={"X-Error-Code": "FORMAT_NOT_SUPPORTED"},
+        )
+
     normalized = await ReportService(db).authorize(user, body.type, body.filters)
     store = ReportStore()
     report_id = await store.create(user.id, body.type, body.format)

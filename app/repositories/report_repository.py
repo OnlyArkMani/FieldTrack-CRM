@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.attendance import Attendance
-from app.models.crm import Visit, VisitOrder
+from app.models.crm import Farmer, Lead, LivestockProfile, Visit, VisitOrder
 from app.models.enums import AttendanceStatus, GeofenceEventType, UserRole
 from app.models.geofence import Geofence, GeofenceEvent
 from app.models.location import LocationLog
@@ -254,3 +254,118 @@ class ReportRepository:
 
     async def get_user(self, user_id: int) -> User | None:
         return await self.db.get(User, user_id)
+
+    # ── Per-employee CRM detail (EMPLOYEE_CONSOLIDATED) ──────────────────────
+    @staticmethod
+    def _utc_bounds(start: date, end: date) -> tuple[datetime, datetime]:
+        return (
+            datetime.combine(start, time.min, tzinfo=timezone.utc),
+            datetime.combine(end, time.max, tzinfo=timezone.utc),
+        )
+
+    async def employee_visits_in_range(
+        self, *, user_id: int, start: date, end: date
+    ) -> list[tuple[Visit, str | None]]:
+        """This employee's visits in [start, end] (by check-in), each paired with
+        the FPO/farmer name. Ordered oldest-first."""
+        lo, hi = self._utc_bounds(start, end)
+        stmt = (
+            select(Visit, Farmer.name)
+            .join(Farmer, Farmer.id == Visit.farmer_id, isouter=True)
+            .where(
+                Visit.employee_id == user_id,
+                Visit.check_in_at >= lo,
+                Visit.check_in_at <= hi,
+            )
+            .order_by(Visit.check_in_at.asc())
+        )
+        result = await self.db.execute(stmt)
+        return [(r[0], r[1]) for r in result.all()]
+
+    async def employee_orders_in_range(
+        self, *, user_id: int, start: date, end: date
+    ) -> list[tuple[VisitOrder, str | None]]:
+        """This employee's captured orders in [start, end] (by created_at)."""
+        lo, hi = self._utc_bounds(start, end)
+        stmt = (
+            select(VisitOrder, Farmer.name)
+            .join(Farmer, Farmer.id == VisitOrder.farmer_id, isouter=True)
+            .where(
+                VisitOrder.employee_id == user_id,
+                VisitOrder.created_at >= lo,
+                VisitOrder.created_at <= hi,
+            )
+            .order_by(VisitOrder.created_at.asc())
+        )
+        result = await self.db.execute(stmt)
+        return [(r[0], r[1]) for r in result.all()]
+
+    async def employee_leads_in_range(
+        self, *, user_id: int, start: date, end: date
+    ) -> list[tuple[Lead, str | None]]:
+        """Lead status changes this employee recorded in [start, end]."""
+        lo, hi = self._utc_bounds(start, end)
+        stmt = (
+            select(Lead, Farmer.name)
+            .join(Farmer, Farmer.id == Lead.farmer_id, isouter=True)
+            .where(
+                Lead.employee_id == user_id,
+                Lead.created_at >= lo,
+                Lead.created_at <= hi,
+            )
+            .order_by(Lead.created_at.asc())
+        )
+        result = await self.db.execute(stmt)
+        return [(r[0], r[1]) for r in result.all()]
+
+    # ── Per-farmer history (FARMER_EXPORT) ──────────────────────────────────
+    async def get_farmer(self, farmer_id: int) -> Farmer | None:
+        return await self.db.get(Farmer, farmer_id)
+
+    async def farmer_visits(
+        self, farmer_id: int
+    ) -> list[tuple[Visit, str | None]]:
+        """Every visit to this FPO/farmer, each paired with the employee name.
+        Newest-first."""
+        stmt = (
+            select(Visit, User.name)
+            .join(User, User.id == Visit.employee_id, isouter=True)
+            .where(Visit.farmer_id == farmer_id)
+            .order_by(Visit.check_in_at.desc().nullslast(), Visit.id.desc())
+        )
+        result = await self.db.execute(stmt)
+        return [(r[0], r[1]) for r in result.all()]
+
+    async def farmer_orders(
+        self, farmer_id: int
+    ) -> list[tuple[VisitOrder, str | None]]:
+        stmt = (
+            select(VisitOrder, User.name)
+            .join(User, User.id == VisitOrder.employee_id, isouter=True)
+            .where(VisitOrder.farmer_id == farmer_id)
+            .order_by(VisitOrder.created_at.desc(), VisitOrder.id.desc())
+        )
+        result = await self.db.execute(stmt)
+        return [(r[0], r[1]) for r in result.all()]
+
+    async def farmer_livestock(self, farmer_id: int) -> list[LivestockProfile]:
+        stmt = (
+            select(LivestockProfile)
+            .where(LivestockProfile.farmer_id == farmer_id)
+            .order_by(
+                LivestockProfile.recorded_at.desc(), LivestockProfile.id.desc()
+            )
+        )
+        return list((await self.db.execute(stmt)).scalars().all())
+
+    async def farmer_leads(
+        self, farmer_id: int
+    ) -> list[tuple[Lead, str | None]]:
+        stmt = (
+            select(Lead, User.name)
+            .join(User, User.id == Lead.employee_id, isouter=True)
+            .where(Lead.farmer_id == farmer_id)
+            .order_by(Lead.created_at.desc(), Lead.id.desc())
+        )
+        result = await self.db.execute(stmt)
+        return [(r[0], r[1]) for r in result.all()]

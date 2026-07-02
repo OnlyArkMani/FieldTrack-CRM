@@ -291,7 +291,7 @@ async def submit_dsr(
 
     # Load employee name for FCM body
     emp = await db.get(User, employee_id)
-    emp_name = emp.full_name if emp else f"Employee #{employee_id}"
+    emp_name = emp.name if emp else f"Employee #{employee_id}"
 
     svc = NotificationService(db)
 

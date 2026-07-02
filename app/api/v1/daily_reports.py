@@ -15,7 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import (
     CurrentUser,
-    get_current_admin,
     get_current_supervisor,
     get_db,
 )
@@ -85,14 +84,39 @@ class DsrDetailResponse(DailyReportResponse):
 class TeamDsrItem(BaseModel):
     employee_id: int
     employee_name: str
+    team_name: str | None = None
     status: str  # SUBMITTED / DRAFT / MISSING
+    check_in_time: Any = None
+    check_out_time: Any = None
+    visits_planned: int = 0
+    visits_completed: int
+    orders_captured: int
+    hot_leads: int
+    warm_leads: int
+    cold_leads: int
+    follow_ups_scheduled: int = 0
+    is_late: bool
+    submitted_at: Any = None
+    has_manager_comment: bool = False
+    report_id: int | None
+
+
+class ArchiveDsrItem(BaseModel):
+    """One employee-day row for the date-range (archive) view."""
+
+    id: int | None = None
+    employee_id: int
+    employee_name: str
+    team_name: str | None = None
+    report_date: date
+    status: str
     visits_completed: int
     orders_captured: int
     hot_leads: int
     warm_leads: int
     cold_leads: int
     is_late: bool
-    report_id: int | None
+    submitted_at: Any = None
 
 
 # -- Employee: own DSR history ------------------------------------------------
@@ -154,26 +178,37 @@ async def submit(
 
 @router.get("/team", response_model=list[TeamDsrItem])
 async def team_dsrs(
-    supervisor: Annotated[User, Depends(get_current_supervisor)],
+    user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
     report_date: date = Query(default_factory=date.today),
+    team_id: int | None = Query(default=None),
 ) -> list[TeamDsrItem]:
-    team_id = supervisor.team_id
-    if not team_id:
-        return []
+    """DSR status for a team on a date.
 
-    emp_q = await db.execute(
-        select(User).where(
-            User.team_id == team_id,
-            User.role == UserRole.EMPLOYEE,
-            User.is_active.is_(True),
-        )
-    )
-    employees = emp_q.scalars().all()
+    ADMIN: all employees (optionally filtered by ``team_id``).
+    SUPERVISOR: always their own team (``team_id`` is ignored).
+    Every active employee in scope is listed — those without a DSR row for the
+    date show as MISSING, so the table is never empty.
+    """
+    emp_filters = [User.role == UserRole.EMPLOYEE, User.is_active.is_(True)]
+    if user.role == UserRole.SUPERVISOR:
+        if not user.team_id:
+            return []
+        emp_filters.append(User.team_id == user.team_id)
+    elif user.role == UserRole.ADMIN:
+        if team_id is not None:
+            emp_filters.append(User.team_id == team_id)
+    else:
+        raise forbidden("Not permitted")
+
+    employees = (
+        await db.execute(select(User).where(*emp_filters).order_by(User.name.asc()))
+    ).scalars().all()
     if not employees:
         return []
 
     emp_ids = [e.id for e in employees]
+    team_names = await _team_name_map(db, {e.team_id for e in employees if e.team_id})
 
     dsr_q = await db.execute(
         select(DailyReport).where(
@@ -181,25 +216,36 @@ async def team_dsrs(
             DailyReport.report_date == report_date,
         )
     )
-    dsrs_by_emp: dict[int, DailyReport] = {
-        d.employee_id: d for d in dsr_q.scalars().all()
-    }
+    dsrs_by_emp: dict[int, DailyReport] = {d.employee_id: d for d in dsr_q.scalars().all()}
 
-    return [
-        TeamDsrItem(
-            employee_id=emp.id,
-            employee_name=emp.full_name,
-            status=dsrs_by_emp[emp.id].status if emp.id in dsrs_by_emp else "MISSING",
-            visits_completed=dsrs_by_emp[emp.id].visits_completed if emp.id in dsrs_by_emp else 0,
-            orders_captured=dsrs_by_emp[emp.id].orders_captured if emp.id in dsrs_by_emp else 0,
-            hot_leads=dsrs_by_emp[emp.id].hot_leads if emp.id in dsrs_by_emp else 0,
-            warm_leads=dsrs_by_emp[emp.id].warm_leads if emp.id in dsrs_by_emp else 0,
-            cold_leads=dsrs_by_emp[emp.id].cold_leads if emp.id in dsrs_by_emp else 0,
-            is_late=dsrs_by_emp[emp.id].is_late if emp.id in dsrs_by_emp else False,
-            report_id=dsrs_by_emp[emp.id].id if emp.id in dsrs_by_emp else None,
+    times_by_emp = await _attendance_times(db, emp_ids, report_date)
+
+    items: list[TeamDsrItem] = []
+    for emp in employees:
+        d = dsrs_by_emp.get(emp.id)
+        ci, co = times_by_emp.get(emp.id, (None, None))
+        items.append(
+            TeamDsrItem(
+                employee_id=emp.id,
+                employee_name=emp.name,
+                team_name=team_names.get(emp.team_id),
+                status=d.status if d else "MISSING",
+                check_in_time=ci,
+                check_out_time=co,
+                visits_planned=d.visits_planned if d else 0,
+                visits_completed=d.visits_completed if d else 0,
+                orders_captured=d.orders_captured if d else 0,
+                hot_leads=d.hot_leads if d else 0,
+                warm_leads=d.warm_leads if d else 0,
+                cold_leads=d.cold_leads if d else 0,
+                follow_ups_scheduled=d.follow_ups_scheduled if d else 0,
+                is_late=d.is_late if d else False,
+                submitted_at=d.submitted_at if d else None,
+                has_manager_comment=bool(getattr(d, "manager_comment", None)) if d else False,
+                report_id=d.id if d else None,
+            )
         )
-        for emp in employees
-    ]
+    return items
 
 
 @router.get("/team/{employee_id}/{report_date}", response_model=DsrDetailResponse)
@@ -240,22 +286,52 @@ async def post_manager_comment(
 
 # -- Admin: archive -----------------------------------------------------------
 
-@router.get("/archive", response_model=CursorPage[DailyReportResponse])
+@router.get("/archive", response_model=CursorPage[ArchiveDsrItem])
 async def archive(
-    _admin: Annotated[User, Depends(get_current_admin)],
+    user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
     employee_id: int | None = Query(default=None),
+    team_id: int | None = Query(default=None),
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
     status: str | None = Query(default=None),
     cursor: str | None = Query(default=None),
     limit: int = Query(default=30, ge=1, le=100),
-) -> CursorPage[DailyReportResponse]:
+) -> CursorPage[ArchiveDsrItem]:
+    """Date-range DSR archive (one row per employee-day), scope-aware.
+
+    ADMIN: all employees, optionally filtered by team_id / employee_id.
+    SUPERVISOR: always restricted to their own team.
+    Max 31-day window (400 otherwise)."""
     from sqlalchemy import func
 
+    if date_from and date_to:
+        if date_from > date_to:
+            raise HTTPException(status_code=400, detail="date_from must be before date_to")
+        if (date_to - date_from).days > 31:
+            raise HTTPException(
+                status_code=400,
+                detail="Date range cannot exceed 31 days.",
+                headers={"X-Error-Code": "DATE_RANGE_TOO_LARGE"},
+            )
+
+    if user.role not in (UserRole.ADMIN, UserRole.SUPERVISOR):
+        raise forbidden("Not permitted")
+
     base_filters = []
-    if employee_id:
-        base_filters.append(DailyReport.employee_id == employee_id)
+    # Scope: supervisors are pinned to their own team; admins may filter.
+    if user.role == UserRole.SUPERVISOR:
+        if not user.team_id:
+            return CursorPage[ArchiveDsrItem](items=[], next_cursor=None, total=0, has_more=False)
+        base_filters.append(User.team_id == user.team_id)
+        if employee_id:
+            base_filters.append(DailyReport.employee_id == employee_id)
+    else:
+        if team_id is not None:
+            base_filters.append(User.team_id == team_id)
+        if employee_id:
+            base_filters.append(DailyReport.employee_id == employee_id)
+
     if date_from:
         base_filters.append(DailyReport.report_date >= date_from)
     if date_to:
@@ -264,27 +340,94 @@ async def archive(
         base_filters.append(DailyReport.status == status.upper())
 
     total = (
-        await db.execute(select(func.count(DailyReport.id)).where(*base_filters))
+        await db.execute(
+            select(func.count(DailyReport.id))
+            .join(User, User.id == DailyReport.employee_id)
+            .where(*base_filters)
+        )
     ).scalar_one()
 
-    q = select(DailyReport).where(*base_filters)
+    q = (
+        select(DailyReport, User.name, User.team_id)
+        .join(User, User.id == DailyReport.employee_id)
+        .where(*base_filters)
+    )
     cursor_id = decode_cursor(cursor)
     if cursor_id:
         q = q.where(DailyReport.id < cursor_id)
-
     q = q.order_by(DailyReport.id.desc()).limit(limit + 1)
-    rows = (await db.execute(q)).scalars().all()
+    rows = (await db.execute(q)).all()
 
     has_more = len(rows) > limit
     page = rows[:limit]
-    next_cursor = encode_cursor(page[-1].id) if has_more and page else None
+    next_cursor = encode_cursor(page[-1][0].id) if has_more and page else None
 
-    return CursorPage[DailyReportResponse](
-        items=[DailyReportResponse.model_validate(r) for r in page],
-        next_cursor=next_cursor,
-        total=total,
-        has_more=has_more,
+    team_names = await _team_name_map(db, {r[2] for r in page if r[2]})
+    items = [
+        ArchiveDsrItem(
+            id=r[0].id,
+            employee_id=r[0].employee_id,
+            employee_name=r[1],
+            team_name=team_names.get(r[2]),
+            report_date=r[0].report_date,
+            status=r[0].status,
+            visits_completed=r[0].visits_completed,
+            orders_captured=r[0].orders_captured,
+            hot_leads=r[0].hot_leads,
+            warm_leads=r[0].warm_leads,
+            cold_leads=r[0].cold_leads,
+            is_late=r[0].is_late,
+            submitted_at=r[0].submitted_at,
+        )
+        for r in page
+    ]
+    return CursorPage[ArchiveDsrItem](
+        items=items, next_cursor=next_cursor, total=total, has_more=has_more
     )
+
+
+# -- Scope/enrichment helpers -------------------------------------------------
+
+async def _team_name_map(db: AsyncSession, team_ids: set[int]) -> dict[int, str]:
+    if not team_ids:
+        return {}
+    from app.models.user import Team
+
+    rows = await db.execute(select(Team.id, Team.name).where(Team.id.in_(team_ids)))
+    return {tid: name for tid, name in rows.all()}
+
+
+async def _attendance_times(
+    db: AsyncSession, emp_ids: list[int], report_date: date
+) -> dict[int, tuple[Any, Any]]:
+    """First START and last END session timestamp per employee for the date."""
+    from sqlalchemy.orm import selectinload
+
+    from app.models.attendance import Attendance
+    from app.models.enums import SessionType
+
+    if not emp_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(Attendance)
+            .where(
+                Attendance.user_id.in_(emp_ids),
+                Attendance.date == report_date,
+            )
+            .options(selectinload(Attendance.sessions))
+        )
+    ).scalars().all()
+    out: dict[int, tuple[Any, Any]] = {}
+    for att in rows:
+        check_in = check_out = None
+        for s in sorted(att.sessions, key=lambda x: x.timestamp):
+            if s.type == SessionType.START and check_in is None:
+                check_in = s.timestamp
+            if s.type == SessionType.END:
+                check_out = s.timestamp
+        out[att.user_id] = (check_in, check_out)
+    return out
 
 
 # -- Internal helper ----------------------------------------------------------

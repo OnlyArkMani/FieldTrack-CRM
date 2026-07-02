@@ -24,6 +24,12 @@ class ReportType(str, Enum):
     DISTANCE_ZONES = "DISTANCE_ZONES"  # distance + time-in-geofence, CSV/Excel only
     GEOFENCE_COMPLIANCE = "GEOFENCE_COMPLIANCE"  # zones visited vs assigned, CSV/Excel only
     TEAM = "TEAM"
+    # One employee, everything in one workbook (attendance + distance/zones +
+    # visits + orders + leads). Excel-only (multi-sheet). ≤31 days.
+    EMPLOYEE_CONSOLIDATED = "EMPLOYEE_CONSOLIDATED"
+    # One FPO/farmer's full history (visits + orders + livestock + leads).
+    # Excel-only (multi-sheet). Used by the mobile "Export" button.
+    FARMER_EXPORT = "FARMER_EXPORT"
 
 
 class ReportFormat(str, Enum):
@@ -62,6 +68,8 @@ class ReportFilters(BaseModel):
     end_date: date | None = None
     team_id: int | None = None
     user_id: int | None = None
+    # FARMER_EXPORT-only: the FPO/farmer whose history to export.
+    farmer_id: int | None = None
     status: str | None = Field(
         default=None, description="PRESENT | ABSENT | HALF_DAY"
     )

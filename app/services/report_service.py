@@ -87,6 +87,8 @@ class NormalizedReport:
     status: AttendanceStatus | None
     scope_label: str
     month: date | None = None
+    # FARMER_EXPORT-only: the FPO/farmer whose history is being exported.
+    farmer_id: int | None = None
     # Overrides the auto-derived subtitle (used by weekly auto-reports where the
     # window isn't a whole calendar month, e.g. "Week of 22 Jun – 28 Jun 2026").
     period_label: str | None = None
@@ -120,6 +122,15 @@ class ReportService:
 
         if type_ is ReportType.GEOFENCE_COMPLIANCE:
             return await self._authorize_compliance(actor, filters)
+
+        if type_ is ReportType.EMPLOYEE_CONSOLIDATED:
+            start, end = self._resolve_range(filters.start_date, filters.end_date)
+            return await self._authorize_employee_consolidated(
+                actor, start, end, filters
+            )
+
+        if type_ is ReportType.FARMER_EXPORT:
+            return await self._authorize_farmer_export(actor, filters)
 
         # ATTENDANCE / DISTANCE
         start, end = self._resolve_range(filters.start_date, filters.end_date)
@@ -188,6 +199,73 @@ class ReportService:
             user_id=None,
             status=None,
             scope_label=f"Team: {team.name}",
+        )
+
+    async def _authorize_employee_consolidated(
+        self,
+        actor: User,
+        start: date,
+        end: date,
+        filters: ReportFilters,
+    ) -> NormalizedReport:
+        """One employee, all their activity in one workbook. Admin/supervisor
+        only; supervisors are limited to employees on the teams they supervise."""
+        if actor.role == UserRole.EMPLOYEE:
+            raise forbidden("Employees cannot generate this report")
+        if filters.user_id is None:
+            raise bad_request("Select an employee for this report")
+        target = await self.repo.get_user(filters.user_id)
+        if target is None:
+            raise not_found("Employee not found")
+        if target.role == UserRole.ADMIN:
+            raise bad_request("Cannot generate a report for an admin account")
+        if actor.role == UserRole.SUPERVISOR:
+            supervised = await self.repo.supervised_team_ids(actor.id)
+            if target.team_id not in supervised:
+                raise forbidden("That employee isn't on your team")
+        return NormalizedReport(
+            type=ReportType.EMPLOYEE_CONSOLIDATED,
+            start=start,
+            end=end,
+            team_id=None,
+            user_id=target.id,
+            status=None,
+            scope_label=f"Employee: {target.name}",
+        )
+
+    async def _authorize_farmer_export(
+        self, actor: User, filters: ReportFilters
+    ) -> NormalizedReport:
+        """A single FPO/farmer's full history. Any field user may export a farmer
+        they can access (own team or created by them); supervisors are limited to
+        their supervised teams; admin sees all. Exports the whole history, so no
+        date range applies."""
+        if filters.farmer_id is None:
+            raise bad_request("farmer_id is required for an FPO export")
+        farmer = await self.repo.get_farmer(filters.farmer_id)
+        if farmer is None:
+            raise not_found("FPO not found")
+
+        if actor.role == UserRole.SUPERVISOR:
+            supervised = await self.repo.supervised_team_ids(actor.id)
+            if farmer.team_id not in supervised and farmer.created_by != actor.id:
+                raise forbidden("You don't have access to this FPO")
+        elif actor.role == UserRole.EMPLOYEE:
+            same_team = (
+                actor.team_id is not None and farmer.team_id == actor.team_id
+            )
+            if not same_team and farmer.created_by != actor.id:
+                raise forbidden("You don't have access to this FPO")
+
+        return NormalizedReport(
+            type=ReportType.FARMER_EXPORT,
+            start=date(2000, 1, 1),
+            end=date.today(),
+            team_id=None,
+            user_id=None,
+            status=None,
+            scope_label=f"FPO: {farmer.name}",
+            farmer_id=farmer.id,
         )
 
     async def _authorize_supervisor_range(
@@ -272,6 +350,10 @@ class ReportService:
             return await self._distance_zones_data(n)
         if n.type is ReportType.GEOFENCE_COMPLIANCE:
             return await self._geofence_compliance_data(n)
+        if n.type is ReportType.EMPLOYEE_CONSOLIDATED:
+            return await self._employee_consolidated_data(n)
+        if n.type is ReportType.FARMER_EXPORT:
+            return await self._farmer_export_data(n)
         return await self._team_data(n)
 
     async def _attendance_data(self, n: NormalizedReport) -> ReportData:
@@ -752,6 +834,304 @@ class ReportService:
             filename_stem=f"team_{n.team_id}_{(n.month or n.start):%Y-%m}",
         )
 
+    # ── Employee consolidated (one workbook, all activity) ───────────────
+    async def _employee_consolidated_data(
+        self, n: NormalizedReport
+    ) -> ReportData:
+        assert n.user_id is not None
+        target = await self.repo.get_user(n.user_id)
+        emp_name = target.name if target else str(n.user_id)
+        uid = n.user_id
+
+        # 1) Attendance (+ mock GPS)
+        att_rows = await self.repo.attendance_in_range(
+            start=n.start, end=n.end, user_id=uid, status=None
+        )
+        mock = await self.repo.mock_counts_in_range(
+            start=n.start, end=n.end, user_ids=[uid]
+        )
+        att_table_rows: list[list[Any]] = []
+        total_minutes = 0
+        total_distance_m = 0.0
+        total_mock = 0
+        present_days = half_days = absent_days = 0
+        for att, _user in att_rows:
+            start_t, end_t = self._session_bounds(att.sessions)
+            mock_n = mock.get((uid, att.date), 0)
+            total_minutes += att.total_duration_minutes
+            total_distance_m += att.total_distance_meters
+            total_mock += mock_n
+            if att.status == AttendanceStatus.PRESENT:
+                present_days += 1
+            elif att.status == AttendanceStatus.HALF_DAY:
+                half_days += 1
+            elif att.status == AttendanceStatus.ABSENT:
+                absent_days += 1
+            att_table_rows.append([
+                att.date.isoformat(), start_t, end_t,
+                self._fmt_duration(att.total_duration_minutes),
+                round(att.total_distance_meters / 1000, 2),
+                att.status.value, mock_n,
+                (att.work_summary or "").strip(),
+            ])
+
+        # 2) Distance & zone time (per day)
+        points = await self.repo.location_points_in_range(
+            start=n.start, end=n.end, user_ids=[uid]
+        )
+        events = await self.repo.geofence_events_in_range(
+            start=n.start, end=n.end, user_ids=[uid]
+        )
+        dz_rows: list[list[Any]] = []
+        for att, _user in att_rows:
+            key = (uid, att.date)
+            distance_km = round(
+                self._haversine_total_m(points.get(key, [])) / 1000, 2
+            )
+            end_dt = self._session_end_dt(att.sessions)
+            zones = self._zone_durations(events.get(key, []), end_dt)
+            zone_total_min = sum(mins for _, mins in zones)
+            zone_details = (
+                "; ".join(
+                    f"{name}: {self._fmt_zone_minutes(mins)}"
+                    for name, mins in zones
+                )
+                or "—"
+            )
+            active_min = att.total_duration_minutes
+            travel_min = max(active_min - zone_total_min, 0)
+            dz_rows.append([
+                att.date.isoformat(), distance_km,
+                self._fmt_duration(active_min), len(zones),
+                zone_details, self._fmt_duration(travel_min),
+            ])
+
+        # 3) Visits
+        visits = await self.repo.employee_visits_in_range(
+            user_id=uid, start=n.start, end=n.end
+        )
+        visit_rows: list[list[Any]] = []
+        completed_visits = 0
+        for v, farmer_name in visits:
+            if v.status == "COMPLETED":
+                completed_visits += 1
+            dist = (
+                round(v.distance_at_checkin_meters)
+                if v.distance_at_checkin_meters is not None
+                else "—"
+            )
+            visit_rows.append([
+                self._fmt_datetime(v.check_in_at),
+                farmer_name or "—",
+                self._fmt_time(v.check_out_at) if v.check_out_at else "—",
+                v.purpose or "—",
+                v.status,
+                dist,
+                "Yes" if v.location_warning else "No",
+            ])
+
+        # 4) Orders
+        orders = await self.repo.employee_orders_in_range(
+            user_id=uid, start=n.start, end=n.end
+        )
+        order_rows: list[list[Any]] = []
+        total_bags = 0
+        for o, farmer_name in orders:
+            total_bags += o.bags_count or 0
+            order_rows.append([
+                self._fmt_datetime(o.created_at),
+                farmer_name or "—",
+                o.bags_count,
+                o.delivery_date.isoformat() if o.delivery_date else "—",
+                o.payment_mode or "—",
+                o.status,
+                (o.special_notes or "").strip(),
+            ])
+
+        # 5) Leads
+        leads = await self.repo.employee_leads_in_range(
+            user_id=uid, start=n.start, end=n.end
+        )
+        lead_rows: list[list[Any]] = []
+        hot = warm = cold = 0
+        for lead, farmer_name in leads:
+            if lead.status == "HOT":
+                hot += 1
+            elif lead.status == "WARM":
+                warm += 1
+            elif lead.status == "COLD":
+                cold += 1
+            lead_rows.append([
+                self._fmt_datetime(lead.created_at),
+                farmer_name or "—",
+                lead.status,
+                (lead.reason_note or "").strip(),
+            ])
+
+        team_name = "—"
+        if target is not None and target.team_id is not None:
+            team = await self.repo.get_team(target.team_id)
+            team_name = team.name if team else "—"
+
+        conversion = (len(order_rows) / completed_visits * 100) if completed_visits else 0.0
+        summary = [
+            ("Employee", emp_name),
+            ("Team", team_name),
+            ("Days present", str(present_days)),
+            ("Half days", str(half_days)),
+            ("Days absent", str(absent_days)),
+            ("Total hours", self._fmt_duration(total_minutes)),
+            ("Total distance", f"{total_distance_m / 1000:.2f} km"),
+            ("Mock-GPS flags", str(total_mock)),
+            ("Visits (completed)", f"{len(visit_rows)} ({completed_visits})"),
+            ("Orders captured", str(len(order_rows))),
+            ("Bags ordered", str(total_bags)),
+            ("Conversion rate", f"{conversion:.0f}%"),
+            ("Leads (H/W/C)", f"{hot} / {warm} / {cold}"),
+        ]
+        return ReportData(
+            title=f"Employee Report — {emp_name}",
+            subtitle=self._range_text(n.start, n.end),
+            filters_text=self._filters_text(n),
+            generated_at=datetime.now(timezone.utc),
+            summary=summary,
+            tables=[
+                ReportTable(
+                    name="Attendance",
+                    columns=["Date", "Start", "End", "Duration",
+                             "Distance (km)", "Status", "Mock GPS",
+                             "Work Summary"],
+                    rows=att_table_rows,
+                    numeric_cols={4, 6},
+                ),
+                ReportTable(
+                    name="Distance & Zones",
+                    columns=["Date", "Distance (km)", "Active Time",
+                             "Zones Visited", "Time in Zones", "Travel Time"],
+                    rows=dz_rows,
+                    numeric_cols={1, 3},
+                ),
+                ReportTable(
+                    name="Visits",
+                    columns=["Checked In", "FPO", "Checked Out", "Purpose",
+                             "Status", "Distance (m)", "Location Warning"],
+                    rows=visit_rows,
+                    numeric_cols={5},
+                ),
+                ReportTable(
+                    name="Orders",
+                    columns=["Captured", "FPO", "Bags", "Delivery Date",
+                             "Payment", "Status", "Notes"],
+                    rows=order_rows,
+                    numeric_cols={2},
+                ),
+                ReportTable(
+                    name="Leads",
+                    columns=["Date", "FPO", "Status", "Reason"],
+                    rows=lead_rows,
+                ),
+            ],
+            filename_stem=f"employee_{uid}_{n.start}_{n.end}",
+        )
+
+    # ── FPO/farmer full-history export ────────────────────────────────────
+    async def _farmer_export_data(self, n: NormalizedReport) -> ReportData:
+        assert n.farmer_id is not None
+        farmer = await self.repo.get_farmer(n.farmer_id)
+        fid = n.farmer_id
+        fname = farmer.name if farmer else str(fid)
+
+        visits = await self.repo.farmer_visits(fid)
+        orders = await self.repo.farmer_orders(fid)
+        livestock = await self.repo.farmer_livestock(fid)
+        leads = await self.repo.farmer_leads(fid)
+
+        visit_rows = [[
+            self._fmt_datetime(v.check_in_at),
+            emp or "—",
+            self._fmt_time(v.check_out_at) if v.check_out_at else "—",
+            v.purpose or "—",
+            v.status,
+        ] for v, emp in visits]
+
+        total_bags = 0
+        order_rows: list[list[Any]] = []
+        for o, emp in orders:
+            total_bags += o.bags_count or 0
+            order_rows.append([
+                self._fmt_datetime(o.created_at),
+                emp or "—",
+                o.bags_count,
+                o.delivery_date.isoformat() if o.delivery_date else "—",
+                o.payment_mode or "—",
+                o.status,
+            ])
+
+        livestock_rows = [[
+            self._fmt_datetime(p.recorded_at),
+            p.total_cattle if p.total_cattle is not None else "—",
+            p.breed or "—",
+            p.current_brand or "—",
+            p.bags_per_month if p.bags_per_month is not None else "—",
+            (f"{p.current_price_per_bag}" if p.current_price_per_bag is not None else "—"),
+            p.health_status or "—",
+        ] for p in livestock]
+
+        lead_rows = [[
+            self._fmt_datetime(lead.created_at),
+            emp or "—",
+            lead.status,
+            (lead.reason_note or "").strip(),
+        ] for lead, emp in leads]
+
+        current_lead = leads[0][0].status if leads else "—"
+        summary = [
+            ("FPO / Farmer", fname),
+            ("Village", (farmer.village if farmer and farmer.village else "—")),
+            ("District", (farmer.district if farmer and farmer.district else "—")),
+            ("Phone", (farmer.phone if farmer and farmer.phone else "—")),
+            ("Current lead", current_lead),
+            ("Total cattle", str(farmer.total_cattle if farmer else "—")),
+            ("Total visits", str(len(visit_rows))),
+            ("Total orders", str(len(order_rows))),
+            ("Total bags ordered", str(total_bags)),
+        ]
+        return ReportData(
+            title=f"FPO Export — {fname}",
+            subtitle="Full history",
+            filters_text=[n.scope_label],
+            generated_at=datetime.now(timezone.utc),
+            summary=summary,
+            tables=[
+                ReportTable(
+                    name="Visits",
+                    columns=["Checked In", "Employee", "Checked Out",
+                             "Purpose", "Status"],
+                    rows=visit_rows,
+                ),
+                ReportTable(
+                    name="Orders",
+                    columns=["Captured", "Employee", "Bags", "Delivery Date",
+                             "Payment", "Status"],
+                    rows=order_rows,
+                    numeric_cols={2},
+                ),
+                ReportTable(
+                    name="Livestock History",
+                    columns=["Recorded", "Cattle", "Breed", "Brand",
+                             "Bags/Month", "Price/Bag", "Health"],
+                    rows=livestock_rows,
+                    numeric_cols={1, 4},
+                ),
+                ReportTable(
+                    name="Lead History",
+                    columns=["Date", "Employee", "Status", "Reason"],
+                    rows=lead_rows,
+                ),
+            ],
+            filename_stem=f"fpo_{fid}_{fname[:20].strip().replace(' ', '_')}",
+        )
+
     # ── Small helpers ────────────────────────────────────────────────────
     def _session_bounds(
         self, sessions: list[AttendanceSession]
@@ -769,6 +1149,14 @@ class ReportService:
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(self._tz).strftime("%H:%M")
+
+    def _fmt_datetime(self, dt: datetime | None) -> str:
+        """Date + time in the business tz, e.g. '2026-07-02 11:15'."""
+        if dt is None:
+            return "—"
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(self._tz).strftime("%Y-%m-%d %H:%M")
 
     @staticmethod
     def _fmt_duration(minutes: int) -> str:
