@@ -1,0 +1,41 @@
+# FieldTrack GitLab CI/CD deployment configuration
+#
+# Configured for deploying the FastAPI backend + React/Vite admin-web stack
+# using Docker Compose.
+#
+# Setup Required on GitLab:
+#   Go to Settings -> CI/CD -> Variables and add:
+#     - SSH_PRIVATE_KEY: The private SSH key for the deploy user on the VPS.
+#     - SSH_HOST: The IP address or domain name of your VPS.
+#     - SSH_USER: The SSH user name (e.g., deploy).
+
+stages:
+  - deploy
+
+deploy_develop:
+  stage: deploy
+  image: alpine:latest
+  only:
+    - develop
+  before_script:
+    - apk add --no-cache openssh-client git
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+  script:
+    - |
+      ssh $SSH_USER@$SSH_HOST "
+        cd /opt/fieldtrack/app
+        
+        # Fetch latest code from the remote (assumes the server's remote is configured)
+        git fetch --all
+        git reset --hard origin/develop
+        
+        # Rebuild and start the containers using the production compose file
+        docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+        
+        # Run database migrations inside the app container
+        docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T app alembic upgrade head
+      "
