@@ -214,14 +214,22 @@ class _LeadCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis),
           ],
           const SizedBox(height: AppDimens.grid),
-          Row(
+          Wrap(
+            spacing: AppDimens.grid,
+            runSpacing: AppDimens.grid / 2,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Icon(Icons.schedule_rounded, size: 13, color: colors.textSecondary),
-              const SizedBox(width: 4),
-              Text(lastVisitedLabel(lead.lastVisitAt),
-                  style: AppTextStyles.caption
-                      .copyWith(color: colors.textSecondary)),
-              const Spacer(),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.schedule_rounded, size: 13, color: colors.textSecondary),
+                  const SizedBox(width: 4),
+                  Text(lastVisitedLabel(lead.lastVisitAt),
+                      style: AppTextStyles.caption
+                          .copyWith(color: colors.textSecondary)),
+                ],
+              ),
               if (lead.followUpDate != null) _followUpChip(context, lead),
             ],
           ),
