@@ -61,6 +61,30 @@ class Keys:
         return f"{Keys.PREFIX}:ratelimit:login:{ip}"
 
 
+
+# Failed logins only — a successful login never counts toward this, so
+# repeated legitimate logins from one IP (shared office network, retries)
+# never trip it. 5 failures per IP within the window locks further attempts.
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_WINDOW_SECONDS = 15 * 60
+
+
+async def record_login_failure(ip: str | None) -> None:
+    if not ip:
+        return
+    r = get_redis()
+    key = Keys.login_rate_limit(ip)
+    count = await r.incr(key)
+    if count == 1:
+        await r.expire(key, LOGIN_WINDOW_SECONDS)
+
+
+async def clear_login_attempts(ip: str | None) -> None:
+    if not ip:
+        return
+    await get_redis().delete(Keys.login_rate_limit(ip))
+
+
 def get_redis() -> aioredis.Redis:
     """Lazy singleton — safe to import at module level, connects on first use."""
     global _client
