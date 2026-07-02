@@ -31,7 +31,12 @@ enum LeadStatus {
 DateTime? _dt(dynamic v) =>
     v == null ? null : DateTime.tryParse(v as String)?.toLocal();
 
-double? _d(dynamic v) => (v as num?)?.toDouble();
+double? _d(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v);
+  return null;
+}
 
 /// One row in the farmer list (GET /farmers).
 class FarmerListItem {

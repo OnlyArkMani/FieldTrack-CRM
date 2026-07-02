@@ -8,7 +8,12 @@ import '../../farmers/models/farmer.dart' show LeadStatus, LivestockProfile;
 DateTime? _dt(dynamic v) =>
     v == null ? null : DateTime.tryParse(v as String)?.toLocal();
 
-double? _d(dynamic v) => (v as num?)?.toDouble();
+double? _d(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v);
+  return null;
+}
 
 /// Result of POST /visits/check-in.
 class CheckInResult {
