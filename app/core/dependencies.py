@@ -23,7 +23,12 @@ from app.core.exceptions import (
     token_revoked,
     user_inactive,
 )
-from app.core.redis import Keys, get_redis  # re-export
+from app.core.redis import (  # re-export
+    LOGIN_MAX_ATTEMPTS,
+    LOGIN_WINDOW_SECONDS,
+    Keys,
+    get_redis,
+)
 from app.core.security import is_blacklisted, verify_token
 from app.models.enums import UserRole
 from app.models.user import User
@@ -42,9 +47,6 @@ __all__ = [
 ]
 
 bearer_scheme = HTTPBearer(auto_error=False)
-
-LOGIN_MAX_ATTEMPTS = 5
-LOGIN_WINDOW_SECONDS = 15 * 60
 
 
 async def get_current_user(
@@ -101,19 +103,20 @@ async def get_current_employee(user: CurrentUser) -> User:
 
 # ── Rate limiting ────────────────────────────────────────────────────────
 async def login_rate_limit(request: Request) -> None:
-    """5 login attempts per IP per 15 minutes. Fixed window: one INCR+EXPIRE,
-    O(1) memory. Keyed by IP (not email) — pre-auth, so IP is all we trust.
-    X-Real-IP is set by our Nginx; direct client.host is the fallback in dev.
+    """Blocks the request if this IP already has 5+ FAILED logins in the last
+    15 minutes. Read-only check — the counter itself is only incremented by
+    AuthService.login on bad credentials, and cleared on success, so repeated
+    legitimate logins from one IP never trip this. Keyed by IP (not email) —
+    pre-auth, so IP is all we trust. X-Real-IP is set by our Nginx; direct
+    client.host is the fallback in dev.
     """
     ip = request.headers.get("x-real-ip") or (
         request.client.host if request.client else "unknown"
     )
     r = get_redis()
     key = Keys.login_rate_limit(ip)
-    count = await r.incr(key)
-    if count == 1:
-        await r.expire(key, LOGIN_WINDOW_SECONDS)
-    if count > LOGIN_MAX_ATTEMPTS:
+    count = await r.get(key)
+    if count is not None and int(count) >= LOGIN_MAX_ATTEMPTS:
         ttl = await r.ttl(key)
         raise rate_limited(retry_after_seconds=ttl if ttl > 0 else LOGIN_WINDOW_SECONDS)
 
