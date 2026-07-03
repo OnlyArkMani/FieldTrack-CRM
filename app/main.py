@@ -22,6 +22,7 @@ from app.api.v1 import (
     leads,
     location,
     notifications,
+    orders,
     reports,
     sync,
     teams,
@@ -153,6 +154,7 @@ app.include_router(farmers.router, prefix=settings.api_v1_prefix)
 app.include_router(visit_plans.router, prefix=settings.api_v1_prefix)
 app.include_router(visits.router, prefix=settings.api_v1_prefix)
 app.include_router(leads.router, prefix=settings.api_v1_prefix)
+app.include_router(orders.router, prefix=settings.api_v1_prefix)
 app.include_router(follow_ups.router, prefix=settings.api_v1_prefix)
 app.include_router(daily_reports.router, prefix=settings.api_v1_prefix)
 app.include_router(gps_config.router, prefix=settings.api_v1_prefix)

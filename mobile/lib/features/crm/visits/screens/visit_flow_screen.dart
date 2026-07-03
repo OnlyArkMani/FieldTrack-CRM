@@ -22,7 +22,7 @@ import '../widgets/step_indicator.dart';
 import '../widgets/visit_extras.dart';
 
 const _breeds = ['Sahiwal', 'Murrah', 'HF Cross', 'Gir', 'Local', 'Other'];
-const _ageGroups = ['Calf', 'Heifer', 'Adult', 'Senior', 'Mixed'];
+const _ageGroups = ['Calf', 'Heifer', 'Adult', 'Senior'];
 const _healthLevels = ['Excellent', 'Good', 'Fair', 'Poor'];
 const _payModes = [('CASH', 'Cash'), ('UPI', 'UPI'), ('CREDIT', 'Credit')];
 
@@ -60,6 +60,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
   final _cattle = TextEditingController();
   final _brand = TextEditingController();
   final _bagsPerMonth = TextEditingController();
+  final _kgPerAnimal = TextEditingController();
   final _pricePerBag = TextEditingController();
   final _payMin = TextEditingController();
   final _payMax = TextEditingController();
@@ -91,7 +92,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
     _autosave?.cancel();
     for (final c in [
       _remark, _highlights, _concerns, _interest, _cattle, _brand,
-      _bagsPerMonth, _pricePerBag, _payMin, _payMax, _healthNotes,
+      _bagsPerMonth, _kgPerAnimal, _pricePerBag, _payMin, _payMax, _healthNotes,
       _bagsCount, _deliveryAddress, _orderNotes, _followUpPurpose,
     ]) {
       c.dispose();
@@ -250,6 +251,8 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       if (_brand.text.trim().isNotEmpty) 'current_brand': _brand.text.trim(),
       if (_bagsPerMonth.text.trim().isNotEmpty)
         'bags_per_month': int.tryParse(_bagsPerMonth.text.trim()),
+      if (_kgPerAnimal.text.trim().isNotEmpty)
+        'kg_per_animal_per_day': double.tryParse(_kgPerAnimal.text.trim()),
       if (_pricePerBag.text.trim().isNotEmpty)
         'current_price_per_bag': double.tryParse(_pricePerBag.text.trim()),
       if (_payMin.text.trim().isNotEmpty)
@@ -613,6 +616,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
             (v) => setState(() => _ageGroup = v)),
         _textField(_brand, 'Current brand'),
         _numField(_bagsPerMonth, 'Bags / month'),
+        _numField(_kgPerAnimal, 'Kg / animal / day'),
         _numField(_pricePerBag, 'Current price / bag (₹)'),
         Row(
           children: [

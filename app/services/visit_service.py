@@ -254,6 +254,7 @@ class VisitService:
             delivery_address=payload.delivery_address,
             payment_mode=payload.payment_mode,
             special_notes=payload.special_notes,
+            price_per_bag=payload.price_per_bag,
             status="SUBMITTED",
         )
         self.repo.add(order)

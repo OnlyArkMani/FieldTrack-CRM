@@ -60,6 +60,15 @@ export function useFarmerLeadHistory(id) {
   });
 }
 
+/** Full order history for one farmer (checklist #35). */
+export function useFarmerOrders(id) {
+  return useQuery({
+    queryKey: [KEY, 'orders', id],
+    queryFn: async () => (await api.get(`/orders/farmer/${id}`)).data,
+    enabled: !!id,
+  });
+}
+
 export function useCreateFarmer() {
   const qc = useQueryClient();
   return useMutation({

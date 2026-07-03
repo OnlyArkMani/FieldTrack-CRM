@@ -17,6 +17,7 @@ import VisitPlansPage from './features/planning/VisitPlansPage';
 import FollowUpsPage from './features/followups/FollowUpsPage';
 import FollowUpCalendarPage from './features/followups/FollowUpCalendarPage';
 import LeadPipelinePage from './features/leads/LeadPipelinePage';
+import OrdersPage from './features/orders/OrdersPage';
 import TeamsPage from './features/teams/TeamsPage';
 import AttendancePage from './features/attendance/AttendancePage';
 import MapPage from './features/map/MapPage';
@@ -106,6 +107,7 @@ export default function App() {
         <Route path="/planning" element={<PlanningPage />} />
         <Route path="/visit-plans" element={<VisitPlansPage />} />
         <Route path="/leads" element={<LeadPipelinePage />} />
+        <Route path="/orders" element={<OrdersPage />} />
         <Route path="/follow-ups" element={<FollowUpCalendarPage />} />
         <Route path="/teams" element={<TeamsPage />} />
         <Route path="/attendance" element={<AttendancePage />} />

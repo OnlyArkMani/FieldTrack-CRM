@@ -10,7 +10,7 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 # Loose international phone shape: optional +, then 7-15 digits, allowing
 # spaces / dashes / parens as separators. Kept permissive on purpose — field
@@ -517,6 +517,7 @@ class OrderCreate(BaseModel):
     delivery_address: str | None = None
     payment_mode: PaymentMode | None = None
     special_notes: str | None = None
+    price_per_bag: Decimal | None = Field(default=None, ge=0)
 
 
 class VisitOrderResponse(BaseModel):
@@ -531,8 +532,32 @@ class VisitOrderResponse(BaseModel):
     delivery_address: str | None
     payment_mode: str | None
     special_notes: str | None
+    price_per_bag: Decimal | None
     status: str
+    approved_by: int | None
+    approved_at: datetime | None
+    rejection_reason: str | None
     created_at: datetime
+    # Denormalized for list views (e.g. the admin-web Orders review page) —
+    # None when not populated by the query (e.g. per-visit orders_for()).
+    farmer_name: str | None = None
+    employee_name: str | None = None
+
+    @computed_field
+    @property
+    def total_value(self) -> Decimal | None:
+        if self.price_per_bag is None:
+            return None
+        return self.price_per_bag * self.bags_count
+
+
+class OrderReviewRequest(BaseModel):
+    """POST /orders/{order_id}/review. rejection_reason is required (min 10
+    chars) when action is REJECT — enforced service-side, same convention as
+    the follow-up-date requirement on VisitCompleteRequest."""
+
+    action: Literal["APPROVE", "REJECT"]
+    rejection_reason: str | None = None
 
 
 class VisitPhotoResponse(BaseModel):

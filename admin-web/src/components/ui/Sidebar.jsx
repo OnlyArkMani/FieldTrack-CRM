@@ -17,6 +17,7 @@ import {
   Radio,
   ChevronLeft,
   X,
+  PackageCheck,
 } from 'lucide-react';
 
 import { useUiStore } from '@/store/uiStore';
@@ -34,6 +35,7 @@ const NAV = [
   { to: '/farmers', label: 'FPO', icon: Sprout },
   { to: '/planning', label: 'Visit Plans', icon: CalendarCheck },
   { to: '/leads', label: 'Lead Pipeline', icon: TrendingUp },
+  { to: '/orders', label: 'Orders', icon: PackageCheck },
   { to: '/follow-ups', label: 'Follow-ups', icon: BellRing },
   { to: '/daily-reports', label: 'DSR', icon: ClipboardList },
   { to: '/settings', label: 'Settings', icon: Settings },
