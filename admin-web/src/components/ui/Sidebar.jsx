@@ -32,7 +32,7 @@ const NAV = [
   { to: '/geofences', label: 'Geofences', icon: Hexagon },
   { to: '/reports', label: 'Reports', icon: FileBarChart },
   { section: 'CRM' },
-  { to: '/farmers', label: 'FPO', icon: Sprout },
+  { to: '/farmers', label: 'Customers', icon: Sprout },
   { to: '/planning', label: 'Visit Plans', icon: CalendarCheck },
   { to: '/leads', label: 'Lead Pipeline', icon: TrendingUp },
   { to: '/orders', label: 'Orders', icon: PackageCheck },

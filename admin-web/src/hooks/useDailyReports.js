@@ -53,6 +53,22 @@ export function useDsrArchive({ enabled = true, ...filters } = {}) {
   });
 }
 
+/** Download one employee's DSR for a date as CSV (the per-day download button). */
+export async function downloadTeamDsr(employeeId, date, employeeName = 'employee') {
+  const { data } = await api.get(
+    `/daily-reports/team/${employeeId}/${date}/download`,
+    { responseType: 'blob' },
+  );
+  const url = window.URL.createObjectURL(data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `DSR_${employeeName.replace(/\s+/g, '_')}_${date}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 /** POST manager comment. */
 export function useAddManagerComment() {
   const qc = useQueryClient();

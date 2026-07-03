@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import dayjs from 'dayjs';
-import { X, MessageSquare } from 'lucide-react';
+import { X, MessageSquare, Download } from 'lucide-react';
 
 import {
   useTeamDsrs,
   useDsrDetail,
   useAddManagerComment,
   useDsrArchive,
+  downloadTeamDsr,
 } from '@/hooks/useDailyReports';
 import { useTeams } from '@/hooks/useTeams';
 import { useAuthStore } from '@/store/authStore';
@@ -334,9 +335,18 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
           <h3 className="font-semibold text-text-primary">{employeeName}</h3>
           <p className="text-xs text-text-secondary">{dayjs(date).format('D MMMM YYYY')}</p>
         </div>
-        <button onClick={onClose} className="rounded p-1 text-text-secondary hover:bg-border/40 hover:text-text-primary">
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => downloadTeamDsr(employeeId, date, employeeName)}
+            title="Download this day's DSR (CSV)"
+            className="flex items-center gap-1 rounded-btn px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+          >
+            <Download className="h-4 w-4" /> CSV
+          </button>
+          <button onClick={onClose} className="rounded p-1 text-text-secondary hover:bg-border/40 hover:text-text-primary">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -405,7 +415,10 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
                 {dsr.visits.map((v) => (
                   <div key={v.id} className="rounded-btn bg-bg px-3 py-2 space-y-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-text-primary truncate">{v.farmer_name}</span>
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="font-medium text-text-primary truncate">{v.farmer_name}</span>
+                        <TypeTag type={v.customer_type} />
+                      </span>
                       <span className="text-xs text-text-secondary shrink-0">
                         {v.purpose?.replace(/_/g, ' ') || 'Visit'}
                         {v.lead_status && (
@@ -434,7 +447,10 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
                 {dsr.orders.map((o) => (
                   <div key={o.id} className="rounded-btn bg-bg px-3 py-2 space-y-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-text-primary truncate">{o.farmer_name}</span>
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="font-medium text-text-primary truncate">{o.farmer_name}</span>
+                        <TypeTag type={o.customer_type} />
+                      </span>
                       <span className="text-xs font-bold text-success shrink-0">
                         {o.bags_count} bags · {dayjs(o.delivery_date).format('DD MMM')}
                       </span>
@@ -517,5 +533,15 @@ function RowItem({ children }) {
     <div className="flex items-center justify-between gap-2 rounded-btn bg-bg px-3 py-2">
       {children}
     </div>
+  );
+}
+
+// Small inline customer-type chip (only shown for FPO/VLCC to avoid noise).
+function TypeTag({ type }) {
+  if (!type || type === 'FARMER') return null;
+  return (
+    <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+      {type}
+    </span>
   );
 }

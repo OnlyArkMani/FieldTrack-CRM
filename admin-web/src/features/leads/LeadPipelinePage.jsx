@@ -40,6 +40,7 @@ export default function LeadPipelinePage() {
   const [employeeId, setEmployeeId] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [territory, setTerritory] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
   const [exporting, setExporting] = useState(false);
 
   const { data: leads, isLoading } = useTeamLeads({
@@ -53,7 +54,11 @@ export default function LeadPipelinePage() {
 
   const teams = Array.isArray(teamsData) ? teamsData : (teamsData?.items || []);
   const employees = empsData?.items || [];
-  const leadList = Array.isArray(leads) ? leads : (leads?.items || []);
+  const allLeads = Array.isArray(leads) ? leads : (leads?.items || []);
+  // Customer-type filter is applied client-side (the list already carries it).
+  const leadList = typeFilter
+    ? allLeads.filter((l) => (l.customer_type || 'FARMER') === typeFilter)
+    : allLeads;
 
   // Counts come from the same filtered /leads/team response as the table
   // below, so the tiles react to team/employee/status/territory exactly like
@@ -188,6 +193,18 @@ export default function LeadPipelinePage() {
               aria-label="Territory"
             />
           </div>
+          <div className="w-36">
+            <Select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              aria-label="Customer type"
+            >
+              <option value="">All types</option>
+              <option value="FARMER">Farmers</option>
+              <option value="FPO">FPOs</option>
+              <option value="VLCC">VLCCs</option>
+            </Select>
+          </div>
         </div>
       </Card>
 
@@ -202,7 +219,7 @@ export default function LeadPipelinePage() {
             <table className="w-full text-left text-sm">
               <thead className="border-b border-border bg-surface/60 text-text-secondary">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">FPO</th>
+                  <th className="px-4 py-3 font-semibold">Customer</th>
                   <th className="px-4 py-3 font-semibold">Employee</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold">Last Visit</th>
@@ -219,7 +236,14 @@ export default function LeadPipelinePage() {
                       className={`border-t border-border/60 ${overdue ? 'bg-danger/5' : 'hover:bg-surface/40'}`}
                     >
                       <td className="px-4 py-3 font-medium text-text-primary">
-                        <div className="truncate max-w-[160px]">{lead.farmer_name ?? '—'}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate max-w-[150px]">{lead.farmer_name ?? '—'}</span>
+                          {lead.customer_type && lead.customer_type !== 'FARMER' && (
+                            <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                              {lead.customer_type}
+                            </span>
+                          )}
+                        </div>
                         {overdue && (
                           <div className="text-xs text-danger font-medium mt-0.5">Overdue follow-up</div>
                         )}

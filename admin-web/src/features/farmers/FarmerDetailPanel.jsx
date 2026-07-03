@@ -36,6 +36,18 @@ function OrderStatusBadge({ status }) {
   return <Badge color={m.color}>{m.label}</Badge>;
 }
 
+// Customer type discriminator (FARMER / FPO / VLCC).
+export const CUSTOMER_TYPE_META = {
+  FARMER: { color: 'var(--ft-secondary)', label: 'Farmer' },
+  FPO: { color: 'var(--ft-primary)', label: 'FPO' },
+  VLCC: { color: 'var(--ft-status-active, #2E9E6B)', label: 'VLCC' },
+};
+
+export function CustomerTypeBadge({ type }) {
+  const m = CUSTOMER_TYPE_META[type] || CUSTOMER_TYPE_META.FARMER;
+  return <Badge color={m.color}>{m.label}</Badge>;
+}
+
 function fmtDate(d) {
   return d ? dayjs(d).format('MMM D, YYYY') : '—';
 }
@@ -66,7 +78,7 @@ export default function FarmerDetailPanel({ farmerId, open, onClose }) {
       >
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="truncate text-lg font-semibold text-text-primary">
-            {farmer?.name || 'FPO'}
+            {farmer?.name || 'Customer'}
           </h2>
           <button
             onClick={onClose}
@@ -84,6 +96,7 @@ export default function FarmerDetailPanel({ farmerId, open, onClose }) {
               {/* Header info */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
+                  <CustomerTypeBadge type={farmer.customer_type} />
                   <LeadBadge status={farmer.current_lead?.status} />
                   {!farmer.is_active && (
                     <Badge color="var(--ft-status-offline)">Inactive</Badge>
