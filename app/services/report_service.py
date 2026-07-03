@@ -132,6 +132,9 @@ class ReportService:
         if type_ is ReportType.FARMER_EXPORT:
             return await self._authorize_farmer_export(actor, filters)
 
+        if type_ is ReportType.LEAD_PIPELINE:
+            return await self._authorize_lead_pipeline(actor, filters)
+
         # ATTENDANCE / DISTANCE
         start, end = self._resolve_range(filters.start_date, filters.end_date)
 
@@ -268,6 +271,49 @@ class ReportService:
             farmer_id=farmer.id,
         )
 
+    async def _authorize_lead_pipeline(
+        self, actor: User, filters: ReportFilters
+    ) -> NormalizedReport:
+        """A current-state snapshot (Hot/Warm/Cold), not date-ranged. Same team
+        scoping as GET /leads/team: admin sees every team (optionally narrowed
+        via team_id), a single-team supervisor is defaulted automatically, a
+        multi-team one must pick — same convention as the other reports here."""
+        if actor.role == UserRole.EMPLOYEE:
+            raise forbidden("Employees cannot generate a lead pipeline report")
+
+        team_id = filters.team_id
+        scope_label = "All teams"
+        if actor.role == UserRole.SUPERVISOR:
+            supervised = await self.repo.supervised_team_ids(actor.id)
+            if not supervised:
+                raise forbidden("You don't supervise any team")
+            if team_id is not None:
+                if team_id not in supervised:
+                    raise forbidden("You don't supervise this team")
+            elif len(supervised) == 1:
+                team_id = next(iter(supervised))
+            else:
+                raise bad_request("Select a team for this report")
+
+        user_id = filters.user_id
+        if user_id is not None:
+            target = await self.repo.get_user(user_id)
+            if target is None:
+                raise not_found("Employee not found")
+            if team_id is not None and target.team_id != team_id:
+                raise forbidden("That employee isn't on your team")
+            scope_label = f"Employee: {target.name}"
+        elif team_id is not None:
+            team = await self.repo.get_team(team_id)
+            scope_label = f"Team: {team.name if team else team_id}"
+
+        today = date.today()
+        return NormalizedReport(
+            type=ReportType.LEAD_PIPELINE, start=today, end=today,
+            team_id=team_id, user_id=user_id, status=None,
+            scope_label=scope_label,
+        )
+
     async def _authorize_supervisor_range(
         self,
         actor: User,
@@ -354,6 +400,8 @@ class ReportService:
             return await self._employee_consolidated_data(n)
         if n.type is ReportType.FARMER_EXPORT:
             return await self._farmer_export_data(n)
+        if n.type is ReportType.LEAD_PIPELINE:
+            return await self._lead_pipeline_data(n)
         return await self._team_data(n)
 
     async def _attendance_data(self, n: NormalizedReport) -> ReportData:
@@ -692,6 +740,56 @@ class ReportService:
                 row_styles=row_styles,
             )],
             filename_stem=f"geofence_compliance_{n.start}_{n.end}",
+        )
+
+    async def _lead_pipeline_data(self, n: NormalizedReport) -> ReportData:
+        """Current Hot/Warm/Cold snapshot — reuses the same repo query that
+        powers GET /leads/team (LeadService.get_team_leads), so the export
+        always matches what's on screen."""
+        from app.repositories.lead_repository import LeadRepository
+
+        rows = await LeadRepository(self.db).latest_lead_rows(
+            team_ids=[n.team_id] if n.team_id is not None else None,
+            employee_id=n.user_id, status=None,
+        )
+
+        columns = [
+            "Farmer", "Village", "Status", "Employee",
+            "Last Visit", "Follow-up Date", "Reason",
+        ]
+        table_rows: list[list[Any]] = []
+        hot = warm = cold = 0
+        for lead, name, village, _team_id, last_visit, fu_date, _fu_time, emp_name in rows:
+            if lead.status == "HOT":
+                hot += 1
+            elif lead.status == "WARM":
+                warm += 1
+            elif lead.status == "COLD":
+                cold += 1
+            table_rows.append([
+                name or "Unknown",
+                village or "—",
+                lead.status,
+                emp_name or "—",
+                last_visit.strftime("%d %b %Y") if last_visit else "—",
+                fu_date.isoformat() if fu_date else "—",
+                (lead.reason_note or "")[:200],
+            ])
+
+        summary = [
+            ("Total leads", str(len(rows))),
+            ("Hot", str(hot)),
+            ("Warm", str(warm)),
+            ("Cold", str(cold)),
+        ]
+        return ReportData(
+            title="Lead Pipeline Report",
+            subtitle=n.scope_label,
+            filters_text=self._filters_text(n),
+            generated_at=datetime.now(timezone.utc),
+            summary=summary,
+            tables=[ReportTable(name="Leads", columns=columns, rows=table_rows)],
+            filename_stem=f"lead_pipeline_{date.today().isoformat()}",
         )
 
     @staticmethod

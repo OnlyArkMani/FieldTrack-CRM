@@ -5,10 +5,12 @@ parameterised paths (/{id}/...) to avoid conflicts.
 """
 from __future__ import annotations
 
-from datetime import date
+import asyncio
+from datetime import date, datetime, timezone
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +21,7 @@ from app.core.dependencies import (
     get_db,
 )
 from app.core.exceptions import forbidden, not_found
-from app.models.crm import DailyReport
+from app.models.crm import DailyReport, VisitPlan, VisitPlanItem
 from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.common import CursorPage, decode_cursor, encode_cursor
