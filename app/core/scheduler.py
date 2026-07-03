@@ -219,7 +219,10 @@ def _fu_data(farmer_id: int | None) -> dict[str, str]:
 
 
 async def send_24h_followup_reminders() -> None:
-    """08:00 — remind employees of follow-ups scheduled for tomorrow."""
+    """08:00 — fallback reminder for follow-ups with NO scheduled_time (legacy
+    rows, or ones scheduled via the standalone lead-status-update endpoint
+    where time is optional). Follow-ups WITH a time are handled by
+    `send_24h_followup_reminders_precise` instead (checklist #39)."""
     tomorrow = _business_tomorrow()
     if not await _claim(f"fu_24h:{tomorrow}"):
         return
@@ -230,11 +233,10 @@ async def send_24h_followup_reminders() -> None:
             return
         service = NotificationService(db)
         for fu, farmer_name in rows:
-            when = fu.scheduled_time.strftime("%H:%M") if fu.scheduled_time else "the day"
             await service.send_fcm(
                 fu.employee_id,
                 title="Follow-up tomorrow",
-                body=f"Visit {farmer_name or 'a farmer'} tomorrow at {when}.",
+                body=f"Visit {farmer_name or 'a farmer'} tomorrow.",
                 type="FOLLOW_UP_REMINDER",
                 data=_fu_data(fu.farmer_id),
                 commit=False,
@@ -242,7 +244,41 @@ async def send_24h_followup_reminders() -> None:
             fu.reminder_sent_24h = True
             db.add(fu)
         await db.commit()
-        logger.info("FOLLOW_UP 24h reminders sent: %d", len(rows))
+        logger.info("FOLLOW_UP 24h (no-time fallback) reminders sent: %d", len(rows))
+
+
+async def send_24h_followup_reminders_precise() -> None:
+    """Every 30 min — remind employees of follow-ups exactly ~24h away, for
+    follow-ups that DO have a scheduled_time. Checklist #39 wants a rolling
+    24h window rather than a single fixed-hour daily blast; this checks a
+    30-minute window centered on now+24h each time it runs, so the reminder
+    lands within ~30 min of the true 24h mark instead of the old ~16-32h
+    spread from the once-a-day 08:00 job."""
+    now = _business_now()
+    if not await _claim(f"fu_24h_precise:{now.strftime('%Y%m%d%H%M')}"):
+        return
+    window_start = now + timedelta(hours=24)
+    window_end = window_start + timedelta(minutes=30)
+    async with async_session_factory() as db:
+        repo = FollowUpRepository(db)
+        rows = await repo.due_24h_precise(window_start, window_end)
+        if not rows:
+            return
+        service = NotificationService(db)
+        for fu, farmer_name in rows:
+            when = fu.scheduled_time.strftime("%H:%M")
+            await service.send_fcm(
+                fu.employee_id,
+                title="Follow-up tomorrow",
+                body=f"Visit {farmer_name or 'a farmer'} at {when}.",
+                type="FOLLOW_UP_REMINDER",
+                data=_fu_data(fu.farmer_id),
+                commit=False,
+            )
+            fu.reminder_sent_24h = True
+            db.add(fu)
+        await db.commit()
+        logger.info("FOLLOW_UP 24h (precise) reminders sent: %d", len(rows))
 
 
 async def send_1h_followup_reminders() -> None:
@@ -597,6 +633,14 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
         max_instances=1,
         coalesce=True,
         misfire_grace_time=3600,
+    )
+    scheduler.add_job(
+        send_24h_followup_reminders_precise,
+        CronTrigger(minute="0,30"),
+        id="fu_24h_reminders_precise",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=600,
     )
     scheduler.add_job(
         send_1h_followup_reminders,

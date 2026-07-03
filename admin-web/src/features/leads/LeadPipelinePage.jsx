@@ -9,7 +9,7 @@ import { api } from '@/services/api/client';
 import Card, { CardHeader } from '@/components/ui/Card';
 import PageHeader from '@/components/ui/PageHeader';
 import Spinner from '@/components/ui/Spinner';
-import { Select } from '@/components/ui/Input';
+import { Input, Select } from '@/components/ui/Input';
 
 const STATUS_COLORS = {
   HOT: { bg: 'bg-danger/15', text: 'text-danger', label: 'Hot' },
@@ -39,12 +39,15 @@ export default function LeadPipelinePage() {
   const [teamId, setTeamId] = useState('');
   const [employeeId, setEmployeeId] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [territory, setTerritory] = useState('');
   const [exporting, setExporting] = useState(false);
 
   const { data: pipeline } = usePipeline();
   const { data: leads, isLoading } = useTeamLeads({
     status: statusFilter || undefined,
     employeeId: employeeId || undefined,
+    teamId: teamId || undefined,
+    territory: territory.trim() || undefined,
   });
   const { data: teamsData } = useTeams();
   const { data: empsData } = useEmployees({ teamId: teamId || undefined, limit: 100 });
@@ -175,6 +178,14 @@ export default function LeadPipelinePage() {
               <option value="WARM">Warm</option>
               <option value="COLD">Cold</option>
             </Select>
+          </div>
+          <div className="w-52">
+            <Input
+              placeholder="Territory (village/district)…"
+              value={territory}
+              onChange={(e) => setTerritory(e.target.value)}
+              aria-label="Territory"
+            />
           </div>
         </div>
       </Card>

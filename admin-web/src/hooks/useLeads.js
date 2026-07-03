@@ -13,13 +13,15 @@ export function usePipeline() {
 }
 
 /** Team leads (supervisor/admin): grouped counts + filterable list. */
-export function useTeamLeads({ status, employeeId } = {}) {
+export function useTeamLeads({ status, employeeId, teamId, territory } = {}) {
   return useQuery({
-    queryKey: [KEY, 'team', { status, employeeId }],
+    queryKey: [KEY, 'team', { status, employeeId, teamId, territory }],
     queryFn: async () => {
       const params = {};
       if (status) params.status = status;
       if (employeeId) params.employee_id = employeeId;
+      if (teamId) params.team_id = teamId;
+      if (territory) params.territory = territory;
       return (await api.get('/leads/team', { params })).data;
     },
     placeholderData: keepPreviousData,

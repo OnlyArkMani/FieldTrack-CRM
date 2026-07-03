@@ -315,6 +315,10 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       setState(() => _error = 'A follow-up date is required for Warm/Cold.');
       return;
     }
+    if (needsFollowUp && _followUpTime == null) {
+      setState(() => _error = 'A follow-up time is required for Warm/Cold.');
+      return;
+    }
     final ok = await _confirmComplete();
     if (ok != true) return;
 
@@ -782,7 +786,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
                 child: _pickerTile(
                   icon: Icons.schedule_rounded,
                   label: _followUpTime == null
-                      ? 'Time (optional)'
+                      ? 'Time'
                       : _followUpTime!.format(context),
                   onTap: () async {
                     final picked = await showTimePicker(

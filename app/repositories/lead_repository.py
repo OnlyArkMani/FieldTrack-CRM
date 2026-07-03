@@ -72,6 +72,7 @@ class LeadRepository:
         created_by: int | None,
         employee_id: int | None,
         status: str | None,
+        territory: str | None = None,
     ) -> Select:
         if team_ids is not None:
             stmt = stmt.where(Farmer.team_id.in_(team_ids))
@@ -81,6 +82,14 @@ class LeadRepository:
             stmt = stmt.where(Lead.employee_id == employee_id)
         if status is not None:
             stmt = stmt.where(Lead.status == status)
+        if territory:
+            # No dedicated "territory" field exists anywhere in the schema —
+            # village/district is the closest existing concept, matching how
+            # the rest of the app already treats them (checklist #44).
+            stmt = stmt.where(
+                (Farmer.village.ilike(f"%{territory}%"))
+                | (Farmer.district.ilike(f"%{territory}%"))
+            )
         return stmt
 
     async def latest_lead_rows(
@@ -90,6 +99,7 @@ class LeadRepository:
         created_by: int | None = None,
         employee_id: int | None = None,
         status: str | None = None,
+        territory: str | None = None,
     ) -> list:
         """Rows of (Lead, farmer_name, village, team_id, last_visit, fu_date,
         fu_time, employee_name) — one per farmer, current status, HOT→WARM→COLD."""
@@ -117,6 +127,7 @@ class LeadRepository:
             created_by=created_by,
             employee_id=employee_id,
             status=status,
+            territory=territory,
         )
         stmt = stmt.order_by(_STATUS_ORDER.asc(), Lead.created_at.desc())
         return list((await self.db.execute(stmt)).all())
