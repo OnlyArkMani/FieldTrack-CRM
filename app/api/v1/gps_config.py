@@ -37,8 +37,8 @@ router = APIRouter(prefix="/gps-config", tags=["gps-config"])
 # ── Defaults ─────────────────────────────────────────────────────────────────
 
 DEFAULTS = {
-    "moving_interval_seconds": 180,
-    "stationary_interval_seconds": 720,
+    "moving_interval_seconds": 300,
+    "stationary_interval_seconds": 300,
     "low_battery_interval_seconds": 1200,
     "low_battery_threshold": 20,
 }

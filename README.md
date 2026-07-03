@@ -60,8 +60,8 @@ All of this runs containerised on a single 2 vCPU / 4 GB RAM VPS with zero archi
 - DSR auto-generated when employee submits END attendance
 
 ### Real-Time GPS Tracking
-- Live location updates with hybrid cadence: 2-5 minutes when moving, 10-15 minutes when stationary
-- Battery-aware tracking adjusts frequency based on device battery level
+- Live location updates every 5 minutes, flat, while on duty (moving or stationary)
+- Battery-aware exception: interval widens to 20 minutes when the device drops below 20% battery
 - Mock GPS flagged (not hard-blocked), visible to admin
 - Offline tile caching via OpenStreetMap — maps work without internet
 - Sync-lag metrics from device capture time vs. server arrival timestamp
@@ -532,7 +532,7 @@ See `DEPLOYMENT_CHECKLIST.md` for the complete step-by-step guide.
 
 ### Completed
 - Attendance state machine (START/BREAK/RESUME/END) with work summary
-- Real-time GPS tracking with hybrid cadence and battery awareness
+- Real-time GPS tracking on a flat 5-minute cadence, with a battery-saving exception
 - Polygon geofencing via PostGIS — team-scoped zone assignment with entry/exit events
 - Offline-first mobile sync with Redis deduplication
 - CSV, Excel, PDF report export — async pipeline, auto-prune after retention

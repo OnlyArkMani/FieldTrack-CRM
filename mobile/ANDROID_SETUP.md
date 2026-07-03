@@ -72,7 +72,7 @@ in a fallback cascade ending at the app's own settings page.
 
 On a real low-end device (one Xiaomi, one Samsung minimum):
 1. START attendance → notification appears → lock screen 30 min → points in
-   local DB every ~3 min moving / ~12 min stationary.
+   local DB every ~5 min (flat, moving or stationary).
 2. Swipe app away from recents → notification stays → points keep coming.
 3. Enable battery saver → still alive (after OEM step done).
 4. Reboot mid-shift → service restarts (boot receiver) → points resume.

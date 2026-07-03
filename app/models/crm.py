@@ -398,10 +398,10 @@ class GpsConfig(Base):
         ForeignKey("teams.id", ondelete="CASCADE")
     )
     moving_interval_seconds: Mapped[int] = mapped_column(
-        Integer, default=180, server_default=text("180")
+        Integer, default=300, server_default=text("300")
     )
     stationary_interval_seconds: Mapped[int] = mapped_column(
-        Integer, default=720, server_default=text("720")
+        Integer, default=300, server_default=text("300")
     )
     low_battery_interval_seconds: Mapped[int] = mapped_column(
         Integer, default=1200, server_default=text("1200")

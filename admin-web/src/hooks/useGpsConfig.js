@@ -4,8 +4,8 @@ import { api } from '@/services/api/client';
 const KEY = 'gps-config';
 
 export const GPS_DEFAULTS = {
-  moving_interval_seconds: 180,
-  stationary_interval_seconds: 720,
+  moving_interval_seconds: 300,
+  stationary_interval_seconds: 300,
   low_battery_interval_seconds: 1200,
   low_battery_threshold: 20,
 };

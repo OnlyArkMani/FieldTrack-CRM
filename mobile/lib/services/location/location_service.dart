@@ -22,11 +22,12 @@ import 'location_sync_service.dart';
 /// - background_locator_2 runs a FOREGROUND SERVICE (persistent notification)
 ///   with its own Dart isolate — survives screen lock, app swipe-away, and
 ///   (with the OEM steps from PermissionHelperService) manufacturer killers.
-/// - The plugin wakes the callback on a FIXED 3-minute cadence; the HYBRID
-///   cadence is enforced in Dart by gating SAVES:
-///       moving (speed > 0.5 m/s)  -> save every >= 3 min
-///       stationary                -> save every >= 12 min
-///       battery < 20%             -> save every >= 20 min, movement ignored
+/// - The plugin wakes the callback on a FIXED 3-minute cadence; the actual
+///   save cadence is enforced in Dart by gating SAVES:
+///       normal (moving or stationary) -> save every >= 5 min (flat, per spec)
+///       battery < 20%                 -> save every >= 20 min, an explicit
+///                                         exception to avoid draining an
+///                                         already-low phone mid-shift
 ///   One service config, no service restarts to switch modes (restarting the
 ///   service to change intervals is exactly the kind of complexity that
 ///   killed the first attempt).
@@ -52,8 +53,8 @@ class LocationService {
   static const kLowBatteryThresholdPref = 'gps_low_battery_threshold';
 
   static const movingThresholdMps = 0.5;
-  static const movingInterval = Duration(minutes: 3);
-  static const stationaryInterval = Duration(minutes: 12);
+  static const movingInterval = Duration(minutes: 5);
+  static const stationaryInterval = Duration(minutes: 5);
   static const lowBatteryInterval = Duration(minutes: 20);
 
   bool _initialized = false;
@@ -179,7 +180,7 @@ class LocationService {
       autoStop: false,
       androidSettings: AndroidSettings(
         accuracy: LocationAccuracy.BALANCED, // NOT HIGH — battery
-        interval: 180, // seconds; the Dart gate handles 12/20-min modes
+        interval: 180, // seconds; the Dart gate handles 5-min/20-min modes
         distanceFilter: 0,
         wakeLockTime: 60, // minutes of wakelock per cycle batch
         androidNotificationSettings: const AndroidNotificationSettings(
