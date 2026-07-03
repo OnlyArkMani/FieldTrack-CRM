@@ -7,7 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../services/notification/fcm_service.dart';
 import '../../../services/sync/sync_engine.dart';
 
-/// Bottom-nav shell around the 4 tabs. The active indicator is a pill that
+/// Bottom-nav shell around the 5 tabs. The active indicator is a circle that
 /// glides between items (AnimatedAlign, easeInOutCubic — same water feel as
 /// page transitions; a cross-route Hero can't animate inside a persistent
 /// shell, so the glide IS the hero treatment here).
@@ -54,25 +54,34 @@ class HomeShell extends ConsumerWidget {
             height: 64,
             child: Stack(
               children: [
-                // Gliding active indicator
-                AnimatedAlign(
-                  duration: const Duration(milliseconds: 350),
-                  curve: Curves.easeInOutCubic,
-                  alignment: Alignment(
-                    -1 + (index * 2 / (_tabs.length - 1)),
-                    0,
-                  ),
-                  child: FractionallySizedBox(
-                    widthFactor: 1 / _tabs.length,
-                    child: Center(
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 350),
-                        curve: Curves.easeInOutCubic,
-                        width: 56,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: scheme.primary.withValues(alpha: 0.16),
-                          borderRadius: BorderRadius.circular(999),
+                // Gliding active indicator — pinned to the same 40x40 icon
+                // zone every tab uses below, so it's a true circle centered
+                // on the icon (not the whole tab, which is taller because of
+                // the label underneath).
+                Positioned(
+                  top: 8,
+                  left: 0,
+                  right: 0,
+                  height: 40,
+                  child: AnimatedAlign(
+                    duration: const Duration(milliseconds: 350),
+                    curve: Curves.easeInOutCubic,
+                    alignment: Alignment(
+                      -1 + (index * 2 / (_tabs.length - 1)),
+                      0,
+                    ),
+                    child: FractionallySizedBox(
+                      widthFactor: 1 / _tabs.length,
+                      child: Center(
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 350),
+                          curve: Curves.easeInOutCubic,
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: scheme.primary.withValues(alpha: 0.16),
+                            shape: BoxShape.circle,
+                          ),
                         ),
                       ),
                     ),
@@ -89,21 +98,25 @@ class HomeShell extends ConsumerWidget {
                           initialLocation: i == index,
                         ),
                         child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            AnimatedScale(
-                              scale: selected ? 1.1 : 1.0,
-                              duration: const Duration(milliseconds: 200),
-                              curve: Curves.easeInOutCubic,
-                              child: Icon(
-                                tab.icon,
-                                size: 24,
-                                color: selected
-                                    ? scheme.primary
-                                    : colors.textSecondary,
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height: 40,
+                              child: Center(
+                                child: AnimatedScale(
+                                  scale: selected ? 1.1 : 1.0,
+                                  duration: const Duration(milliseconds: 200),
+                                  curve: Curves.easeInOutCubic,
+                                  child: Icon(
+                                    tab.icon,
+                                    size: 24,
+                                    color: selected
+                                        ? scheme.primary
+                                        : colors.textSecondary,
+                                  ),
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 2),
                             AnimatedSwitcher(
                               duration: const Duration(milliseconds: 200),
                               child: selected

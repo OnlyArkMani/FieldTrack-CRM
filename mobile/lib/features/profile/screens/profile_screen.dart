@@ -35,11 +35,18 @@ final _gpsIntervalProvider = FutureProvider<String>((ref) async {
   return 'Moving ${fmt(moving)} · Idle ${fmt(stationary)}';
 });
 
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  bool _loggingOut = false;
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(authProvider).user;
     final themeMode = ref.watch(themeModeProvider);
     final version = ref.watch(_appVersionProvider);
@@ -225,16 +232,33 @@ class ProfileScreen extends ConsumerWidget {
               padding: EdgeInsets.zero,
               child: _SettingsTile(
                 icon: Icons.logout_rounded,
-                title: 'Log Out',
+                title: _loggingOut ? 'Logging Out…' : 'Log Out',
                 iconColor: scheme.error,
                 titleColor: scheme.error,
-                onTap: () async {
-                  final confirmed = await _showLogoutSheet(context);
-                  if (confirmed) {
-                    await HapticFeedback.mediumImpact();
-                    await ref.read(authProvider.notifier).logout();
-                  }
-                },
+                // Clock-out call underneath (GPS fix + network) can take a
+                // few seconds — block re-taps and show progress instead of
+                // leaving the tile looking unresponsive.
+                trailing: _loggingOut
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: scheme.error,
+                        ),
+                      )
+                    : null,
+                onTap: _loggingOut
+                    ? null
+                    : () async {
+                        final confirmed = await _showLogoutSheet(context);
+                        if (confirmed) {
+                          await HapticFeedback.mediumImpact();
+                          setState(() => _loggingOut = true);
+                          await ref.read(authProvider.notifier).logout();
+                          if (mounted) setState(() => _loggingOut = false);
+                        }
+                      },
               ),
             ),
             const SizedBox(height: AppDimens.grid * 4),

@@ -70,7 +70,10 @@ class _Resumed with WidgetsBindingObserver {
 }
 
 class AttendanceNotifier extends Notifier<AttendanceUiState> {
-  late final _Resumed _observer;
+  // NOT late final — build() is called again when authProvider changes (e.g.
+  // logout → re-login). Riverpod runs the previous onDispose (which removes
+  // the old observer) before the new build(), so a plain `late` is safe.
+  late _Resumed _observer;
 
   @override
   AttendanceUiState build() {
