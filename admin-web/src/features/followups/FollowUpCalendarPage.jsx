@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import dayjs from 'dayjs';
 
@@ -14,10 +15,15 @@ const STATUS_CFG = {
 };
 
 function FollowUpItem({ fu }) {
+  const navigate = useNavigate();
   const cfg = STATUS_CFG[fu.status] || STATUS_CFG.PENDING;
   const Icon = cfg.icon;
   return (
-    <div className="flex items-start gap-3 rounded-card border border-border p-3">
+    <button
+      type="button"
+      onClick={() => navigate('/farmers', { state: { openFarmerId: fu.farmer_id } })}
+      className="flex w-full items-start gap-3 rounded-card border border-border p-3 text-left transition-colors hover:bg-surface/60"
+    >
       <Icon className="mt-0.5 h-4 w-4 shrink-0" style={{ color: cfg.color }} />
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium text-text-primary">
@@ -34,7 +40,7 @@ function FollowUpItem({ fu }) {
       <span className="shrink-0 text-xs font-medium" style={{ color: cfg.color }}>
         {cfg.label}
       </span>
-    </div>
+    </button>
   );
 }
 

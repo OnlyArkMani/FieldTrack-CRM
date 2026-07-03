@@ -64,16 +64,10 @@ async def generate_report(
             detail="End date cannot be in the future.",
         )
 
-    # Tabular-only report types (no useful single-page PDF layout; keeps
-    # generation fast). Distance & Zone Time and Geofence Compliance are
-    # CSV/Excel only — server-enforced here in addition to the UI hiding PDF.
-    _TABULAR_ONLY = {ReportType.DISTANCE_ZONES, ReportType.GEOFENCE_COMPLIANCE}
-    if body.type in _TABULAR_ONLY and body.format is ReportFormat.PDF:
-        raise HTTPException(
-            status_code=400,
-            detail="This report is available in CSV and Excel only",
-            headers={"X-Error-Code": "FORMAT_NOT_SUPPORTED"},
-        )
+    # PDF is available for every report type: _render_pdf builds on reportlab's
+    # SimpleDocTemplate, which paginates long tables across as many pages as
+    # needed — there was never a hard single-page limit backing the old
+    # CSV/Excel-only restriction on Distance & Zone Time / Geofence Compliance.
 
     # Multi-sheet consolidations only make sense as an Excel workbook.
     _EXCEL_ONLY = {ReportType.EMPLOYEE_CONSOLIDATED, ReportType.FARMER_EXPORT}

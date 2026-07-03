@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
+import { Download } from 'lucide-react';
 
 import { useFarmers } from '@/hooks/useFarmers';
 import { useTeams } from '@/hooks/useTeams';
 import { useGlobalSearch } from '@/hooks/useGlobalSearch';
+import { api } from '@/services/api/client';
 
 import PageHeader from '@/components/ui/PageHeader';
 import Card from '@/components/ui/Card';
@@ -17,6 +20,21 @@ export default function FarmersPage() {
   const [teamId, setTeamId] = useState('');
   const [leadStatus, setLeadStatus] = useState('');
   const [selectedId, setSelectedId] = useState(null);
+  const [exporting, setExporting] = useState(false);
+
+  // Cross-page click-through (e.g. from the Follow-up Calendar) — open a
+  // specific farmer's detail panel on arrival, then clear the nav state so
+  // a later in-page navigation doesn't keep reopening it.
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const openFarmerId = location.state?.openFarmerId;
+    if (openFarmerId != null) {
+      setSelectedId(openFarmerId);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   const { data, isLoading } = useFarmers({
     teamId: teamId || undefined,
@@ -25,6 +43,44 @@ export default function FarmersPage() {
   });
 
   const rows = data?.items || [];
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const filters = {};
+      if (teamId) filters.team_id = Number(teamId);
+      const { data: job } = await api.post('/reports/generate', {
+        type: 'FARMER_EXPORT',
+        format: 'EXCEL',
+        filters,
+      });
+
+      const reportId = job.report_id;
+      let ready = false;
+      for (let tick = 0; tick < 20 && !ready; tick += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const { data: status } = await api.get(`/reports/${reportId}/status`);
+        if (status.status === 'READY') {
+          ready = true;
+        } else if (status.status === 'FAILED' || status.status === 'EXPIRED') {
+          throw new Error(status.error || 'Report generation failed');
+        }
+      }
+      if (!ready) throw new Error('Report is taking too long — please retry.');
+
+      const res = await api.get(`/reports/${reportId}/download`, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `farmer_export_${dayjs().format('YYYY-MM-DD')}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // ignore — user sees no download
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const columns = [
     {

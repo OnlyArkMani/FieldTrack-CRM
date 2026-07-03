@@ -128,6 +128,34 @@ class FarmerRepository:
         total = (await self.db.execute(count_stmt)).scalar_one()
         return list(rows), int(total)
 
+    async def list_all_for_export(
+        self,
+        *,
+        team_id: int | None = None,
+        created_by: int | None = None,
+        search: str | None = None,
+        lead_status: str | None = None,
+    ) -> list[tuple]:
+        """Same shape/filters as list_farmers, but unpaginated — every matching
+        row, for a one-shot report export rather than an infinite-scroll page."""
+        lead_sq = self._latest_lead_status_sq()
+        visit_sq = self._last_visit_sq()
+        stmt = select(
+            Farmer,
+            Team.name.label("team_name"),
+            lead_sq.label("lead_status"),
+            visit_sq.label("last_visit_at"),
+        ).outerjoin(Team, Team.id == Farmer.team_id)
+        stmt = self._apply_list_filters(
+            stmt,
+            team_id=team_id,
+            created_by=created_by,
+            search=search,
+            lead_status=lead_status,
+        )
+        stmt = stmt.order_by(Farmer.name.asc())
+        return list((await self.db.execute(stmt)).all())
+
     # ── single-farmer reads ──────────────────────────────────────────────
     async def get_by_id(self, farmer_id: int) -> Farmer | None:
         return await self.db.get(Farmer, farmer_id)
