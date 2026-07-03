@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Download, TrendingUp } from 'lucide-react';
 import dayjs from 'dayjs';
 
-import { usePipeline, useTeamLeads } from '@/hooks/useLeads';
+import { useTeamLeads } from '@/hooks/useLeads';
 import { useTeams } from '@/hooks/useTeams';
 import { useEmployees } from '@/hooks/useEmployees';
 import { api } from '@/services/api/client';
@@ -42,7 +42,6 @@ export default function LeadPipelinePage() {
   const [territory, setTerritory] = useState('');
   const [exporting, setExporting] = useState(false);
 
-  const { data: pipeline } = usePipeline();
   const { data: leads, isLoading } = useTeamLeads({
     status: statusFilter || undefined,
     employeeId: employeeId || undefined,
@@ -56,12 +55,14 @@ export default function LeadPipelinePage() {
   const employees = empsData?.items || [];
   const leadList = Array.isArray(leads) ? leads : (leads?.items || []);
 
-  // Conversion rate = share of all leads that have reached HOT (closest to a
-  // sale). Displayed alongside the Hot/Warm/Cold counts.
-  const totalLeads =
-    (pipeline?.hot_count ?? 0) + (pipeline?.warm_count ?? 0) + (pipeline?.cold_count ?? 0);
-  const conversionRate =
-    totalLeads > 0 ? Math.round(((pipeline?.hot_count ?? 0) / totalLeads) * 100) : 0;
+  // Counts come from the same filtered /leads/team response as the table
+  // below, so the tiles react to team/employee/status/territory exactly like
+  // the list does (checklist #44).
+  const hotCount = leads?.hot_count ?? 0;
+  const warmCount = leads?.warm_count ?? 0;
+  const coldCount = leads?.cold_count ?? 0;
+  const totalLeads = hotCount + warmCount + coldCount;
+  const conversionRate = totalLeads > 0 ? Math.round((hotCount / totalLeads) * 100) : 0;
 
   const today = dayjs().format('YYYY-MM-DD');
   const overdueIds = new Set(
@@ -130,9 +131,9 @@ export default function LeadPipelinePage() {
 
       {/* Summary stats */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatMini label="Hot" value={pipeline?.hot_count} color="var(--ft-status-danger)" />
-        <StatMini label="Warm" value={pipeline?.warm_count} color="var(--ft-primary)" />
-        <StatMini label="Cold" value={pipeline?.cold_count} color="var(--ft-secondary)" />
+        <StatMini label="Hot" value={hotCount} color="var(--ft-status-danger)" />
+        <StatMini label="Warm" value={warmCount} color="var(--ft-primary)" />
+        <StatMini label="Cold" value={coldCount} color="var(--ft-secondary)" />
         <StatMini
           label="Conversion rate"
           value={`${conversionRate}%`}
