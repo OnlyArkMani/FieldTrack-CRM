@@ -83,6 +83,32 @@ class VisitRepository {
     return VisitOrder.fromJson(data);
   }
 
+  /// Upsert the shared FPO/VLCC 5-question form. When [interestedInSupply] is
+  /// true with [interestedBags] > 0 the backend also creates a real order.
+  Future<OrgAnswers> saveOrgAnswers(
+    int visitId, {
+    int? memberCount,
+    int? totalCattle,
+    String? currentBrand,
+    int? monthlyBags,
+    bool interestedInSupply = false,
+    int? interestedBags,
+    String? notes,
+    String? paymentMode,
+  }) async {
+    final data = await _api.patch('/visits/$visitId/org-answers', body: {
+      'member_count': memberCount,
+      'total_cattle': totalCattle,
+      'current_brand': currentBrand,
+      'monthly_bags': monthlyBags,
+      'interested_in_supply': interestedInSupply,
+      'interested_bags': interestedBags,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+      if (paymentMode != null) 'payment_mode': paymentMode,
+    });
+    return OrgAnswers.fromJson(data);
+  }
+
   Future<VisitDetail> complete(
     int visitId, {
     required LeadStatus leadStatus,

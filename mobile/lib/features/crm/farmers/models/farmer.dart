@@ -28,6 +28,33 @@ enum LeadStatus {
       };
 }
 
+/// Customer discriminator (mirrors backend CustomerType). Farmers use the
+/// guided livestock flow; FPO and VLCC share the 5-question org form.
+enum CustomerType {
+  farmer('FARMER'),
+  fpo('FPO'),
+  vlcc('VLCC');
+
+  const CustomerType(this.wire);
+  final String wire;
+
+  static CustomerType fromWire(String? v) {
+    for (final t in CustomerType.values) {
+      if (t.wire == v) return t;
+    }
+    return CustomerType.farmer;
+  }
+
+  String get label => switch (this) {
+        CustomerType.farmer => 'Farmer',
+        CustomerType.fpo => 'FPO',
+        CustomerType.vlcc => 'VLCC',
+      };
+
+  /// FPO and VLCC answer the shared organisation form instead of livestock.
+  bool get isOrg => this != CustomerType.farmer;
+}
+
 DateTime? _dt(dynamic v) =>
     v == null ? null : DateTime.tryParse(v as String)?.toLocal();
 
@@ -43,6 +70,7 @@ class FarmerListItem {
   const FarmerListItem({
     required this.id,
     required this.name,
+    this.customerType = CustomerType.farmer,
     this.phone,
     this.village,
     this.district,
@@ -57,6 +85,7 @@ class FarmerListItem {
 
   final int id;
   final String name;
+  final CustomerType customerType;
   final String? phone;
   final String? village;
   final String? district;
@@ -71,6 +100,7 @@ class FarmerListItem {
   factory FarmerListItem.fromJson(Map<String, dynamic> json) => FarmerListItem(
         id: json['id'] as int,
         name: json['name'] as String,
+        customerType: CustomerType.fromWire(json['customer_type'] as String?),
         phone: json['phone'] as String?,
         village: json['village'] as String?,
         district: json['district'] as String?,
@@ -267,6 +297,7 @@ class FollowUp {
 class FarmerDetail {
   const FarmerDetail({
     required this.id,
+    this.customerType = CustomerType.farmer,
     this.teamId,
     this.teamName,
     this.createdBy,
@@ -293,6 +324,7 @@ class FarmerDetail {
   });
 
   final int id;
+  final CustomerType customerType;
   final int? teamId;
   final String? teamName;
   final int? createdBy;
@@ -319,6 +351,7 @@ class FarmerDetail {
 
   factory FarmerDetail.fromJson(Map<String, dynamic> json) => FarmerDetail(
         id: json['id'] as int,
+        customerType: CustomerType.fromWire(json['customer_type'] as String?),
         teamId: json['team_id'] as int?,
         teamName: json['team_name'] as String?,
         createdBy: json['created_by'] as int?,

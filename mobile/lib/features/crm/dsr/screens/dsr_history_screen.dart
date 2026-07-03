@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/network/api_exceptions.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -244,9 +245,9 @@ class _StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha:0.12),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.35)),
+        border: Border.all(color: color.withValues(alpha:0.35)),
       ),
       child: Text(
         isSubmitted ? 'Submitted' : 'Draft',
@@ -264,9 +265,9 @@ class _LateBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: coral.withOpacity(0.12),
+        color: coral.withValues(alpha:0.12),
         borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: coral.withOpacity(0.4)),
+        border: Border.all(color: coral.withValues(alpha:0.4)),
       ),
       child: const Text(
         'LATE',
@@ -290,12 +291,36 @@ class _DsrDetailView extends ConsumerStatefulWidget {
 class _DsrDetailViewState extends ConsumerState<_DsrDetailView> {
   DsrDetail? _detail;
   bool _loading = true;
+  bool _downloading = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  Future<void> _download() async {
+    setState(() => _downloading = true);
+    try {
+      final repo = ref.read(dsrRepositoryProvider);
+      final path = await repo.downloadMyDsrCsv(widget.summary.reportDate);
+      final dateLabel = DateFormat('d MMM yyyy')
+          .format(widget.summary.reportDate.toLocal());
+      await Share.shareXFiles([XFile(path)], subject: 'DSR · $dateLabel');
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not download the report.')));
+      }
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
   }
 
   Future<void> _load() async {
@@ -323,6 +348,21 @@ class _DsrDetailViewState extends ConsumerState<_DsrDetailView> {
     return Scaffold(
       appBar: AppBar(
         title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        actions: [
+          IconButton(
+            tooltip: 'Download CSV',
+            icon: _downloading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.download_rounded),
+            onPressed: (_downloading || _loading || _detail == null)
+                ? null
+                : _download,
+          ),
+        ],
       ),
       body: SafeArea(
         child: _loading
@@ -467,7 +507,7 @@ class _DsrDetailViewState extends ConsumerState<_DsrDetailView> {
         if (d.managerComment != null && d.managerComment!.isNotEmpty) ...[
           _SectionLabel('Manager Comment'),
           AppCard(
-            color: const Color(0xFFF5A623).withOpacity(0.1),
+            color: const Color(0xFFF5A623).withValues(alpha:0.1),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -517,9 +557,9 @@ class _InfoChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: c.withOpacity(0.08),
+        color: c.withValues(alpha:0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: c.withOpacity(0.25)),
+        border: Border.all(color: c.withValues(alpha:0.25)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -532,7 +572,7 @@ class _InfoChip extends StatelessWidget {
           const SizedBox(width: 4),
           Text(label,
               style: TextStyle(
-                  color: c.withOpacity(0.8),
+                  color: c.withValues(alpha:0.8),
                   fontSize: 12)),
         ],
       ),
@@ -557,9 +597,9 @@ class _LeadBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: c.withOpacity(0.12),
+        color: c.withValues(alpha:0.12),
         borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: c.withOpacity(0.4)),
+        border: Border.all(color: c.withValues(alpha:0.4)),
       ),
       child: Text(
         status,

@@ -1,4 +1,8 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../../core/network/api_client.dart';
 import '../models/dsr.dart';
@@ -49,6 +53,31 @@ class DsrRepository {
     final data =
         await _api.get('/daily-reports/team/$employeeId/${_ymd(date)}');
     return DsrDetail.fromJson(data);
+  }
+
+  /// Download the caller's DSR for [date] as a CSV file (the per-day download
+  /// button). Writes it to a temp file and returns the path for sharing.
+  Future<String> downloadMyDsrCsv(DateTime date) async {
+    final res = await _api.dio.get<List<int>>(
+      '/daily-reports/my/${_ymd(date)}/download',
+      options: Options(responseType: ResponseType.bytes),
+    );
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/DSR_${_ymd(date)}.csv');
+    await file.writeAsBytes(res.data ?? const <int>[]);
+    return file.path;
+  }
+
+  /// Download a team member's DSR for [date] as CSV (supervisor).
+  Future<String> downloadTeamDsrCsv(int employeeId, DateTime date) async {
+    final res = await _api.dio.get<List<int>>(
+      '/daily-reports/team/$employeeId/${_ymd(date)}/download',
+      options: Options(responseType: ResponseType.bytes),
+    );
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/DSR_${employeeId}_${_ymd(date)}.csv');
+    await file.writeAsBytes(res.data ?? const <int>[]);
+    return file.path;
   }
 
   /// Submit the DSR (employee action).

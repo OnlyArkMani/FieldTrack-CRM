@@ -2,7 +2,7 @@
 /// farmers feature's LeadStatus.
 library;
 
-import '../../farmers/models/farmer.dart' show LeadStatus;
+import '../../farmers/models/farmer.dart' show CustomerType, LeadStatus;
 
 DateTime? _dt(dynamic v) =>
     v == null ? null : DateTime.tryParse(v as String)?.toLocal();
@@ -11,6 +11,7 @@ class LeadItem {
   const LeadItem({
     required this.farmerId,
     required this.farmerName,
+    this.customerType = CustomerType.farmer,
     this.village,
     required this.status,
     this.lastVisitAt,
@@ -23,6 +24,7 @@ class LeadItem {
 
   final int farmerId;
   final String farmerName;
+  final CustomerType customerType;
   final String? village;
   final LeadStatus status;
   final DateTime? lastVisitAt;
@@ -49,6 +51,7 @@ class LeadItem {
   factory LeadItem.fromJson(Map<String, dynamic> json) => LeadItem(
         farmerId: json['farmer_id'] as int,
         farmerName: (json['farmer_name'] as String?) ?? 'Unknown',
+        customerType: CustomerType.fromWire(json['customer_type'] as String?),
         village: json['village'] as String?,
         status:
             LeadStatus.fromWire(json['lead_status'] as String?) ?? LeadStatus.cold,

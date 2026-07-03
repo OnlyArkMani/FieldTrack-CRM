@@ -3,7 +3,8 @@
 /// LivestockProfile so there's one source of truth for those shapes.
 library;
 
-import '../../farmers/models/farmer.dart' show LeadStatus, LivestockProfile;
+import '../../farmers/models/farmer.dart'
+    show CustomerType, LeadStatus, LivestockProfile;
 
 DateTime? _dt(dynamic v) =>
     v == null ? null : DateTime.tryParse(v as String)?.toLocal();
@@ -123,6 +124,37 @@ class VisitPhoto {
       );
 }
 
+/// The shared 5-question FPO/VLCC organisation form (mirrors OrgAnswerResponse).
+class OrgAnswers {
+  const OrgAnswers({
+    this.memberCount,
+    this.totalCattle,
+    this.currentBrand,
+    this.monthlyBags,
+    this.interestedInSupply = false,
+    this.interestedBags,
+    this.notes,
+  });
+
+  final int? memberCount;
+  final int? totalCattle;
+  final String? currentBrand;
+  final int? monthlyBags;
+  final bool interestedInSupply;
+  final int? interestedBags;
+  final String? notes;
+
+  factory OrgAnswers.fromJson(Map<String, dynamic> json) => OrgAnswers(
+        memberCount: json['member_count'] as int?,
+        totalCattle: json['total_cattle'] as int?,
+        currentBrand: json['current_brand'] as String?,
+        monthlyBags: json['monthly_bags'] as int?,
+        interestedInSupply: (json['interested_in_supply'] as bool?) ?? false,
+        interestedBags: json['interested_bags'] as int?,
+        notes: json['notes'] as String?,
+      );
+}
+
 /// Full visit detail (GET /visits/{id}, /visits/active, and the result of
 /// check-out).
 class VisitDetail {
@@ -131,6 +163,7 @@ class VisitDetail {
     this.employeeId,
     this.farmerId,
     this.farmerName,
+    this.customerType = CustomerType.farmer,
     this.planItemId,
     this.checkInAt,
     this.checkOutAt,
@@ -141,6 +174,7 @@ class VisitDetail {
     required this.status,
     this.notes,
     this.livestock,
+    this.orgAnswers,
     this.orders = const [],
     this.lead,
     this.photos = const [],
@@ -150,6 +184,7 @@ class VisitDetail {
   final int? employeeId;
   final int? farmerId;
   final String? farmerName;
+  final CustomerType customerType;
   final int? planItemId;
   final DateTime? checkInAt;
   final DateTime? checkOutAt;
@@ -160,6 +195,7 @@ class VisitDetail {
   final String status;
   final VisitNoteData? notes;
   final LivestockProfile? livestock;
+  final OrgAnswers? orgAnswers;
   final List<VisitOrder> orders;
   final LeadStatus? lead;
   final List<VisitPhoto> photos;
@@ -169,6 +205,7 @@ class VisitDetail {
         employeeId: json['employee_id'] as int?,
         farmerId: json['farmer_id'] as int?,
         farmerName: json['farmer_name'] as String?,
+        customerType: CustomerType.fromWire(json['customer_type'] as String?),
         planItemId: json['plan_item_id'] as int?,
         checkInAt: _dt(json['check_in_at']),
         checkOutAt: _dt(json['check_out_at']),
@@ -183,6 +220,9 @@ class VisitDetail {
         livestock: json['livestock'] != null
             ? LivestockProfile.fromJson(
                 json['livestock'] as Map<String, dynamic>)
+            : null,
+        orgAnswers: json['org_answers'] != null
+            ? OrgAnswers.fromJson(json['org_answers'] as Map<String, dynamic>)
             : null,
         orders: ((json['orders'] as List<dynamic>?) ?? [])
             .map((e) => VisitOrder.fromJson(e as Map<String, dynamic>))

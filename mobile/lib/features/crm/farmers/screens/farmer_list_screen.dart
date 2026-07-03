@@ -56,13 +56,13 @@ class _FarmerListScreenState extends ConsumerState<FarmerListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text('FPO', maxLines: 1, overflow: TextOverflow.ellipsis),
+        title: const Text('Customers',
+            maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openAdd,
         icon: const Icon(Icons.add_rounded),
-        label: const Text('Add FPO'),
+        label: const Text('Add customer'),
       ),
       body: SafeArea(
         child: Column(
@@ -114,11 +114,11 @@ class _FarmerListScreenState extends ConsumerState<FarmerListScreen> {
               icon: searching
                   ? Icons.search_off_rounded
                   : Icons.agriculture_rounded,
-              title: searching ? 'No matches' : 'No FPOs yet',
+              title: searching ? 'No matches' : 'No customers yet',
               message: searching
                   ? 'Try a different name, village, or lead filter.'
-                  : 'Add your first FPO.',
-              actionLabel: searching ? null : 'Add FPO',
+                  : 'Add your first customer.',
+              actionLabel: searching ? null : 'Add customer',
               onAction: searching ? null : _openAdd,
             ),
           ],
@@ -197,7 +197,7 @@ class _SearchBar extends StatelessWidget {
         style: AppTextStyles.body
             .copyWith(color: Theme.of(context).colorScheme.onSurface),
         decoration: InputDecoration(
-          hintText: total > 0 ? 'Search $total FPOs' : 'Search FPOs',
+          hintText: total > 0 ? 'Search $total customers' : 'Search customers',
           prefixIcon:
               Icon(Icons.search_rounded, size: 20, color: colors.textSecondary),
           suffixIcon: ValueListenableBuilder<TextEditingValue>(
@@ -297,6 +297,35 @@ class _FilterChips extends StatelessWidget {
   }
 }
 
+class _CustomerTypeChip extends StatelessWidget {
+  const _CustomerTypeChip({required this.type});
+  final CustomerType type;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color =
+        type == CustomerType.vlcc ? scheme.tertiary : scheme.primary;
+    return Container(
+      padding:
+          const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(
+        type.label,
+        style: AppTextStyles.caption.copyWith(
+          color: color,
+          fontWeight: FontWeight.w700,
+          fontSize: 10,
+        ),
+      ),
+    );
+  }
+}
+
 class _FarmerTile extends StatelessWidget {
   const _FarmerTile({required this.farmer, required this.onTap});
 
@@ -333,6 +362,10 @@ class _FarmerTile extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (farmer.customerType != CustomerType.farmer) ...[
+                  const SizedBox(width: AppDimens.grid),
+                  _CustomerTypeChip(type: farmer.customerType),
+                ],
                 const SizedBox(width: AppDimens.grid),
                 LeadStatusBadge(status: farmer.leadStatus),
               ],

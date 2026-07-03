@@ -18,6 +18,7 @@ class FarmerRepository {
     int limit = 20,
     String? search,
     LeadStatus? leadStatus,
+    CustomerType? customerType,
     int? teamId,
   }) async {
     final query = <String, dynamic>{'limit': limit};
@@ -26,6 +27,7 @@ class FarmerRepository {
       query['search'] = search.trim();
     }
     if (leadStatus != null) query['lead_status'] = leadStatus.wire;
+    if (customerType != null) query['customer_type'] = customerType.wire;
     if (teamId != null) query['team_id'] = teamId;
     final data = await _api.get('/farmers', query: query);
     return FarmerPage.fromJson(data);
@@ -38,6 +40,7 @@ class FarmerRepository {
 
   Future<FarmerDetail> create({
     required String name,
+    CustomerType customerType = CustomerType.farmer,
     String? phone,
     String? village,
     String? district,
@@ -48,6 +51,7 @@ class FarmerRepository {
   }) async {
     final data = await _api.post('/farmers', body: {
       'name': name,
+      'customer_type': customerType.wire,
       if (phone != null && phone.isNotEmpty) 'phone': phone,
       if (village != null && village.isNotEmpty) 'village': village,
       if (district != null && district.isNotEmpty) 'district': district,

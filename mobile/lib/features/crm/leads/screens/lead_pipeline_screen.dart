@@ -7,11 +7,14 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/shimmer_card.dart';
 import '../../../../core/widgets/state_views.dart';
-import '../../farmers/models/farmer.dart' show LeadStatus;
+import '../../farmers/models/farmer.dart' show CustomerType, LeadStatus;
 import '../../farmers/utils.dart';
 import '../../farmers/widgets/lead_status_badge.dart';
 import '../data/lead_repository.dart';
 import '../models/lead.dart';
+
+/// Optional customer-type filter for the pipeline (null = all types).
+final leadTypeFilterProvider = StateProvider<CustomerType?>((ref) => null);
 
 /// Lead pipeline: Hot/Warm/Cold summary cards (tap to filter) over a farmer
 /// list. Reached from a dashboard card.
@@ -22,6 +25,7 @@ class LeadPipelineScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(myLeadsProvider);
     final filter = ref.watch(leadFilterProvider);
+    final typeFilter = ref.watch(leadTypeFilterProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -39,9 +43,14 @@ class LeadPipelineScreen extends ConsumerWidget {
             final hot = leads.where((l) => l.status == LeadStatus.hot).length;
             final warm = leads.where((l) => l.status == LeadStatus.warm).length;
             final cold = leads.where((l) => l.status == LeadStatus.cold).length;
-            final shown = filter == null
+            var shown = filter == null
                 ? leads
                 : leads.where((l) => l.status == filter).toList();
+            if (typeFilter != null) {
+              shown = shown
+                  .where((l) => l.customerType == typeFilter)
+                  .toList();
+            }
 
             return RefreshIndicator(
               onRefresh: () async => ref.invalidate(myLeadsProvider),
@@ -57,6 +66,13 @@ class LeadPipelineScreen extends ConsumerWidget {
                     onSelect: (s) => ref.read(leadFilterProvider.notifier).state =
                         filter == s ? null : s,
                   ),
+                  const SizedBox(height: AppDimens.grid * 1.5),
+                  _TypeFilterRow(
+                    selected: typeFilter,
+                    onSelect: (t) => ref
+                        .read(leadTypeFilterProvider.notifier)
+                        .state = typeFilter == t ? null : t,
+                  ),
                   const SizedBox(height: AppDimens.grid * 2),
                   if (shown.isEmpty)
                     Padding(
@@ -66,7 +82,7 @@ class LeadPipelineScreen extends ConsumerWidget {
                         title: filter == null ? 'No leads yet' : 'No matches',
                         message: filter == null
                             ? 'Lead statuses you set on visits appear here.'
-                            : 'No ${filter!.label.toLowerCase()} leads right now.',
+                            : 'No ${filter.label.toLowerCase()} leads right now.',
                       ),
                     )
                   else
@@ -132,6 +148,60 @@ class _SummaryRow extends StatelessWidget {
                 selected: selected == LeadStatus.cold,
                 onTap: () => onSelect(LeadStatus.cold))),
       ],
+    );
+  }
+}
+
+class _TypeFilterRow extends StatelessWidget {
+  const _TypeFilterRow({required this.selected, required this.onSelect});
+
+  final CustomerType? selected;
+  final ValueChanged<CustomerType> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 36,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          for (final t in CustomerType.values)
+            Padding(
+              padding: const EdgeInsets.only(right: AppDimens.grid),
+              child: _chip(context, t),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(BuildContext context, CustomerType t) {
+    final colors = context.appColors;
+    final scheme = Theme.of(context).colorScheme;
+    final isSelected = selected == t;
+    return GestureDetector(
+      onTap: () => onSelect(t),
+      child: Container(
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.grid * 1.5, vertical: AppDimens.grid * 0.5),
+        decoration: BoxDecoration(
+          color: isSelected ? scheme.primary.withValues(alpha: 0.16) : colors.card,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: isSelected
+                ? scheme.primary
+                : colors.textSecondary.withValues(alpha: 0.2),
+          ),
+        ),
+        child: Text(
+          t.label,
+          style: AppTextStyles.caption.copyWith(
+            color: isSelected ? scheme.primary : colors.textSecondary,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -202,6 +272,21 @@ class _LeadCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
               ),
+              if (lead.customerType != CustomerType.farmer) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(lead.customerType.label,
+                      style: AppTextStyles.caption.copyWith(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 10)),
+                ),
+                const SizedBox(width: AppDimens.grid),
+              ],
               LeadStatusBadge(status: lead.status),
             ],
           ),

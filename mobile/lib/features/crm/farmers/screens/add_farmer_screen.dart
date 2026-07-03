@@ -9,6 +9,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../data/farmer_repository.dart';
+import '../models/farmer.dart';
 import '../providers/farmer_provider.dart';
 
 /// Create-a-farmer form. Name is required; everything else optional.
@@ -30,6 +31,7 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
   final _cattle = TextEditingController(text: '0');
   final _notes = TextEditingController();
 
+  CustomerType _type = CustomerType.farmer;
   bool _submitting = false;
   String? _nameError;
   String? _formError;
@@ -58,6 +60,7 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
     try {
       final farmer = await ref.read(farmerRepositoryProvider).create(
             name: name,
+            customerType: _type,
             phone: _phone.text.trim(),
             village: _village.text.trim(),
             district: _district.text.trim(),
@@ -85,17 +88,32 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
     final colors = context.appColors;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add FPO',
+        title: const Text('Add customer',
             maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(AppDimens.grid * 2),
           children: [
+            Text('Customer type',
+                style: AppTextStyles.caption
+                    .copyWith(color: colors.textSecondary)),
+            const SizedBox(height: AppDimens.grid),
+            SegmentedButton<CustomerType>(
+              segments: const [
+                ButtonSegment(
+                    value: CustomerType.farmer, label: Text('Farmer')),
+                ButtonSegment(value: CustomerType.fpo, label: Text('FPO')),
+                ButtonSegment(value: CustomerType.vlcc, label: Text('VLCC')),
+              ],
+              selected: {_type},
+              onSelectionChanged: (s) => setState(() => _type = s.first),
+            ),
+            const SizedBox(height: AppDimens.grid * 2),
             AppTextField(
               label: 'Name *',
               controller: _name,
-              hint: 'FPO or vendor name',
+              hint: 'Customer, FPO or VLCC name',
               errorText: _nameError,
               textInputAction: TextInputAction.next,
               prefixIcon: Icons.person_rounded,
@@ -156,7 +174,7 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
             ],
             const SizedBox(height: AppDimens.grid * 3),
             AppButton(
-              label: 'Save Farmer',
+              label: 'Save customer',
               icon: Icons.check_rounded,
               isLoading: _submitting,
               onPressed: _submitting ? null : _submit,

@@ -12,7 +12,8 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/state_views.dart';
-import '../../farmers/models/farmer.dart' show LeadStatus, LivestockProfile;
+import '../../farmers/models/farmer.dart'
+    show CustomerType, LeadStatus, LivestockProfile;
 import '../../farmers/providers/farmer_provider.dart';
 import '../../farmers/utils.dart';
 import '../../planning/providers/visit_plan_provider.dart';
@@ -69,6 +70,15 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
   String? _ageGroup;
   String? _health;
 
+  // org answers (FPO / VLCC shared 5-question form — replaces livestock)
+  final _orgMembers = TextEditingController();
+  final _orgCattle = TextEditingController();
+  final _orgBrand = TextEditingController();
+  final _orgMonthlyBags = TextEditingController();
+  final _orgInterestedBags = TextEditingController();
+  final _orgNotes = TextEditingController();
+  bool _orgInterested = false;
+
   // order
   bool _orderEnabled = false;
   final _bagsCount = TextEditingController();
@@ -87,12 +97,21 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
   DateTime get _earliestDelivery =>
       DateTime.now().add(const Duration(days: 7));
 
+  /// Customer type of the current farmer (loaded via farmerDetailProvider).
+  /// Farmers get the livestock step; FPO/VLCC get the org-answers step.
+  CustomerType get _customerType =>
+      ref.read(farmerDetailProvider(widget.farmerId)).value?.customerType ??
+      CustomerType.farmer;
+  bool get _isOrg => _customerType.isOrg;
+
   @override
   void dispose() {
     _autosave?.cancel();
     for (final c in [
       _remark, _highlights, _concerns, _interest, _cattle, _brand,
       _bagsPerMonth, _kgPerAnimal, _pricePerBag, _payMin, _payMax, _healthNotes,
+      _orgMembers, _orgCattle, _orgBrand, _orgMonthlyBags,
+      _orgInterestedBags, _orgNotes,
       _bagsCount, _deliveryAddress, _orderNotes, _followUpPurpose,
     ]) {
       c.dispose();
@@ -233,7 +252,11 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
           if (!mounted) return;
           _enterStep(2);
         case 2:
-          await _saveLivestock();
+          if (_isOrg) {
+            await _saveOrgAnswers();
+          } else {
+            await _saveLivestock();
+          }
           await _saveNotes(step: 2, silent: true);
           if (!mounted) return;
           _enterStep(3);
@@ -276,9 +299,27 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
     await _repo.saveLivestock(_visitId!, fields);
   }
 
-  Future<void> _skipLivestock() async {
-    final ok = await _confirm('Skip livestock update?',
-        'You can record livestock details on a later visit.');
+  Future<void> _saveOrgAnswers() async {
+    final interestedBags = int.tryParse(_orgInterestedBags.text.trim());
+    await _repo.saveOrgAnswers(
+      _visitId!,
+      memberCount: int.tryParse(_orgMembers.text.trim()),
+      totalCattle: int.tryParse(_orgCattle.text.trim()),
+      currentBrand:
+          _orgBrand.text.trim().isEmpty ? null : _orgBrand.text.trim(),
+      monthlyBags: int.tryParse(_orgMonthlyBags.text.trim()),
+      interestedInSupply: _orgInterested,
+      interestedBags: _orgInterested ? interestedBags : null,
+      notes: _orgNotes.text.trim().isEmpty ? null : _orgNotes.text.trim(),
+    );
+  }
+
+  Future<void> _skipStep2() async {
+    final ok = _isOrg
+        ? await _confirm('Skip the organisation form?',
+            'You can record these details on a later visit.')
+        : await _confirm('Skip livestock update?',
+            'You can record livestock details on a later visit.');
     if (ok != true) return;
     if (!mounted) return;
     await _saveNotes(step: 2, silent: true);
@@ -385,7 +426,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('FPO: ${_checkIn?.farmerName ?? ''}'),
+            Text('Customer: ${_checkIn?.farmerName ?? ''}'),
             Text('Lead: ${_lead?.label ?? ''}'),
             if (fu != null) Text('Follow-up: $fu'),
           ],
@@ -519,7 +560,12 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
   Widget _guidedStep() {
     return Column(
       children: [
-        StepIndicator(current: _step),
+        StepIndicator(
+          current: _step,
+          labels: _isOrg
+              ? const ['Notes', 'Details', 'Order', 'Lead']
+              : const ['Notes', 'Livestock', 'Order', 'Lead'],
+        ),
         Expanded(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
@@ -527,7 +573,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
               key: ValueKey(_step),
               child: switch (_step) {
                 1 => _notesStep(),
-                2 => _livestockStep(),
+                2 => _isOrg ? _orgAnswersStep() : _livestockStep(),
                 3 => _orderStep(),
                 _ => _leadStep(),
               },
@@ -572,7 +618,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
                     child: AppButton(
                       label: 'Skip',
                       variant: AppButtonVariant.secondary,
-                      onPressed: _busy ? null : _skipLivestock,
+                      onPressed: _busy ? null : _skipStep2,
                     ),
                   ),
                 if (_step == 2) const SizedBox(width: AppDimens.grid * 1.5),
@@ -648,6 +694,54 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
     );
   }
 
+  // ── step 2 (FPO/VLCC): shared 5-question organisation form ───────────────
+  Widget _orgAnswersStep() {
+    final colors = context.appColors;
+    final scheme = Theme.of(context).colorScheme;
+    final typeLabel = _customerType.label;
+    final memberQ = _customerType == CustomerType.vlcc
+        ? 'Farmers pouring milk'
+        : 'Member farmers';
+    return ListView(
+      padding: const EdgeInsets.all(AppDimens.grid * 2),
+      children: [
+        _sectionTitle('$typeLabel details'),
+        _numField(_orgMembers, 'Q1 · $memberQ'),
+        _numField(_orgCattle, 'Q2 · Total cattle (approx)'),
+        _textField(_orgBrand, 'Q3 · Current feed brand / procurement'),
+        _numField(_orgMonthlyBags, 'Q4 · Monthly feed requirement (bags)'),
+        const SizedBox(height: AppDimens.grid),
+        AppCard(
+          child: Row(
+            children: [
+              Expanded(
+                child: Text('Q5 · Interested in supply from us?',
+                    style: AppTextStyles.bodyMedium
+                        .copyWith(color: scheme.onSurface)),
+              ),
+              Switch(
+                value: _orgInterested,
+                onChanged: (v) => setState(() => _orgInterested = v),
+              ),
+            ],
+          ),
+        ),
+        if (_orgInterested) ...[
+          const SizedBox(height: AppDimens.grid),
+          _numField(_orgInterestedBags, 'Bags they want to order'),
+          Text(
+            'Recording bags here creates an order (delivery in 7+ days) that '
+            'shows in the DSR and manager dashboard.',
+            style:
+                AppTextStyles.caption.copyWith(color: colors.textSecondary),
+          ),
+        ],
+        const SizedBox(height: AppDimens.grid),
+        _textField(_orgNotes, 'Notes (optional)'),
+      ],
+    );
+  }
+
   // ── step 3: order ─────────────────────────────────────────────────────────
   Widget _orderStep() {
     final colors = context.appColors;
@@ -659,7 +753,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
           child: Row(
             children: [
               Expanded(
-                child: Text('Farmer wants to place an order',
+                child: Text('Customer wants to place an order',
                     style: AppTextStyles.bodyMedium
                         .copyWith(color: scheme.onSurface)),
               ),
@@ -670,6 +764,16 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
             ],
           ),
         ),
+        if (_isOrg && _orgInterested)
+          Padding(
+            padding: const EdgeInsets.only(top: AppDimens.grid),
+            child: Text(
+              'Supply interest from the previous step is already recorded as '
+              'an order. Only add another here if it is a separate order.',
+              style:
+                  AppTextStyles.caption.copyWith(color: colors.textSecondary),
+            ),
+          ),
         if (_orderEnabled) ...[
           const SizedBox(height: AppDimens.grid),
           _numField(_bagsCount, 'Bags count (min 1)'),
