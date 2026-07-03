@@ -124,6 +124,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
     });
     try {
       final pos = await _position();
+      if (!mounted) return;
       if (pos == null) {
         setState(() {
           _busy = false;
@@ -137,6 +138,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
         lng: pos.lng,
         planItemId: widget.planItemId,
       );
+      if (!mounted) return;
       HapticFeedback.mediumImpact();
       _visitId = result.visitId;
       _checkIn = result;
@@ -149,11 +151,13 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
         _enterStep(1);
       }
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() {
         _busy = false;
         _error = e.message;
       });
     } catch (_) {
+      if (!mounted) return;
       setState(() {
         _busy = false;
         _error = 'Could not get your location. Try again.';
@@ -172,8 +176,10 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
     });
     try {
       await _repo.locationRemark(_visitId!, _remark.text.trim());
+      if (!mounted) return;
       _enterStep(1);
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() {
         _busy = false;
         _error = e.message;
@@ -224,17 +230,21 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       switch (_step) {
         case 1:
           await _saveNotes(step: 1);
+          if (!mounted) return;
           _enterStep(2);
         case 2:
           await _saveLivestock();
           await _saveNotes(step: 2, silent: true);
+          if (!mounted) return;
           _enterStep(3);
         case 3:
           if (_orderEnabled) await _saveOrder();
           await _saveNotes(step: 3, silent: true);
+          if (!mounted) return;
           _enterStep(4);
       }
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() {
         _busy = false;
         _error = e.message;
@@ -270,7 +280,9 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
     final ok = await _confirm('Skip livestock update?',
         'You can record livestock details on a later visit.');
     if (ok != true) return;
+    if (!mounted) return;
     await _saveNotes(step: 2, silent: true);
+    if (!mounted) return;
     _enterStep(3);
   }
 

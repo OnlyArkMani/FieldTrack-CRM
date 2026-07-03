@@ -56,7 +56,7 @@ from app.schemas.crm import (
 
 logger = logging.getLogger("fieldtrack.visit")
 
-LOCATION_WARNING_METERS = 200.0
+LOCATION_WARNING_METERS = 100.0
 ORDER_MIN_LEAD_DAYS = 7
 _EARTH_RADIUS_M = 6371000.0
 _ALLOWED_PHOTO_TYPES = {"image/jpeg", "image/png", "image/webp", "image/heic"}
