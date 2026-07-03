@@ -34,6 +34,9 @@ class NotificationType(str, Enum):
     STATIONARY_ALERT = "STATIONARY_ALERT"    # exec not moving 90+ min in field hours
     WEEKLY_REPORT = "WEEKLY_REPORT"          # Monday auto team report ready
     MONTHLY_REPORT = "MONTHLY_REPORT"        # 1st-of-month auto team report ready
+    ORDER_CAPTURED = "ORDER_CAPTURED"        # employee -> their supervisor(s)
+    ORDER_APPROVED = "ORDER_APPROVED"        # manager decision -> the employee
+    ORDER_REJECTED = "ORDER_REJECTED"        # manager decision -> the employee
 
 
 class NotificationOut(BaseModel):

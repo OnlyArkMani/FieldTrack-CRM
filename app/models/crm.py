@@ -230,7 +230,7 @@ class LivestockProfile(Base):
     visit_id: Mapped[int | None] = mapped_column(ForeignKey("visits.id"))
     total_cattle: Mapped[int | None] = mapped_column(Integer)
     breed: Mapped[str | None] = mapped_column(String(100))  # Sahiwal/Murrah/HF Cross/Gir/Local/Other
-    age_group: Mapped[str | None] = mapped_column(String(50))  # Calf/Heifer/Adult/Senior/Mixed
+    age_group: Mapped[str | None] = mapped_column(String(50))  # Calf/Heifer/Adult/Senior
     current_brand: Mapped[str | None] = mapped_column(String(200))
     bags_per_month: Mapped[int | None] = mapped_column(Integer)
     kg_per_animal_per_day: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
@@ -253,7 +253,8 @@ class LivestockProfile(Base):
 
 
 class VisitOrder(Base):
-    """Order captured during a visit (manager approval deferred)."""
+    """Order captured during a visit. status: SUBMITTED -> APPROVED/REJECTED
+    (checklist #34 — manager approval)."""
 
     __tablename__ = "visit_orders"
 
@@ -266,9 +267,15 @@ class VisitOrder(Base):
     delivery_address: Mapped[str | None] = mapped_column(Text)
     payment_mode: Mapped[str | None] = mapped_column(String(50))  # CASH / UPI / CREDIT
     special_notes: Mapped[str | None] = mapped_column(Text)
+    # Price at order time (farmer's negotiated rate) — powers total_value here
+    # and the DSR order-value line (checklist #49).
+    price_per_bag: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     status: Mapped[str] = mapped_column(
         String(30), nullable=False, default="SUBMITTED", server_default=text("'SUBMITTED'")
-    )
+    )  # SUBMITTED / APPROVED / REJECTED
+    approved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rejection_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

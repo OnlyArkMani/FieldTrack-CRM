@@ -7,6 +7,7 @@ import {
   useFarmerVisits,
   useFarmerLivestock,
   useFarmerLeadHistory,
+  useFarmerOrders,
 } from '@/hooks/useFarmers';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
@@ -24,6 +25,17 @@ export function LeadBadge({ status }) {
   return <Badge color={m.color}>{m.label}</Badge>;
 }
 
+const ORDER_STATUS_META = {
+  SUBMITTED: { color: 'var(--ft-primary)', label: 'Pending' },
+  APPROVED: { color: 'var(--ft-status-active)', label: 'Approved' },
+  REJECTED: { color: 'var(--ft-danger)', label: 'Rejected' },
+};
+
+function OrderStatusBadge({ status }) {
+  const m = ORDER_STATUS_META[status] || ORDER_STATUS_META.SUBMITTED;
+  return <Badge color={m.color}>{m.label}</Badge>;
+}
+
 function fmtDate(d) {
   return d ? dayjs(d).format('MMM D, YYYY') : '—';
 }
@@ -35,6 +47,7 @@ export default function FarmerDetailPanel({ farmerId, open, onClose }) {
   const { data: visits } = useFarmerVisits(open ? farmerId : null);
   const { data: livestock } = useFarmerLivestock(open ? farmerId : null);
   const { data: leads } = useFarmerLeadHistory(open ? farmerId : null);
+  const { data: orders } = useFarmerOrders(open ? farmerId : null);
 
   return (
     <>
@@ -99,6 +112,7 @@ export default function FarmerDetailPanel({ farmerId, open, onClose }) {
                     <KV k="Breed" v={farmer.latest_livestock.breed} />
                     <KV k="Brand" v={farmer.latest_livestock.current_brand} />
                     <KV k="Bags/mo" v={farmer.latest_livestock.bags_per_month} />
+                    <KV k="Kg/animal/day" v={farmer.latest_livestock.kg_per_animal_per_day} />
                     <KV k="Price/bag" v={money(farmer.latest_livestock.current_price_per_bag)} />
                   </div>
                 ) : (
@@ -136,6 +150,23 @@ export default function FarmerDetailPanel({ farmerId, open, onClose }) {
                   />
                 ) : (
                   <Empty>No livestock history.</Empty>
+                )}
+              </Section>
+
+              {/* Order history (checklist #35) */}
+              <Section title={`Order history (${farmer.total_orders ?? 0})`}>
+                {orders?.length ? (
+                  <MiniTable
+                    head={['Date', 'Bags', 'Value', 'Status']}
+                    rows={orders.map((o) => [
+                      fmtDate(o.created_at),
+                      o.bags_count,
+                      money(o.total_value),
+                      <OrderStatusBadge key={o.id} status={o.status} />,
+                    ])}
+                  />
+                ) : (
+                  <Empty>No orders yet.</Empty>
                 )}
               </Section>
 
