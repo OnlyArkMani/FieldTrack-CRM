@@ -1,0 +1,58 @@
+services:
+  cattle-feed-gatipay-backend-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile-dev
+
+    container_name: cattle-feed-gatipay-backend-dev
+
+    restart: always
+
+    env_file:
+      - .env
+
+    ports:
+      - "3991:8000"
+
+    volumes:
+      - /home/wiladmin/ALL_VOLUMES/cattle-feed-gatipay-backend-dev/reports:/srv/fieldtrack/reports
+      - /home/wiladmin/ALL_VOLUMES/cattle-feed-gatipay-backend-dev/visit_photos:/srv/fieldtrack/visit_photos
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=5)"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+    networks:
+      - cattle-feed-gatipay-backend-network-dev
+
+  # DEV_SETUP: devops splits the public domain by path on their own host
+  # Nginx — /api/* -> localhost:3991 (above), everything else -> localhost:3993
+  # (this service). No reverse-proxy logic lives in this container; it just
+  # serves the built SPA with client-side-routing fallback via `serve -s`.
+  cattle-feed-gatipay-backend-admin-web-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.admin-web
+
+    container_name: cattle-feed-gatipay-backend-admin-web-dev
+
+    restart: always
+
+    ports:
+      - "3993:3000"
+
+    networks:
+      - cattle-feed-gatipay-backend-network-dev
+
+networks:
+  cattle-feed-gatipay-backend-network-dev:
+    external: true

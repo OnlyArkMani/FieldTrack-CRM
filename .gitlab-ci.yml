@@ -1,53 +1,403 @@
-# FieldTrack GitLab CI/CD deployment configuration
-#
-# Configured for deploying the FastAPI backend + React/Vite admin-web stack
-# using Docker Compose.
-#
-# Setup Required on GitLab:
-#   Go to Settings -> CI/CD -> Variables and add:
-#     - SSH_PRIVATE_KEY: The private SSH key for the deploy user on the VPS.
-#     - SSH_HOST: The IP address or domain name of your VPS.
-#     - SSH_USER: The SSH user name (e.g., deploy).
-
 stages:
-  - deploy
+  - test
+  - dev
+  - stage
 
-deploy_develop:
-  stage: deploy
-  image: alpine:latest
-  only:
-    - develop
+variables:
+  TARGET_URL_DEV:
+    value: "https://thewitslab-dev.com"
+    description: "Enter the URL to scan for dev environment (e.g. https://thewitslab-dev.com)"
+  TARGET_URL_STAGING:
+    value: "https://thewitslab-staging.com"
+    description: "Enter the URL to scan for staging (e.g. https://thewitslab-staging.com)"
+  TARGET_URL_PROD:
+    value: "https://thewitslab-prod.com"
+    description: "Enter the URL to scan for production (e.g. https://thewitslab-prod.com)"
+  SCAN_TYPE:
+    value: "zap-baseline.py"
+    description: "Choose the scan type."
+    options:
+      - zap-baseline.py
+      - zap-api-scan.py
+      - zap-full-scan.py
+  COMPOSE_DEV:
+    value: "docker-compose-dev.yml"
+    description: "Enter docker-compose file name for dev."
+  COMPOSE_STAGING:
+    value: "docker-compose-staging.yml"
+    description: "Enter docker-compose file name for staging."
+  COMPOSE_PROD:
+    value: "docker-compose-production.yml"
+    description: "Enter docker-compose file name for production."
+  DEPENDENCY_INSTALL:
+    value: "npm i"
+    description: "Enter the command to install dependencies in all environment."
+    
+.env:
   before_script:
+    - Path=$(pwd)
+    - bash -c '(cd /home/$Default_Username/script && ./env_script.sh dev cattle-feed-gatipay-backend-NestJs-dev '$VAULT_TOKEN' > /dev/null)'
+    - mv /home/$Default_Username/script/.env $Path && cd $Path
+
+test:lint:
+  stage: test
+  tags:
+    - gcp
+  extends: .env
+  rules:
+    - if: '$TESTING_ENABLED == "false" && $CI_COMMIT_BRANCH == "main"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+      allow_failure: true
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: on_success
+    - when: on_success
+  script:
+    - DEPENDENCY_INSTALL=$(echo $DEPENDENCY_INSTALL | tr '[A-Z]' '[a-z]')
+    - $DEPENDENCY_INSTALL
+    - echo "Starting the lint testing."
+    - npm run lint
+    
+test:unit:
+  stage: test
+  tags:
+    - gcp
+  extends: .env
+  needs:
+    - test:lint
+  rules:
+    - if: '$TESTING_ENABLED == "false" && $CI_COMMIT_BRANCH == "main"'
+      when: never  
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+      allow_failure: true
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: on_success
+    - when: on_success
+  script:
+    - DEPENDENCY_INSTALL=$(echo $DEPENDENCY_INSTALL | tr '[A-Z]' '[a-z]')
+    - $DEPENDENCY_INSTALL    
+    - echo "Startig the unit testing."
+    - npm run test
+
+test:sonarqube:
+  stage: test
+  tags:
+     - gcp
+  needs:
+    - test:unit
+  rules:
+    - if: '($TESTING_ENABLED == "false" || $SONAR_ENABLED == "false") && $CI_COMMIT_BRANCH == "main"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+      allow_failure: true
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: on_success
+    - when: on_success
+  script:
+     - echo 'Starting SonarQube Scan...'
+     - $DEPENDENCY_INSTALL
+     - |
+       if [ "$CI_COMMIT_REF_NAME" = "develop" ]; then
+         sonar-scanner \
+            -Dsonar.projectKey="${CI_PROJECT_NAME}-dev" \
+            -Dsonar.sources=. \
+            -Dsonar.projectVersion="${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}" \
+            -Dsonar.host.url="${SONAR_URL}" \
+            -Dsonar.login="${SONAR_TOKEN}" \
+            -Dsonar.qualitygate.wait=true
+         echo "Report URL - ${SONAR_URL}dashboard?id=${CI_PROJECT_NAME}-dev"
+       elif [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+          sonar-scanner \
+             -Dsonar.projectKey="${CI_PROJECT_NAME}" \
+             -Dsonar.sources=. \
+             -Dsonar.projectVersion="${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}" \
+             -Dsonar.host.url="${SONAR_URL}" \
+             -Dsonar.login="${SONAR_TOKEN}" \
+             -Dsonar.qualitygate.wait=true
+          echo "Report URL - ${SONAR_URL}dashboard?id=${CI_PROJECT_NAME}"
+       else
+          echo "Skipping SonarQube scan: Not on main or develop branch."
+       fi
+
+test:trivy:
+  stage: test
+  tags:
+    - gcp
+  needs:
+    - job: test:sonarqube
+      optional: true
+  rules:
+    - if: '$TESTING_ENABLED == "false" && $CI_COMMIT_BRANCH == "main"'
+      when: never  
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+      allow_failure: true
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: on_success
+    - when: on_success
+  script:
+    - echo "Starting trivy filesystem scan..."
     - |
-      if [ -z "$SSH_PRIVATE_KEY" ]; then
-        echo "ERROR: SSH_PRIVATE_KEY variable is missing in GitLab CI/CD settings."
-        exit 1
+      #!/bin/bash
+      set +e  # disable exit-on-error, handle manually
+      overall_exit_code=0
+      
+      echo
+      for file in $(ls | grep -i '^dockerfile'); do
+        echo "############################### Scanning: $file ###############################"
+        echo ''
+        if [[ $file == docker* ]];then
+          echo "Please remove $file from your repository, and rename it with proper format like: Dockerfile-dev, Dockerfile-* ."
+          exit 1
+        fi
+        if [[ $file != Dockerfile ]];then
+          mv $file Dockerfile
+        fi
+        script -q -e -c "trivy config --exit-code 1 --severity CRITICAL,HIGH,LOW,MEDIUM ."
+        exit_code=$?
+        if [[ $exit_code -ne 0 ]]; then
+          echo "Vulnerabilities found in $file"
+          overall_exit_code=1
+        fi
+        if [[ $file != Dockerfile ]];then
+          mv Dockerfile $file
+        fi
+      done
+      echo ''
+      echo "************************************** Scanning file System **************************************"
+      echo ''
+      script -q -e -c "trivy fs --exit-code 1 --severity CRITICAL,HIGH,LOW,MEDIUM ."
+      exit_code=$?
+      if [[ $exit_code -ne 0 ]]; then
+        echo "Vulnerabilities found in filesystem scan"
+        overall_exit_code=1
       fi
-      if [ -z "$SSH_HOST" ]; then
-        echo "ERROR: SSH_HOST variable is missing in GitLab CI/CD settings."
-        exit 1
-      fi
-      if [ -z "$SSH_USER" ]; then
-        echo "ERROR: SSH_USER variable is missing in GitLab CI/CD settings."
-        exit 1
-      fi
-    - eval $(ssh-agent -s)
-    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
-    - mkdir -p ~/.ssh
-    - chmod 700 ~/.ssh
-    - ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+      exit $overall_exit_code
+
+test:checkov:
+  stage: test
+  tags:
+    - gcp
+  needs:
+    - test:trivy
+  rules:
+    - if: '$TESTING_ENABLED == "false" && $CI_COMMIT_BRANCH == "main"'
+      when: never  
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+      allow_failure: true
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: on_success
+    - when: on_success
+  script:
+    - script -q -c 'checkov -d . --framework all --enable-secret-scan-all-files ; echo $? > CKVEXIT'
+    - exit $(cat CKVEXIT)
+
+test:zap:
+  stage: test
+  tags:
+    - gcp
+  needs:
+    - job: test:checkov
+  rules:
+    - if: '$TESTING_ENABLED == "false" && $CI_COMMIT_BRANCH == "main"'
+      when: never  
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+      allow_failure: true
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: on_success
+    - when: on_success
   script:
     - |
-      ssh $SSH_USER@$SSH_HOST "
-        cd /opt/fieldtrack/app
-        
-        # Fetch latest code from the remote (assumes the server's remote is configured)
-        git fetch --all
-        git reset --hard origin/develop
-        
-        # Rebuild and start the containers using the production compose file
-        docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
-        
-        # Run database migrations inside the app container
-        docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T app alembic upgrade head
-      "
+      if [ "$CI_COMMIT_REF_NAME" = "develop" ]; then
+        echo "************************************** ZAP Scanning DEV **************************************"
+        echo "Starting ZAP scan for dev environment with target- $TARGET_URL_DEV."
+        cd /home/$Default_Username/script/ && ./zap.sh "$TARGET_URL_DEV" "$SCAN_TYPE" > zap_output.log 2>&1
+        cat zap_output.log
+        FAIL_NEW=$(grep -o 'FAIL-NEW: [0-9]\+' zap_output.log | awk '{print $2}')
+        FAIL_INPROG=$(grep -o 'FAIL-INPROG: [0-9]\+' zap_output.log | awk '{print $2}')
+        rm -rf zap_output.log
+        echo "Summary for DEV: FAIL-NEW=$FAIL_NEW, FAIL-INPROG=$FAIL_INPROG"
+        if [ "$FAIL_NEW" -gt 0 ] || [ "$FAIL_INPROG" -gt 0 ]; then
+          echo "ZAP scan failed for dev environment"
+          exit 1
+        else
+          echo "ZAP scan passed for dev environment"
+        fi
+      fi
+    - |
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        echo "************************************** ZAP Scanning STAGING **************************************"
+        echo "Starting ZAP scan for staging environment with target- $TARGET_URL_STAGING."
+        cd /home/$Default_Username/script/ && ./zap.sh "$TARGET_URL_STAGING" "$SCAN_TYPE" > zap_output.log 2>&1
+        cat zap_output.log
+        FAIL_NEW=$(grep -o 'FAIL-NEW: [0-9]\+' zap_output.log | awk '{print $2}')
+        FAIL_INPROG=$(grep -o 'FAIL-INPROG: [0-9]\+' zap_output.log | awk '{print $2}')
+        echo "Summary for STAGING: FAIL-NEW=$FAIL_NEW, FAIL-INPROG=$FAIL_INPROG"
+        rm -rf zap_output.log
+        if [ "$FAIL_NEW" -gt 0 ] || [ "$FAIL_INPROG" -gt 0 ]; then
+          echo "ZAP scan failed for staging environment"
+          exit 1
+        else
+          echo "ZAP scan passed for staging environment"
+        fi
+        echo ''
+        echo ''
+        echo "************************************** ZAP Scanning PROD Skip... **************************************"
+        echo ''
+        # echo "Starting ZAP scan for production environment with target- $TARGET_URL_PROD."
+        # cd /home/$Default_Username/script/ && ./zap.sh "$TARGET_URL_PROD" "$SCAN_TYPE" > zap_output.log 2>&1
+        # cat zap_output.log
+        # FAIL_NEW=$(grep -o 'FAIL-NEW: [0-9]\+' zap_output.log | awk '{print $2}')
+        # FAIL_INPROG=$(grep -o 'FAIL-INPROG: [0-9]\+' zap_output.log | awk '{print $2}')
+        # echo "Summary for PROD: FAIL-NEW=$FAIL_NEW, FAIL-INPROG=$FAIL_INPROG"
+        # rm -rf zap_output.log
+        # if [ "$FAIL_NEW" -gt 0 ] || [ "$FAIL_INPROG" -gt 0 ]; then
+        #   echo "ZAP scan failed for production environment"
+        #   exit 1
+        # else
+        #   echo "ZAP scan passed for production environment"
+        # fi
+      fi
+
+Build-&-Deployment-Dev:
+  stage: dev
+  tags:
+    - gcp
+  extends: .env
+  needs: 
+    - job: test:zap
+      optional: true
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+      when: on_success
+    - when: never
+  script:
+    - echo "Deploying on dev server."
+    - COMPOSE_DEV=$(echo $COMPOSE_DEV | tr '[A-Z]' '[a-z]')
+    - |
+      api=$(curl -X GET "https://gitlab.thewitslab.com/api/v4/projects/$CI_PROJECT_ID" -H "Private-Token: $GITLAB_ACCESS_TOKEN")
+      CLIENT_NAME=$(echo $api | jq '.namespace.name' | sed 's/"//g' | sed s/WIL-//g | sed s/WIL_//g | tr '[A-Z]' '[a-z]' | sed 's/_/-/g')
+      inputString=$(echo $CI_PROJECT_NAME | tr '[A-Z]' '[a-z]' | sed 's/_/-/g')
+      original_string=$inputString
+      original_string=$(echo $original_string | tr '[A-Z]' '[a-z]')
+      if [[ $original_string = wil* ]];then
+        inputString=$(echo $original_string | sed 's/wil//')
+      fi
+      NAME="${CLIENT_NAME%%-*}"
+      NEW_CLIENT_NAME=$(echo $CLIENT_NAME | sed 's/'$NAME-'//g')
+      NEW_NAME="${NEW_CLIENT_NAME%%-*}"
+      project_name=$(echo $inputString | cut -d'-' -f1-2)
+      if [[ $NEW_NAME == $project_name  ]];then
+        PROJECT_NAME=$project_name
+      else
+        validation=$(echo $NEW_NAME | cut -d'-' -f1)
+        validation_Repo=$(echo $project_name | cut -d'-' -f1)
+        if [[ $validation ==  $validation_Repo ]];then
+          project_name=$(echo $project_name | sed 's/'$validation-'//g')
+        fi
+        PROJECT_NAME=$NEW_NAME-$project_name
+      fi
+    - |
+      if [[ $PROJECT_NAME == *"--"* ]];then
+        PROJECT_NAME=$(echo $PROJECT_NAME | sed 's/-//')
+      fi
+      if [[ $PROJECT_NAME == "-"* ]];then
+        PROJECT_NAME=$(echo $PROJECT_NAME | sed 's/-//')
+      fi
+    - |
+      if [[ ! -z $DOMAIN ]];then
+        PROJECT_NAME=$DOMAIN
+        echo "Deployment is going through custom domain."
+      fi
+    - |
+      ssh $DEV_SERVER_USER@$DEV_HOST "
+        if [[ -d /home/$DEV_SERVER_USER/backend/"WIL-"$CI_PROJECT_NAME"-dev" ]]; then
+          cd /home/$DEV_SERVER_USER/backend/"WIL-"$CI_PROJECT_NAME"-dev"
+          docker-compose -f $COMPOSE_DEV down
+          cd && rm -rf ./backend/"WIL-"$CI_PROJECT_NAME"-dev"
+        fi "
+    - ssh $DEV_SERVER_USER@$DEV_HOST "mkdir -p ./backend/"WIL-"$CI_PROJECT_NAME"-dev""
+    - scp -r * .env $DEV_SERVER_USER@$DEV_HOST:/home/$DEV_SERVER_USER/backend/"WIL-"$CI_PROJECT_NAME"-dev"
+    - ssh $DEV_SERVER_USER@$DEV_HOST "
+        cd /home/$DEV_SERVER_USER/backend/"WIL-"$CI_PROJECT_NAME"-dev" && docker-compose -f $COMPOSE_DEV up -d --build "
+    - ssh $DEV_SERVER_USER@$DEV_HOST "
+        cd /home/$DEV_SERVER_USER/backend/"WIL-"$CI_PROJECT_NAME"-dev" && docker-compose -f $COMPOSE_DEV exec -T cattle-feed-gatipay-backend-dev alembic upgrade head "
+    - aws configure set aws_access_key_id $AWS_ACCESS_KEY; aws configure set aws_secret_access_key $AWS_SECRET_KEY; aws configure set default.region $AWS_ZONE
+    - ssh $DEV_SERVER_USER@$DEV_HOST " ./scripts/nginx-backend.sh $PROJECT_NAME"-dev" $VAULT_TOKEN $PORT_DEV "
+    - echo "" > ~/.aws/config
+    - echo "" > ~/.aws/credentials
+    - echo "Docker compose up for dev complete."
+
+Build-&-Deployment-Stage:
+  stage: stage
+  tags:
+    - gcp
+  needs: 
+    - job: test:zap
+      optional: true
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $DEPLOYMENT_ON_STAGING_CLIENT != "true" && $DEPLOYMENT_ON_STAGING_EXTERNAL != "true"'
+      when: manual
+    - when: never
+  script:
+    - COMPOSE_STAGING=$(echo $COMPOSE_STAGING | tr '[A-Z]' '[a-z]')
+    - |
+      api=$(curl -X GET "https://gitlab.thewitslab.com/api/v4/projects/$CI_PROJECT_ID" -H "Private-Token: $GITLAB_ACCESS_TOKEN")
+      CLIENT_NAME=$(echo $api | jq '.namespace.name' | sed 's/"//g' | sed s/WIL-//g | sed s/WIL_//g | tr '[A-Z]' '[a-z]' | sed 's/_/-/g')
+      inputString=$(echo $CI_PROJECT_NAME | tr '[A-Z]' '[a-z]' | sed 's/_/-/g')
+      original_string=$inputString
+      original_string=$(echo $original_string | tr '[A-Z]' '[a-z]')
+      if [[ $original_string = wil* ]];then
+        inputString=$(echo $original_string | sed 's/wil//')
+      fi
+      NAME="${CLIENT_NAME%%-*}"
+      NEW_CLIENT_NAME=$(echo $CLIENT_NAME | sed 's/'$NAME-'//g')
+      NEW_NAME="${NEW_CLIENT_NAME%%-*}"
+      project_name=$(echo $inputString | cut -d'-' -f1-2)
+      if [[ $NEW_NAME == $project_name  ]];then
+        PROJECT_NAME=$project_name
+      else
+        validation=$(echo $NEW_NAME | cut -d'-' -f1)
+        validation_Repo=$(echo $project_name | cut -d'-' -f1)
+        if [[ $validation ==  $validation_Repo ]];then
+          project_name=$(echo $project_name | sed 's/'$validation-'//g')
+        fi
+        PROJECT_NAME=$NEW_NAME-$project_name
+      fi
+    - |
+      if [[ $PROJECT_NAME == *"--"* ]];then
+        PROJECT_NAME=$(echo $PROJECT_NAME | sed 's/-//')
+      fi
+      if [[ $PROJECT_NAME == "-"* ]];then
+        PROJECT_NAME=$(echo $PROJECT_NAME | sed 's/-//')
+      fi
+    - |
+      if [[ ! -z $DOMAIN ]];then
+        PROJECT_NAME=$DOMAIN
+        echo "Deployment is going through custom domain."
+      fi
+    - Path=$(pwd)
+    - bash -c '(cd /home/$Default_Username/script && ./env_script.sh staging $CI_PROJECT_NAME"-staging" $VAULT_TOKEN > /dev/null)'
+    - mv /home/$Default_Username/script/.env $Path && cd $Path
+    - |
+      ssh $Staging_User@$Staging_Server "
+        if [[ -d ./backend/"WIL-"$CI_PROJECT_NAME"-staging" ]]; then
+          cd /home/$Staging_User/backend/"WIL-"$CI_PROJECT_NAME"-staging"
+          docker compose -f $COMPOSE_STAGING down --remove-orphans
+          cd .. && rm -rf "WIL-"$CI_PROJECT_NAME"-staging"
+        fi "
+    - ssh $Staging_User@$Staging_Server "mkdir -p ./backend/"WIL-"$CI_PROJECT_NAME"-staging""
+    - scp -r * .env $Staging_User@$Staging_Server:/home/$Staging_User/backend/"WIL-"$CI_PROJECT_NAME"-staging"
+    - ssh $Staging_User@$Staging_Server "
+        cd /home/$Staging_User/backend/"WIL-"$CI_PROJECT_NAME"-staging" && docker compose -f $COMPOSE_STAGING up -d --build "
+    - ssh $Staging_User@$Staging_Server " ./scripts/nginx-backend.sh $PROJECT_NAME"-staging" $VAULT_TOKEN $PORT_STAGING "
+    - aws configure set aws_access_key_id $AWS_ACCESS_KEY; aws configure set aws_secret_access_key $AWS_SECRET_KEY; aws configure set default.region $AWS_ZONE
+    - cd /home/$Staging_User/script && ./dns-nginx-staging.sh $PROJECT_NAME"-staging" $VAULT_TOKEN
+    - echo "" > ~/.aws/config
+    - echo "" > ~/.aws/credentials
+    - echo "Docker compose up for staging complete."

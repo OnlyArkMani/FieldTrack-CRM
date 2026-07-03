@@ -152,7 +152,7 @@ class VisitService:
         visit = Visit(
             employee_id=user.id,
             farmer_id=farmer.id,
-            plan_item_id=payload.plan_item_id,
+            plan_item_id=plan_item.id if plan_item is not None else None,
             check_in_at=now,
             check_in_lat=payload.lat,
             check_in_lng=payload.lng,

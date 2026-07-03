@@ -36,7 +36,7 @@ from app.core.exceptions import (
     token_invalid,
     user_inactive,
 )
-from app.core.redis import Keys, get_redis
+from app.core.redis import Keys, clear_login_attempts, get_redis, record_login_failure
 from app.core.security import (
     blacklist_token,
     create_access_token,
@@ -76,11 +76,15 @@ class AuthService:
         user = await self.users.get_by_email(email)
         if user is None:
             verify_password(password, _DUMMY_HASH)  # burn equal time
+            await record_login_failure(ip)
             raise invalid_credentials()
         if not verify_password(password, user.password_hash):
+            await record_login_failure(ip)
             raise invalid_credentials()
         if not user.is_active:
             raise user_inactive()
+
+        await clear_login_attempts(ip)
 
         access_token, _, _ = create_access_token(user.id, user.role.value)
         refresh_token, _, refresh_exp = create_refresh_token(user.id)
