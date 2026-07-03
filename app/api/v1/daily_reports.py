@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -21,7 +22,7 @@ from app.core.dependencies import (
     get_db,
 )
 from app.core.exceptions import forbidden, not_found
-from app.models.crm import DailyReport, VisitPlan, VisitPlanItem
+from app.models.crm import DailyReport, Farmer, Visit, VisitPlan, VisitPlanItem
 from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.common import CursorPage, decode_cursor, encode_cursor
@@ -54,10 +55,13 @@ class ManagerCommentRequest(BaseModel):
 class VisitSummaryItem(BaseModel):
     id: int
     farmer_name: str
+    village: str | None = None
+    district: str | None = None
     purpose: str | None
     check_in_at: Any
     check_out_at: Any
     lead_status: str | None
+    meeting_highlights: str | None = None
 
 
 class OrderSummaryItem(BaseModel):
@@ -66,6 +70,8 @@ class OrderSummaryItem(BaseModel):
     bags_count: int
     delivery_date: date
     payment_mode: str | None
+    price_per_bag: Decimal | None = None
+    total_value: Decimal | None = None
 
 
 class FollowUpSummaryItem(BaseModel):
@@ -288,6 +294,11 @@ async def post_manager_comment(
 
 # -- Admin: archive -----------------------------------------------------------
 
+_ARCHIVE_MAX_RANGE_DAYS = 731  # ~24 months (checklist #55) — was mistakenly
+# capped at 31 days, a limit that belongs to the unrelated /reports/generate
+# endpoint (kept fast for ad-hoc report generation), not this archive.
+
+
 @router.get("/archive", response_model=CursorPage[ArchiveDsrItem])
 async def archive(
     user: CurrentUser,
@@ -297,6 +308,9 @@ async def archive(
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
     status: str | None = Query(default=None),
+    search: str | None = Query(
+        default=None, description="Customer/farmer name — matches any visit that day"
+    ),
     cursor: str | None = Query(default=None),
     limit: int = Query(default=30, ge=1, le=100),
 ) -> CursorPage[ArchiveDsrItem]:
@@ -304,16 +318,16 @@ async def archive(
 
     ADMIN: all employees, optionally filtered by team_id / employee_id.
     SUPERVISOR: always restricted to their own team.
-    Max 31-day window (400 otherwise)."""
-    from sqlalchemy import func
+    Max ~24-month window (400 otherwise)."""
+    from sqlalchemy import exists, func
 
     if date_from and date_to:
         if date_from > date_to:
             raise HTTPException(status_code=400, detail="date_from must be before date_to")
-        if (date_to - date_from).days > 31:
+        if (date_to - date_from).days > _ARCHIVE_MAX_RANGE_DAYS:
             raise HTTPException(
                 status_code=400,
-                detail="Date range cannot exceed 31 days.",
+                detail="Date range cannot exceed 24 months.",
                 headers={"X-Error-Code": "DATE_RANGE_TOO_LARGE"},
             )
 
@@ -340,6 +354,20 @@ async def archive(
         base_filters.append(DailyReport.report_date <= date_to)
     if status:
         base_filters.append(DailyReport.status == status.upper())
+    if search:
+        # A DSR row has no farmer of its own (it's per employee-day) — match
+        # if any visit that employee logged that day was with a matching farmer.
+        # (Simple UTC-date comparison — same precision the rest of this
+        # archive already works at; not worth a business-timezone-aware
+        # bucketing here.)
+        base_filters.append(
+            exists().where(
+                Visit.employee_id == DailyReport.employee_id,
+                func.date(Visit.check_in_at) == DailyReport.report_date,
+                Visit.farmer_id == Farmer.id,
+                Farmer.name.ilike(f"%{search.strip()}%"),
+            )
+        )
 
     total = (
         await db.execute(
@@ -437,9 +465,14 @@ async def _attendance_times(
 def _build_detail_response(detail: dict) -> DsrDetailResponse:
     report = detail["report"]
     base = DailyReportResponse.model_validate(report)
+    # NOTE: manager_comment is already a field on DailyReportResponse (added
+    # in migration 0006), so it's already in base.model_dump() — passing it
+    # again as an explicit kwarg here previously caused a guaranteed
+    # `TypeError: got multiple values for keyword argument 'manager_comment'`
+    # on every single call to this endpoint. Pre-existing bug, unrelated to
+    # this change — found via live testing, fixed here.
     return DsrDetailResponse(
         **base.model_dump(),
-        manager_comment=getattr(report, "manager_comment", None),
         visits=[VisitSummaryItem(**v) for v in detail["visits"]],
         orders=[OrderSummaryItem(**o) for o in detail["orders"]],
         follow_ups=[FollowUpSummaryItem(**f) for f in detail["follow_ups"]],

@@ -18,7 +18,7 @@ import Spinner from '@/components/ui/Spinner';
 import { Input, Select } from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 
-const MAX_RANGE_DAYS = 31;
+const MAX_RANGE_DAYS = 731;
 
 // ── Status helpers ────────────────────────────────────────────────────────────
 
@@ -42,6 +42,12 @@ function LateBadge() {
       LATE
     </span>
   );
+}
+
+function money(v) {
+  if (v == null) return '—';
+  const n = Number(v);
+  return `₹${Number.isInteger(n) ? n : n.toFixed(2)}`;
 }
 
 function LeadPills({ h, w, c }) {
@@ -229,6 +235,7 @@ function RangeView({ isAdmin, teams }) {
   const [start, setStart] = useState(dayjs().subtract(6, 'day').format('YYYY-MM-DD'));
   const [end, setEnd] = useState(dayjs().format('YYYY-MM-DD'));
   const [teamId, setTeamId] = useState('');
+  const [search, setSearch] = useState('');
 
   const rangeTooLong = dayjs(end).diff(dayjs(start), 'day') > MAX_RANGE_DAYS;
 
@@ -237,6 +244,7 @@ function RangeView({ isAdmin, teams }) {
     date_from: start,
     date_to: end,
     ...(isAdmin && teamId ? { team_id: teamId } : {}),
+    ...(search.trim() ? { search: search.trim() } : {}),
   });
   const items = data?.items ?? [];
 
@@ -274,11 +282,19 @@ function RangeView({ isAdmin, teams }) {
             </Select>
           </div>
         )}
+        <div className="w-56">
+          <Input
+            label="Farmer / customer"
+            placeholder="Search by name…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
       </div>
-      <p className="mb-3 text-xs italic text-text-secondary">Max 31 days per range.</p>
+      <p className="mb-3 text-xs italic text-text-secondary">Max 24 months per range.</p>
 
       {rangeTooLong ? (
-        <p className="py-8 text-center text-sm text-danger">Please select a range of 31 days or less.</p>
+        <p className="py-8 text-center text-sm text-danger">Please select a range of 24 months or less.</p>
       ) : isLoading ? (
         <div className="flex justify-center py-12"><Spinner /></div>
       ) : items.length === 0 ? (
@@ -340,10 +356,33 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
               )}
             </div>
 
+            {(dsr.check_in_at || dsr.check_out_at) && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-card bg-bg px-3 py-2 text-xs text-text-secondary">
+                {dsr.check_in_at && (
+                  <span>
+                    <span className="text-text-primary font-medium">In:</span>{' '}
+                    {dayjs(dsr.check_in_at).format('HH:mm')}
+                    {dsr.check_in_lat != null && dsr.check_in_lng != null && (
+                      <span className="text-text-secondary">
+                        {' '}({dsr.check_in_lat.toFixed(4)}, {dsr.check_in_lng.toFixed(4)})
+                      </span>
+                    )}
+                  </span>
+                )}
+                {dsr.check_out_at && (
+                  <span>
+                    <span className="text-text-primary font-medium">Out:</span>{' '}
+                    {dayjs(dsr.check_out_at).format('HH:mm')}
+                  </span>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-3 gap-2">
               {[
                 { label: 'Visits', val: dsr.visits_completed },
                 { label: 'Orders', val: dsr.orders_captured },
+                { label: 'Order Value', val: dsr.orders_value != null ? money(dsr.orders_value) : '—' },
                 { label: 'Follow-ups', val: dsr.follow_ups_scheduled },
                 { label: 'Hot Leads', val: dsr.hot_leads, color: 'text-danger' },
                 { label: 'Warm Leads', val: dsr.warm_leads, color: 'text-primary' },
@@ -359,18 +398,28 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
             {dsr.visits?.length > 0 && (
               <Section title={`Visits (${dsr.visits.length})`}>
                 {dsr.visits.map((v) => (
-                  <RowItem key={v.id}>
-                    <span className="font-medium text-text-primary truncate">{v.farmer_name}</span>
-                    <span className="text-xs text-text-secondary shrink-0">
-                      {v.purpose?.replace(/_/g, ' ') || 'Visit'}
-                      {v.lead_status && (
-                        <span className={`ml-2 font-semibold ${
-                          v.lead_status === 'HOT' ? 'text-danger' :
-                          v.lead_status === 'WARM' ? 'text-primary' : 'text-secondary'
-                        }`}>{v.lead_status}</span>
-                      )}
-                    </span>
-                  </RowItem>
+                  <div key={v.id} className="rounded-btn bg-bg px-3 py-2 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-text-primary truncate">{v.farmer_name}</span>
+                      <span className="text-xs text-text-secondary shrink-0">
+                        {v.purpose?.replace(/_/g, ' ') || 'Visit'}
+                        {v.lead_status && (
+                          <span className={`ml-2 font-semibold ${
+                            v.lead_status === 'HOT' ? 'text-danger' :
+                            v.lead_status === 'WARM' ? 'text-primary' : 'text-secondary'
+                          }`}>{v.lead_status}</span>
+                        )}
+                      </span>
+                    </div>
+                    {(v.village || v.district) && (
+                      <div className="text-[11px] text-text-secondary">
+                        {[v.village, v.district].filter(Boolean).join(', ')}
+                      </div>
+                    )}
+                    {v.meeting_highlights && (
+                      <p className="text-xs italic text-text-primary">{v.meeting_highlights}</p>
+                    )}
+                  </div>
                 ))}
               </Section>
             )}
@@ -378,12 +427,19 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
             {dsr.orders?.length > 0 && (
               <Section title={`Orders (${dsr.orders.length})`}>
                 {dsr.orders.map((o) => (
-                  <RowItem key={o.id}>
-                    <span className="font-medium text-text-primary truncate">{o.farmer_name}</span>
-                    <span className="text-xs font-bold text-success shrink-0">
-                      {o.bags_count} bags · {dayjs(o.delivery_date).format('DD MMM')}
-                    </span>
-                  </RowItem>
+                  <div key={o.id} className="rounded-btn bg-bg px-3 py-2 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-text-primary truncate">{o.farmer_name}</span>
+                      <span className="text-xs font-bold text-success shrink-0">
+                        {o.bags_count} bags · {dayjs(o.delivery_date).format('DD MMM')}
+                      </span>
+                    </div>
+                    {o.price_per_bag != null && (
+                      <div className="text-[11px] text-text-secondary">
+                        {money(o.price_per_bag)}/bag · Total {money(o.total_value)}
+                      </div>
+                    )}
+                  </div>
                 ))}
               </Section>
             )}
@@ -437,6 +493,7 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
           </>
         )}
       </div>
+         
     </div>
   );
 }

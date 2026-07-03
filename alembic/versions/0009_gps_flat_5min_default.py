@@ -6,14 +6,14 @@ an intentional exception to protect device battery late in a shift. Existing
 per-team rows are left untouched; this only changes what new teams (and the
 "no row yet" fallback served by GET /gps-config/my) get by default.
 
-Revision: 0008
-Prev: 0007_visit_photos
+Revision: 0009
+Prev: 0008_order_approval
 """
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "0008"
-down_revision = "0007"
+revision = "0009"
+down_revision = "0008"
 branch_labels = None
 depends_on = None
 

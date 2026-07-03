@@ -36,6 +36,7 @@ from app.models.crm import (
     FollowUp,
     Lead,
     Visit,
+    VisitNote,
     VisitOrder,
     VisitPlan,
     VisitPlanItem,
@@ -116,9 +117,13 @@ async def _generate_in_session(
 
     check_in_time: datetime | None = None
     check_out_time: datetime | None = None
+    check_in_lat: float | None = None
+    check_in_lng: float | None = None
     for s in sessions:
         if s.type == SessionType.START and check_in_time is None:
             check_in_time = s.timestamp
+            check_in_lat = s.lat
+            check_in_lng = s.lng
         if s.type == SessionType.END:
             check_out_time = s.timestamp
 
@@ -174,6 +179,12 @@ async def _generate_in_session(
     )
     orders_today = orders_q.all()
     orders_captured = len(orders_today)
+    order_values = [
+        r.VisitOrder.bags_count * r.VisitOrder.price_per_bag
+        for r in orders_today
+        if r.VisitOrder.price_per_bag is not None
+    ]
+    orders_value = sum(order_values) if order_values else None
 
     # ── e) Lead changes today — grouped by status ─────────────────────────
     leads_q = await db.execute(
@@ -214,10 +225,15 @@ async def _generate_in_session(
             visits_completed=visits_completed_count,
             visits_skipped=visits_skipped_count,
             orders_captured=orders_captured,
+            orders_value=orders_value,
             hot_leads=hot_leads,
             warm_leads=warm_leads,
             cold_leads=cold_leads,
             follow_ups_scheduled=follow_ups_scheduled,
+            check_in_at=check_in_time,
+            check_out_at=check_out_time,
+            check_in_lat=check_in_lat,
+            check_in_lng=check_in_lng,
             is_late=is_late,
             status="DRAFT",
         )
@@ -229,10 +245,15 @@ async def _generate_in_session(
                 "visits_completed": visits_completed_count,
                 "visits_skipped": visits_skipped_count,
                 "orders_captured": orders_captured,
+                "orders_value": orders_value,
                 "hot_leads": hot_leads,
                 "warm_leads": warm_leads,
                 "cold_leads": cold_leads,
                 "follow_ups_scheduled": follow_ups_scheduled,
+                "check_in_at": check_in_time,
+                "check_out_at": check_out_time,
+                "check_in_lat": check_in_lat,
+                "check_in_lng": check_in_lng,
                 # is_late: only set to True, never downgrade back to False
                 "is_late": text("daily_reports.is_late OR EXCLUDED.is_late"),
             },
@@ -418,10 +439,18 @@ async def get_dsr_with_details(
 
     day_start, day_end = _day_bounds_utc(report_date)
 
-    # Completed visits with farmer name + purpose + lead status chip
+    # Completed visits with farmer name/location + purpose + lead status chip
+    # + meeting highlights (checklist #47 location, #48 highlights).
     visits_q = await db.execute(
-        select(Visit, Farmer.name.label("farmer_name"))
+        select(
+            Visit,
+            Farmer.name.label("farmer_name"),
+            Farmer.village.label("village"),
+            Farmer.district.label("district"),
+            VisitNote.meeting_highlights.label("meeting_highlights"),
+        )
         .join(Farmer, Visit.farmer_id == Farmer.id, isouter=True)
+        .outerjoin(VisitNote, VisitNote.visit_id == Visit.id)
         .where(
             Visit.employee_id == employee_id,
             Visit.status == "COMPLETED",
@@ -481,10 +510,13 @@ async def get_dsr_with_details(
             {
                 "id": r.Visit.id,
                 "farmer_name": r.farmer_name or "Unknown Farmer",
+                "village": r.village,
+                "district": r.district,
                 "purpose": r.Visit.purpose,
                 "check_in_at": r.Visit.check_in_at,
                 "check_out_at": r.Visit.check_out_at,
                 "lead_status": lead_status_map.get(r.Visit.farmer_id),
+                "meeting_highlights": r.meeting_highlights,
             }
             for r in visits_rows
         ],
@@ -495,6 +527,12 @@ async def get_dsr_with_details(
                 "bags_count": r.VisitOrder.bags_count,
                 "delivery_date": r.VisitOrder.delivery_date,
                 "payment_mode": r.VisitOrder.payment_mode,
+                "price_per_bag": r.VisitOrder.price_per_bag,
+                "total_value": (
+                    r.VisitOrder.bags_count * r.VisitOrder.price_per_bag
+                    if r.VisitOrder.price_per_bag is not None
+                    else None
+                ),
             }
             for r in orders_rows
         ],
