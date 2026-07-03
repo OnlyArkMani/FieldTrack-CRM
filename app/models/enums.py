@@ -10,6 +10,16 @@ class UserRole(str, enum.Enum):
     EMPLOYEE = "EMPLOYEE"
 
 
+class CustomerType(str, enum.Enum):
+    """Kind of CRM customer. FARMER is the historical default (all pre-0008
+    rows). FPO = Farmer Producer Organization, VLCC = Village Level Collection
+    Centre. Stored on the ``customers`` table (formerly ``farmers``)."""
+
+    FARMER = "FARMER"
+    FPO = "FPO"
+    VLCC = "VLCC"
+
+
 class AttendanceStatus(str, enum.Enum):
     PRESENT = "PRESENT"
     ABSENT = "ABSENT"

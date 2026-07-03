@@ -7,14 +7,20 @@ AUTHZ:
 - Create/update/lead-status are available to any field user for their own
   team's farmers; the service decides what team a new farmer lands in.
 """
+import csv
+import io
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import CurrentUser, get_db
+from app.core.dependencies import CurrentUser, get_current_admin, get_db
+from app.core.exceptions import bad_request
+from app.models.user import User
 from app.schemas.common import CursorPage
 from app.schemas.crm import (
+    CustomerImportResult,
     FarmerCreate,
     FarmerDetailResponse,
     FarmerListItem,
@@ -30,6 +36,20 @@ from app.services.farmer_service import FarmerService
 
 router = APIRouter(prefix="/farmers", tags=["farmers"])
 
+# Columns of the bulk-import template (order preserved in the .xlsx/.csv).
+IMPORT_COLUMNS = [
+    "name",
+    "customer_type",
+    "phone",
+    "village",
+    "district",
+    "address",
+    "total_cattle",
+    "current_feed_brand",
+    "team_id",
+    "notes",
+]
+
 
 @router.get("/ping")
 async def ping() -> dict:
@@ -43,6 +63,9 @@ async def list_farmers(
     cursor: str | None = Query(default=None, description="Opaque forward cursor"),
     limit: int = Query(default=20, ge=1, le=100),
     team_id: int | None = Query(default=None, description="Admin-only team filter"),
+    customer_type: str | None = Query(
+        default=None, description="Filter by type: FARMER | FPO | VLCC"
+    ),
     lead_status: str | None = Query(
         default=None, description="Filter by current lead status: HOT | WARM | COLD"
     ),
@@ -50,8 +73,12 @@ async def list_farmers(
         default=None, max_length=200, description="Match name or village"
     ),
 ) -> CursorPage[FarmerListItem]:
-    """Paginated farmer list with the CURRENT lead status joined per row.
-    Supervisor/employee see only their team's farmers; admin sees all."""
+    """Paginated customer list with the CURRENT lead status joined per row.
+    Supervisor/employee see only their team's customers; admin sees all.
+    Optional customer_type filter powers the [All][Farmers][FPOs][VLCCs] tabs."""
+    ct = customer_type.strip().upper() if customer_type else None
+    if ct and ct not in ("FARMER", "FPO", "VLCC"):
+        raise bad_request("customer_type must be FARMER, FPO or VLCC")
     return await FarmerService(db).list_farmers(
         user=user,
         cursor=cursor,
@@ -59,7 +86,84 @@ async def list_farmers(
         team_id=team_id,
         lead_status=lead_status.strip().upper() if lead_status else None,
         search=search,
+        customer_type=ct,
     )
+
+
+# ── Bulk import (admin preload) ──────────────────────────────────────────
+@router.get("/import/template")
+async def import_template(
+    admin: Annotated[User, Depends(get_current_admin)],
+) -> StreamingResponse:
+    """Download the blank customer-import spreadsheet (CSV). Fill it and upload
+    it to POST /farmers/import. customer_type must be FARMER, FPO or VLCC."""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(IMPORT_COLUMNS)
+    writer.writerow(
+        ["Ramesh Patil", "FARMER", "9876543210", "Shirur", "Pune", "", "8", "AmulFeed", "", ""]
+    )
+    writer.writerow(
+        ["Shirur Dairy FPO", "FPO", "9876500000", "Shirur", "Pune", "", "", "", "", ""]
+    )
+    writer.writerow(
+        ["Kendur VLCC", "VLCC", "9876511111", "Kendur", "Pune", "", "", "", "", ""]
+    )
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=customers_import_template.csv"
+        },
+    )
+
+
+@router.post("/import", response_model=CustomerImportResult)
+async def import_customers(
+    admin: Annotated[User, Depends(get_current_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: Annotated[UploadFile, File(description="CSV or XLSX, header row required")],
+    dry_run: bool = Query(
+        default=True,
+        description="true = validate and preview only; false = commit the insert",
+    ),
+) -> CustomerImportResult:
+    """Bulk-preload customers. Defaults to a dry run (validation preview);
+    pass dry_run=false to actually insert. Admin only."""
+    content = await file.read()
+    rows = _parse_import_file(file.filename or "", content)
+    return await FarmerService(db).import_customers(rows, user=admin, dry_run=dry_run)
+
+
+def _parse_import_file(filename: str, content: bytes) -> list[dict]:
+    """Parse an uploaded CSV or XLSX into a list of row dicts keyed by header."""
+    name = filename.lower()
+    if name.endswith(".xlsx") or name.endswith(".xlsm"):
+        try:
+            from openpyxl import load_workbook
+        except ImportError:  # pragma: no cover
+            raise bad_request("XLSX import needs openpyxl; upload a CSV instead")
+        wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        ws = wb.active
+        rows_iter = ws.iter_rows(values_only=True)
+        try:
+            header = [str(c).strip() if c is not None else "" for c in next(rows_iter)]
+        except StopIteration:
+            return []
+        out: list[dict] = []
+        for r in rows_iter:
+            if r is None or all(c is None or str(c).strip() == "" for c in r):
+                continue
+            out.append({header[i]: r[i] if i < len(r) else None for i in range(len(header))})
+        return out
+    # default: CSV / text
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = content.decode("latin-1")
+    reader = csv.DictReader(io.StringIO(text))
+    return [dict(r) for r in reader]
 
 
 @router.get("/{farmer_id}", response_model=FarmerDetailResponse)

@@ -19,6 +19,9 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+)
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy import (
     Float,
     ForeignKey,
     Index,
@@ -36,12 +39,29 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin
 
 
-class Farmer(Base, TimestampMixin):
-    """Customer/Farmer master record (the CRM's central entity)."""
+class Customer(Base, TimestampMixin):
+    """Customer master record (the CRM's central entity).
 
-    __tablename__ = "farmers"
+    Renamed from ``farmers`` in migration 0008 and given a ``customer_type``
+    discriminator (FARMER / FPO / VLCC). Child tables still carry a
+    ``farmer_id`` FK column that now references ``customers.id`` — the column
+    name is kept for wire/DB compatibility; ``Farmer`` remains an alias of this
+    class at the bottom of the module."""
+
+    __tablename__ = "customers"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    # Native PG enum ``customertype`` (created in migration 0008). Mapped with
+    # plain string members (not the Python enum class) so reads return
+    # "FARMER"/"FPO"/"VLCC" strings — matching the rest of the CRM's string
+    # discriminators and the Pydantic Literal wire types. create_type=False:
+    # Alembic owns the type's lifecycle, never metadata.create_all.
+    customer_type: Mapped[str] = mapped_column(
+        SAEnum("FARMER", "FPO", "VLCC", name="customertype"),
+        nullable=False,
+        default="FARMER",
+        server_default=text("'FARMER'"),
+    )
     team_id: Mapped[int | None] = mapped_column(
         ForeignKey("teams.id", ondelete="SET NULL")
     )
@@ -62,13 +82,17 @@ class Farmer(Base, TimestampMixin):
     visits: Mapped[list["Visit"]] = relationship(back_populates="farmer")
 
     __table_args__ = (
-        Index("ix_farmers_team_id", "team_id"),
-        Index("ix_farmers_created_by", "created_by"),
-        Index("ix_farmers_village", "village"),
+        Index("ix_customers_team_id", "team_id"),
+        Index("ix_customers_created_by", "created_by"),
+        Index("ix_customers_village", "village"),
+        Index("ix_customers_customer_type", "customer_type"),
     )
 
     def __repr__(self) -> str:
-        return f"<Farmer id={self.id} name={self.name!r} village={self.village!r}>"
+        return (
+            f"<Customer id={self.id} type={self.customer_type} "
+            f"name={self.name!r} village={self.village!r}>"
+        )
 
 
 class VisitPlan(Base):
@@ -108,7 +132,7 @@ class VisitPlanItem(Base):
     plan_id: Mapped[int | None] = mapped_column(
         ForeignKey("visit_plans.id", ondelete="CASCADE")
     )
-    farmer_id: Mapped[int | None] = mapped_column(ForeignKey("farmers.id"))
+    farmer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"))
     sequence_order: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     time_slot: Mapped[time_type | None] = mapped_column(Time)
     purpose: Mapped[str | None] = mapped_column(String(50))
@@ -136,7 +160,7 @@ class Visit(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     employee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
-    farmer_id: Mapped[int | None] = mapped_column(ForeignKey("farmers.id"))
+    farmer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"))
     plan_item_id: Mapped[int | None] = mapped_column(
         ForeignKey("visit_plan_items.id", ondelete="SET NULL")
     )  # null if unplanned visit
@@ -156,7 +180,7 @@ class Visit(Base, TimestampMixin):
         String(20), nullable=False, default="CHECKED_IN", server_default=text("'CHECKED_IN'")
     )  # CHECKED_IN / COMPLETED / ABANDONED
 
-    farmer: Mapped["Farmer | None"] = relationship(back_populates="visits")
+    farmer: Mapped["Customer | None"] = relationship(back_populates="visits")
     notes: Mapped[list["VisitNote"]] = relationship(
         back_populates="visit", cascade="all, delete-orphan"
     )
@@ -226,7 +250,7 @@ class LivestockProfile(Base):
     __tablename__ = "livestock_profiles"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    farmer_id: Mapped[int | None] = mapped_column(ForeignKey("farmers.id"))
+    farmer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"))
     visit_id: Mapped[int | None] = mapped_column(ForeignKey("visits.id"))
     total_cattle: Mapped[int | None] = mapped_column(Integer)
     breed: Mapped[str | None] = mapped_column(String(100))  # Sahiwal/Murrah/HF Cross/Gir/Local/Other
@@ -260,7 +284,7 @@ class VisitOrder(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     visit_id: Mapped[int | None] = mapped_column(ForeignKey("visits.id"))
-    farmer_id: Mapped[int | None] = mapped_column(ForeignKey("farmers.id"))
+    farmer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"))
     employee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     bags_count: Mapped[int] = mapped_column(Integer, nullable=False)
     delivery_date: Mapped[date_type] = mapped_column(Date, nullable=False)  # >= today+7 (service-validated)
@@ -295,7 +319,7 @@ class Lead(Base):
     __tablename__ = "leads"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    farmer_id: Mapped[int | None] = mapped_column(ForeignKey("farmers.id"))
+    farmer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"))
     employee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     visit_id: Mapped[int | None] = mapped_column(ForeignKey("visits.id"))
     status: Mapped[str] = mapped_column(String(20), nullable=False)  # HOT / WARM / COLD
@@ -320,7 +344,7 @@ class FollowUp(Base):
     __tablename__ = "follow_ups"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    farmer_id: Mapped[int | None] = mapped_column(ForeignKey("farmers.id"))
+    farmer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"))
     employee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     visit_id: Mapped[int | None] = mapped_column(
         ForeignKey("visits.id", ondelete="SET NULL")
@@ -429,3 +453,57 @@ class GpsConfig(Base):
 
     def __repr__(self) -> str:
         return f"<GpsConfig id={self.id} team_id={self.team_id}>"
+
+
+class VisitOrgAnswer(Base):
+    """Shared 5-question organisation form captured on FPO / VLCC visits.
+
+    Farmers keep the guided livestock form; FPO and VLCC customers answer one
+    common 5-question set instead. One row per visit (upserted). When
+    ``interested_in_supply`` is set with ``interested_bags`` > 0 the service
+    also writes a real ``visit_orders`` row so the interest flows through DSR,
+    reports and the manager dashboard exactly like a farmer order."""
+
+    __tablename__ = "visit_org_answers"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    visit_id: Mapped[int | None] = mapped_column(
+        ForeignKey("visits.id", ondelete="CASCADE")
+    )
+    farmer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"))
+    # Q1 — number of member farmers (FPO) / farmers pouring milk (VLCC)
+    member_count: Mapped[int | None] = mapped_column(Integer)
+    # Q2 — total cattle across members (approx)
+    total_cattle: Mapped[int | None] = mapped_column(Integer)
+    # Q3 — current feed brand / procurement channel
+    current_brand: Mapped[str | None] = mapped_column(String(200))
+    # Q4 — monthly feed requirement (bags/month)
+    monthly_bags: Mapped[int | None] = mapped_column(Integer)
+    # Q5 — interested in supply? -> bags requested (drives order capture)
+    interested_in_supply: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    interested_bags: Mapped[int | None] = mapped_column(Integer)
+    notes: Mapped[str | None] = mapped_column(Text)
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_visit_org_answers_visit_id", "visit_id"),
+        Index("ix_visit_org_answers_farmer_id", "farmer_id"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<VisitOrgAnswer id={self.id} visit_id={self.visit_id} "
+            f"interested={self.interested_in_supply}>"
+        )
+
+
+# ── Backwards-compat alias ───────────────────────────────────────────────
+# The table was renamed farmers -> customers in 0008, but a large amount of
+# service/repository code (and the mobile/web JSON contract) still refers to
+# "farmer". Keeping this alias lets that code keep importing ``Farmer`` while
+# new code uses the clearer ``Customer`` name.
+Farmer = Customer

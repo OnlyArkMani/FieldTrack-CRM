@@ -116,6 +116,7 @@ class LeadRepository:
                 self._next_fu_date_sq().label("fu_date"),
                 self._next_fu_time_sq().label("fu_time"),
                 User.name.label("employee_name"),
+                Farmer.customer_type.label("customer_type"),
             )
             .join(latest, Lead.id == latest.c.mid)
             .join(Farmer, Farmer.id == Lead.farmer_id)

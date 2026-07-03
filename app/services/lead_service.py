@@ -36,11 +36,22 @@ class LeadService:
     # ── row -> LeadListItem ──────────────────────────────────────────────
     @staticmethod
     def _item(row, *, team_view: bool) -> LeadListItem:
-        lead, name, village, _team_id, last_visit, fu_date, fu_time, emp_name = row
+        (
+            lead,
+            name,
+            village,
+            _team_id,
+            last_visit,
+            fu_date,
+            fu_time,
+            emp_name,
+            customer_type,
+        ) = row
         warm_cold = lead.status in _WARM_COLD
         return LeadListItem(
             farmer_id=lead.farmer_id,
             farmer_name=name or "Unknown",
+            customer_type=customer_type or "FARMER",
             village=village,
             lead_status=lead.status,
             last_visit_at=last_visit,

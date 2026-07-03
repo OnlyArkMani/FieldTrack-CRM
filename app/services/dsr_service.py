@@ -490,6 +490,7 @@ async def get_dsr_with_details(
             Farmer.name.label("farmer_name"),
             Farmer.village.label("village"),
             Farmer.district.label("district"),
+            Farmer.customer_type.label("customer_type"),
             VisitNote.meeting_highlights.label("meeting_highlights"),
         )
         .join(Farmer, Visit.farmer_id == Farmer.id, isouter=True)
@@ -523,7 +524,11 @@ async def get_dsr_with_details(
 
     # Orders today
     orders_q = await db.execute(
-        select(VisitOrder, Farmer.name.label("farmer_name"))
+        select(
+            VisitOrder,
+            Farmer.name.label("farmer_name"),
+            Farmer.customer_type.label("customer_type"),
+        )
         .join(Farmer, VisitOrder.farmer_id == Farmer.id, isouter=True)
         .where(
             VisitOrder.employee_id == employee_id,
@@ -556,6 +561,7 @@ async def get_dsr_with_details(
                 "farmer_name": r.farmer_name or "Unknown Farmer",
                 "village": r.village,
                 "district": r.district,
+                "customer_type": r.customer_type or "FARMER",
                 "purpose": r.Visit.purpose,
                 "check_in_at": r.Visit.check_in_at,
                 "check_out_at": r.Visit.check_out_at,
@@ -568,6 +574,7 @@ async def get_dsr_with_details(
             {
                 "id": r.VisitOrder.id,
                 "farmer_name": r.farmer_name or "Unknown Farmer",
+                "customer_type": r.customer_type or "FARMER",
                 "bags_count": r.VisitOrder.bags_count,
                 "delivery_date": r.VisitOrder.delivery_date,
                 "payment_mode": r.VisitOrder.payment_mode,

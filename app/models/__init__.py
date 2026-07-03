@@ -2,6 +2,7 @@
 from app.models.base import Base
 from app.models.enums import (
     AttendanceStatus,
+    CustomerType,
     GeofenceEventType,
     SessionType,
     SyncQueueStatus,
@@ -20,6 +21,7 @@ from app.models.misc import (
     SyncQueue,
 )
 from app.models.crm import (
+    Customer,
     DailyReport,
     Farmer,
     FollowUp,
@@ -29,6 +31,7 @@ from app.models.crm import (
     Visit,
     VisitNote,
     VisitOrder,
+    VisitOrgAnswer,
     VisitPhoto,
     VisitPlan,
     VisitPlanItem,
@@ -54,7 +57,9 @@ __all__ = [
     "SyncStatus",
     "SyncQueueStatus",
     "GeofenceEventType",
-    # CRM extension (migration 0005)
+    "CustomerType",
+    # CRM extension (migration 0005; farmers->customers in 0008)
+    "Customer",
     "Farmer",
     "VisitPlan",
     "VisitPlanItem",
@@ -63,6 +68,7 @@ __all__ = [
     "VisitPhoto",
     "LivestockProfile",
     "VisitOrder",
+    "VisitOrgAnswer",
     "Lead",
     "FollowUp",
     "DailyReport",

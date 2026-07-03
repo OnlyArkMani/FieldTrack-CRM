@@ -87,6 +87,7 @@ class FarmerService:
         team_id: int | None,
         lead_status: str | None,
         search: str | None,
+        customer_type: str | None = None,
     ) -> CursorPage[FarmerListItem]:
         scope = await self._scope_for(user)
         # Admins may filter by an explicit team; non-admins are pinned to scope.
@@ -98,6 +99,7 @@ class FarmerService:
             limit=limit,
             search=search,
             lead_status=lead_status,
+            customer_type=customer_type,
             **scope,
         )
         has_more = len(rows) > limit
@@ -106,6 +108,7 @@ class FarmerService:
             FarmerListItem(
                 id=f.id,
                 name=f.name,
+                customer_type=f.customer_type,
                 phone=f.phone,
                 village=f.village,
                 district=f.district,
@@ -192,6 +195,7 @@ class FarmerService:
         farmer = Farmer(
             team_id=team_id,
             created_by=user.id,
+            customer_type=payload.customer_type,
             name=payload.name.strip(),
             phone=payload.phone,
             village=payload.village,
@@ -232,6 +236,7 @@ class FarmerService:
         # Livestock is captured per-visit, never edited here — guard anyway.
         editable = {
             "name",
+            "customer_type",
             "phone",
             "village",
             "district",
@@ -253,6 +258,113 @@ class FarmerService:
         await self.db.commit()
         await self.db.refresh(farmer)
         return FarmerResponse.model_validate(farmer)
+
+    # ── bulk import (admin preload) ──────────────────────────────────────
+    async def import_customers(
+        self, rows: list[dict], *, user: User, dry_run: bool
+    ) -> "CustomerImportResult":
+        """Validate (and optionally commit) a batch of customer rows.
+
+        Admin-only (enforced in the router). Each row must have a name; type
+        defaults to FARMER and must be one of FARMER/FPO/VLCC. team_id, when
+        given, must reference an active team. Validation runs for every row so
+        the caller sees all problems at once; when dry_run is False the valid
+        rows are inserted in a single transaction (all-or-nothing)."""
+        from app.schemas.crm import CustomerImportError, CustomerImportResult
+
+        valid_types = {"FARMER", "FPO", "VLCC"}
+        errors: list[CustomerImportError] = []
+        by_type: dict[str, int] = {"FARMER": 0, "FPO": 0, "VLCC": 0}
+        staged: list[Farmer] = []
+        team_cache: dict[int, bool] = {}
+
+        def _to_int(v, field, rownum):
+            if v in (None, ""):
+                return None
+            try:
+                return int(float(str(v).strip()))
+            except (TypeError, ValueError):
+                errors.append(
+                    CustomerImportError(row=rownum, field=field, message="not a number")
+                )
+                return None
+
+        for idx, raw in enumerate(rows, start=1):
+            row = {
+                (str(k).strip().lower() if k is not None else ""): v
+                for k, v in raw.items()
+            }
+            name = str(row.get("name") or "").strip()
+            if not name:
+                errors.append(
+                    CustomerImportError(row=idx, field="name", message="name is required")
+                )
+                continue
+
+            ctype = str(row.get("customer_type") or row.get("type") or "FARMER").strip().upper()
+            if ctype not in valid_types:
+                errors.append(
+                    CustomerImportError(
+                        row=idx,
+                        field="customer_type",
+                        message=f"must be one of {', '.join(sorted(valid_types))}",
+                    )
+                )
+                continue
+
+            phone = row.get("phone")
+            phone = str(phone).strip() if phone not in (None, "") else None
+
+            team_id = _to_int(row.get("team_id"), "team_id", idx)
+            if team_id is not None:
+                ok = team_cache.get(team_id)
+                if ok is None:
+                    ok = await self.repo.active_team_exists(team_id)
+                    team_cache[team_id] = ok
+                if not ok:
+                    errors.append(
+                        CustomerImportError(
+                            row=idx, field="team_id", message="team not found / inactive"
+                        )
+                    )
+                    continue
+
+            farmer = Farmer(
+                team_id=team_id if team_id is not None else user.team_id,
+                created_by=user.id,
+                customer_type=ctype,
+                name=name,
+                phone=phone,
+                village=(str(row.get("village")).strip() if row.get("village") else None),
+                district=(str(row.get("district")).strip() if row.get("district") else None),
+                address=(str(row.get("address")).strip() if row.get("address") else None),
+                total_cattle=_to_int(row.get("total_cattle"), "total_cattle", idx) or 0,
+                current_feed_brand=(
+                    str(row.get("current_feed_brand")).strip()
+                    if row.get("current_feed_brand")
+                    else None
+                ),
+                notes=(str(row.get("notes")).strip() if row.get("notes") else None),
+                is_active=True,
+            )
+            staged.append(farmer)
+            by_type[ctype] += 1
+
+        created = 0
+        if not dry_run and staged:
+            for f in staged:
+                self.repo.add(f)
+            await self.db.commit()
+            created = len(staged)
+
+        return CustomerImportResult(
+            total_rows=len(rows),
+            created=created,
+            skipped=len(rows) - len(staged),
+            by_type={k: v for k, v in by_type.items() if v},
+            errors=errors,
+            dry_run=dry_run,
+        )
 
     # ── visit history ────────────────────────────────────────────────────
     async def list_visits(

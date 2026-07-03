@@ -20,7 +20,7 @@ import uuid
 from datetime import date as date_type
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -33,6 +33,7 @@ from app.models.crm import (
     Visit,
     VisitNote,
     VisitOrder,
+    VisitOrgAnswer,
     VisitPhoto,
 )
 from app.models.enums import UserRole
@@ -45,6 +46,8 @@ from app.schemas.crm import (
     LivestockProfileResponse,
     LivestockUpsert,
     OrderCreate,
+    OrgAnswerResponse,
+    OrgAnswersUpsert,
     VisitCompleteRequest,
     VisitDetailResponse,
     VisitNoteResponse,
@@ -294,6 +297,71 @@ class VisitService:
         await self.db.refresh(order)
         return VisitOrderResponse.model_validate(order)
 
+    # ── org answers (FPO / VLCC shared 5-question form) ──────────────────
+    async def upsert_org_answers(
+        self, user: User, visit_id: int, payload: OrgAnswersUpsert
+    ) -> OrgAnswerResponse:
+        """Save the shared FPO/VLCC 5-question form (one row per visit, upserted).
+
+        Q5 'interested in supply?' with a bag count creates a REAL visit_orders
+        row so the interest flows into DSR order counts, reports and the manager
+        dashboard exactly like a farmer order. delivery_date defaults to the
+        earliest allowed date (today + 7 days) when not supplied."""
+        visit = await self._load_owned_visit(visit_id, user)
+
+        existing = (
+            await self.db.execute(
+                select(VisitOrgAnswer)
+                .where(VisitOrgAnswer.visit_id == visit.id)
+                .order_by(VisitOrgAnswer.id.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+        answer = existing or VisitOrgAnswer(visit_id=visit.id, farmer_id=visit.farmer_id)
+        answer.member_count = payload.member_count
+        answer.total_cattle = payload.total_cattle
+        answer.current_brand = payload.current_brand
+        answer.monthly_bags = payload.monthly_bags
+        answer.interested_in_supply = payload.interested_in_supply
+        answer.interested_bags = payload.interested_bags
+        answer.notes = payload.notes
+        if existing is None:
+            self.repo.add(answer)
+        await self.db.flush()
+
+        # Interest -> real order (same table as farmer orders). Only when a
+        # positive bag count is given; avoid creating duplicate orders on re-save.
+        if payload.interested_in_supply and (payload.interested_bags or 0) > 0:
+            already = (
+                await self.db.execute(
+                    select(func.count(VisitOrder.id)).where(
+                        VisitOrder.visit_id == visit.id
+                    )
+                )
+            ).scalar_one()
+            if not already:
+                min_date = self._today() + _days(ORDER_MIN_LEAD_DAYS)
+                delivery = payload.delivery_date or min_date
+                if delivery < min_date:
+                    delivery = min_date
+                self.repo.add(
+                    VisitOrder(
+                        visit_id=visit.id,
+                        farmer_id=visit.farmer_id,
+                        employee_id=user.id,
+                        bags_count=payload.interested_bags,
+                        delivery_date=delivery,
+                        payment_mode=payload.payment_mode,
+                        special_notes="Auto-captured from FPO/VLCC supply interest",
+                        status="SUBMITTED",
+                    )
+                )
+
+        await self.db.commit()
+        await self.db.refresh(answer)
+        return OrgAnswerResponse.model_validate(answer)
+
     # ── complete ─────────────────────────────────────────────────────────
     async def complete_visit(
         self, user: User, visit_id: int, payload: VisitCompleteRequest
@@ -528,21 +596,35 @@ class VisitService:
         return await self._build_detail(visit)
 
     async def _build_detail(self, visit: Visit) -> VisitDetailResponse:
-        farmer_name = await self.repo.farmer_name(visit.farmer_id)
+        farmer = await self.repo.get_farmer(visit.farmer_id)
+        farmer_name = farmer.name if farmer else None
+        customer_type = getattr(farmer, "customer_type", "FARMER") or "FARMER"
         note = await self.repo.notes_for(visit.id)
         livestock = await self.repo.livestock_for_visit(visit.id)
         orders = await self.repo.orders_for(visit.id)
         lead = await self.repo.lead_for_visit(visit.id)
         photos = await self.repo.photos_for(visit.id)
+        org_answer = (
+            await self.db.execute(
+                select(VisitOrgAnswer)
+                .where(VisitOrgAnswer.visit_id == visit.id)
+                .order_by(VisitOrgAnswer.id.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
         base = VisitResponse.model_validate(visit).model_dump()
         return VisitDetailResponse(
             **base,
             farmer_name=farmer_name,
+            customer_type=customer_type,
             notes=VisitNoteResponse.model_validate(note) if note else None,
             livestock=(
                 LivestockProfileResponse.model_validate(livestock)
                 if livestock
                 else None
+            ),
+            org_answers=(
+                OrgAnswerResponse.model_validate(org_answer) if org_answer else None
             ),
             orders=[VisitOrderResponse.model_validate(o) for o in orders],
             lead=LeadResponse.model_validate(lead) if lead else None,

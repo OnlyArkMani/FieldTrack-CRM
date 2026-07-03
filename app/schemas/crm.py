@@ -30,6 +30,7 @@ def _validate_phone(v: str | None) -> str | None:
 
 
 # Shared literal vocabularies (kept here so clients share one source of truth).
+CustomerType = Literal["FARMER", "FPO", "VLCC"]
 LeadStatus = Literal["HOT", "WARM", "COLD"]
 VisitStatus = Literal["CHECKED_IN", "COMPLETED", "ABANDONED"]
 VisitPurpose = Literal["FIRST_VISIT", "FOLLOW_UP", "ORDER_COLLECTION", "RELATIONSHIP_VISIT"]
@@ -42,6 +43,7 @@ ReportStatus = Literal["DRAFT", "SUBMITTED"]
 # ── Farmers (Module 1) ───────────────────────────────────────────────────
 class FarmerCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
+    customer_type: CustomerType = "FARMER"
     phone: str | None = Field(default=None, max_length=20)
     village: str | None = Field(default=None, max_length=200)
     district: str | None = Field(default=None, max_length=200)
@@ -61,6 +63,7 @@ class FarmerUpdate(BaseModel):
     """All-optional partial update."""
 
     name: str | None = Field(default=None, min_length=1, max_length=200)
+    customer_type: CustomerType | None = None
     phone: str | None = Field(default=None, max_length=20)
     village: str | None = Field(default=None, max_length=200)
     district: str | None = Field(default=None, max_length=200)
@@ -81,6 +84,7 @@ class FarmerResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    customer_type: CustomerType
     team_id: int | None
     created_by: int | None
     name: str
@@ -97,6 +101,22 @@ class FarmerResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+
+# ── Customer bulk import (admin preload) ─────────────────────────────────
+class CustomerImportError(BaseModel):
+    row: int  # 1-based data row number (matches spreadsheet, header excluded)
+    field: str | None = None
+    message: str
+
+
+class CustomerImportResult(BaseModel):
+    total_rows: int = 0
+    created: int = 0
+    skipped: int = 0
+    by_type: dict[str, int] = Field(default_factory=dict)
+    errors: list[CustomerImportError] = Field(default_factory=list)
+    dry_run: bool = True
 
 
 # ── Visit Plans (Module 2) ───────────────────────────────────────────────
@@ -283,6 +303,7 @@ class FarmerListItem(BaseModel):
 
     id: int
     name: str
+    customer_type: CustomerType = "FARMER"
     phone: str | None = None
     village: str | None = None
     district: str | None = None
@@ -357,6 +378,7 @@ class FarmerDetailResponse(BaseModel):
 
     # base
     id: int
+    customer_type: CustomerType = "FARMER"
     team_id: int | None
     team_name: str | None = None
     created_by: int | None
@@ -568,6 +590,41 @@ class OrderReviewRequest(BaseModel):
     rejection_reason: str | None = None
 
 
+class OrgAnswersUpsert(BaseModel):
+    """The shared 5-question form for FPO / VLCC visits.
+
+    Q1 member_count, Q2 total_cattle, Q3 current_brand, Q4 monthly_bags,
+    Q5 interested_in_supply (+ interested_bags). When interested with bags > 0
+    the service also creates a real visit_orders row."""
+
+    member_count: int | None = Field(default=None, ge=0)
+    total_cattle: int | None = Field(default=None, ge=0)
+    current_brand: str | None = Field(default=None, max_length=200)
+    monthly_bags: int | None = Field(default=None, ge=0)
+    interested_in_supply: bool = False
+    interested_bags: int | None = Field(default=None, ge=0)
+    notes: str | None = None
+    # Optional order details when interested (defaults applied server-side).
+    delivery_date: date | None = None
+    payment_mode: PaymentMode | None = None
+
+
+class OrgAnswerResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    visit_id: int | None
+    farmer_id: int | None
+    member_count: int | None
+    total_cattle: int | None
+    current_brand: str | None
+    monthly_bags: int | None
+    interested_in_supply: bool
+    interested_bags: int | None
+    notes: str | None
+    recorded_at: datetime
+
+
 class VisitPhotoResponse(BaseModel):
     """Metadata for one photo attached to a visit. The image itself is fetched
     from `download_url` (streamed, owner/team scoped)."""
@@ -601,6 +658,7 @@ class VisitDetailResponse(BaseModel):
     employee_id: int | None
     farmer_id: int | None
     farmer_name: str | None = None
+    customer_type: CustomerType = "FARMER"
     plan_item_id: int | None
     check_in_at: datetime | None
     check_out_at: datetime | None
@@ -618,6 +676,7 @@ class VisitDetailResponse(BaseModel):
     # step data (populated by the service)
     notes: VisitNoteResponse | None = None
     livestock: LivestockProfileResponse | None = None
+    org_answers: OrgAnswerResponse | None = None  # FPO / VLCC only
     orders: list[VisitOrderResponse] = Field(default_factory=list)
     lead: LeadResponse | None = None
     photos: list[VisitPhotoResponse] = Field(default_factory=list)
@@ -630,6 +689,7 @@ class LeadListItem(BaseModel):
 
     farmer_id: int
     farmer_name: str
+    customer_type: CustomerType = "FARMER"
     village: str | None = None
     lead_status: str
     last_visit_at: datetime | None = None

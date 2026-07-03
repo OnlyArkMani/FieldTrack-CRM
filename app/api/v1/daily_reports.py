@@ -5,13 +5,14 @@ parameterised paths (/{id}/...) to avoid conflicts.
 """
 from __future__ import annotations
 
-import asyncio
-from datetime import date, datetime, timezone
+import csv
+import io
+from datetime import date
 from decimal import Decimal
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,6 +58,7 @@ class VisitSummaryItem(BaseModel):
     farmer_name: str
     village: str | None = None
     district: str | None = None
+    customer_type: str = "FARMER"
     purpose: str | None
     check_in_at: Any
     check_out_at: Any
@@ -67,6 +69,7 @@ class VisitSummaryItem(BaseModel):
 class OrderSummaryItem(BaseModel):
     id: int
     farmer_name: str
+    customer_type: str = "FARMER"
     bags_count: int
     delivery_date: date
     payment_mode: str | None
@@ -162,6 +165,19 @@ async def my_dsr_for_date(
             detail="No attendance recorded for this date.",
         )
     return _build_detail_response(detail)
+
+
+@router.get("/my/{report_date}/download")
+async def download_my_dsr(
+    report_date: date,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> StreamingResponse:
+    """Download the caller's DSR for one day as CSV (the per-day download button)."""
+    detail = await get_dsr_with_details(db, employee_id=user.id, report_date=report_date)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="No DSR for this date.")
+    return _dsr_csv_response(detail, user.name, report_date)
 
 
 # -- Employee: submit DSR -----------------------------------------------------
@@ -272,6 +288,25 @@ async def team_dsr_detail(
     if detail is None:
         raise not_found("No DSR found for this employee on this date")
     return _build_detail_response(detail)
+
+
+@router.get("/team/{employee_id}/{report_date}/download")
+async def download_team_dsr(
+    employee_id: int,
+    report_date: date,
+    supervisor: Annotated[User, Depends(get_current_supervisor)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> StreamingResponse:
+    """Download one team member's DSR for a day as CSV (supervisor/admin)."""
+    emp = await db.get(User, employee_id)
+    if emp is None:
+        raise not_found("Employee not found")
+    if supervisor.role == UserRole.SUPERVISOR and emp.team_id != supervisor.team_id:
+        raise forbidden("Employee is not on your team")
+    detail = await get_dsr_with_details(db, employee_id=employee_id, report_date=report_date)
+    if detail is None:
+        raise not_found("No DSR found for this employee on this date")
+    return _dsr_csv_response(detail, emp.name, report_date)
 
 
 # -- Supervisor: add manager comment ------------------------------------------
@@ -461,6 +496,86 @@ async def _attendance_times(
 
 
 # -- Internal helper ----------------------------------------------------------
+
+def _dsr_csv_response(
+    detail: dict, employee_name: str, report_date: date
+) -> StreamingResponse:
+    """Render one employee-day DSR as a single CSV (summary + visits + orders +
+    follow-ups), each visited customer tagged with its type."""
+    report = detail["report"]
+    buf = io.StringIO()
+    w = csv.writer(buf)
+
+    w.writerow(["Daily Sales Report"])
+    w.writerow(["Employee", employee_name])
+    w.writerow(["Date", report_date.isoformat()])
+    w.writerow(["Status", getattr(report, "status", "")])
+    w.writerow(
+        ["Visits planned", getattr(report, "visits_planned", 0)]
+    )
+    w.writerow(["Visits completed", getattr(report, "visits_completed", 0)])
+    w.writerow(["Orders captured", getattr(report, "orders_captured", 0)])
+    w.writerow(
+        [
+            "Leads (Hot/Warm/Cold)",
+            f"{getattr(report, 'hot_leads', 0)}/"
+            f"{getattr(report, 'warm_leads', 0)}/"
+            f"{getattr(report, 'cold_leads', 0)}",
+        ]
+    )
+    w.writerow(["End-of-day note", getattr(report, "end_of_day_note", "") or ""])
+    w.writerow([])
+
+    w.writerow(["Visits"])
+    w.writerow(["Customer", "Type", "Purpose", "Check-in", "Check-out", "Lead"])
+    for v in detail["visits"]:
+        w.writerow(
+            [
+                v["farmer_name"],
+                v.get("customer_type", "FARMER"),
+                v.get("purpose") or "",
+                v.get("check_in_at") or "",
+                v.get("check_out_at") or "",
+                v.get("lead_status") or "",
+            ]
+        )
+    w.writerow([])
+
+    w.writerow(["Orders"])
+    w.writerow(["Customer", "Type", "Bags", "Delivery date", "Payment"])
+    for o in detail["orders"]:
+        w.writerow(
+            [
+                o["farmer_name"],
+                o.get("customer_type", "FARMER"),
+                o["bags_count"],
+                o["delivery_date"].isoformat() if o.get("delivery_date") else "",
+                o.get("payment_mode") or "",
+            ]
+        )
+    w.writerow([])
+
+    w.writerow(["Follow-ups"])
+    w.writerow(["Customer", "Scheduled date", "Time", "Purpose"])
+    for f in detail["follow_ups"]:
+        w.writerow(
+            [
+                f["farmer_name"],
+                f["scheduled_date"].isoformat() if f.get("scheduled_date") else "",
+                f.get("scheduled_time") or "",
+                f.get("purpose") or "",
+            ]
+        )
+
+    buf.seek(0)
+    safe_name = employee_name.replace(" ", "_")
+    fname = f"DSR_{safe_name}_{report_date.isoformat()}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={fname}"},
+    )
+
 
 def _build_detail_response(detail: dict) -> DsrDetailResponse:
     report = detail["report"]

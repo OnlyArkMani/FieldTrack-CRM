@@ -56,7 +56,10 @@ class FarmerRepository:
         created_by: int | None,
         search: str | None,
         lead_status: str | None,
+        customer_type: str | None = None,
     ) -> Select:
+        if customer_type:
+            stmt = stmt.where(Farmer.customer_type == customer_type)
         if team_id is not None:
             stmt = stmt.where(Farmer.team_id == team_id)
         elif team_ids is not None and created_by is not None:
@@ -90,6 +93,7 @@ class FarmerRepository:
         created_by: int | None = None,
         search: str | None = None,
         lead_status: str | None = None,
+        customer_type: str | None = None,
     ) -> tuple[list[tuple], int]:
         """Keyset page (Farmer.id ASC). Returns rows of
         (Farmer, team_name, lead_status, last_visit_at) + total count.
@@ -111,6 +115,7 @@ class FarmerRepository:
             created_by=created_by,
             search=search,
             lead_status=lead_status,
+            customer_type=customer_type,
         )
         if cursor_id is not None:
             stmt = stmt.where(Farmer.id > cursor_id)
@@ -124,6 +129,7 @@ class FarmerRepository:
             created_by=created_by,
             search=search,
             lead_status=lead_status,
+            customer_type=customer_type,
         )
         total = (await self.db.execute(count_stmt)).scalar_one()
         return list(rows), int(total)

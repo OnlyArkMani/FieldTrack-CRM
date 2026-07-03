@@ -18,6 +18,8 @@ from app.schemas.crm import (
     LivestockUpsert,
     LocationRemarkRequest,
     OrderCreate,
+    OrgAnswerResponse,
+    OrgAnswersUpsert,
     VisitCompleteRequest,
     VisitDetailResponse,
     VisitNoteResponse,
@@ -89,6 +91,19 @@ async def upsert_livestock(
     """Capture a new livestock snapshot for this visit (history preserved) and
     denormalize total_cattle / feed brand / feed price onto the farmer."""
     return await VisitService(db).upsert_livestock(user, visit_id, body)
+
+
+@router.patch("/{visit_id}/org-answers", response_model=OrgAnswerResponse)
+async def upsert_org_answers(
+    visit_id: int,
+    body: OrgAnswersUpsert,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OrgAnswerResponse:
+    """Save the shared FPO/VLCC 5-question form. When the customer is interested
+    in supply (Q5) with a bag count, a real visit_orders row is also created so
+    it shows in DSR, reports and the manager dashboard."""
+    return await VisitService(db).upsert_org_answers(user, visit_id, body)
 
 
 @router.post("/{visit_id}/orders", response_model=VisitOrderResponse, status_code=201)
