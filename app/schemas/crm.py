@@ -233,10 +233,16 @@ class DailyReportResponse(BaseModel):
     visits_completed: int
     visits_skipped: int
     orders_captured: int
+
+    orders_value: Decimal | None = None  # added migration 0009
     hot_leads: int
     warm_leads: int
     cold_leads: int
     follow_ups_scheduled: int
+    check_in_at: datetime | None = None  # added migration 0009
+    check_out_at: datetime | None = None
+    check_in_lat: float | None = None
+    check_in_lng: float | None = None
     end_of_day_note: str | None
     manager_comment: str | None = None  # added migration 0006
     submitted_at: datetime | None

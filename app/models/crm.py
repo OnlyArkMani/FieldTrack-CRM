@@ -363,10 +363,19 @@ class DailyReport(Base):
     visits_completed: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     visits_skipped: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     orders_captured: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    # Sum of bags_count * price_per_bag across the day's orders (checklist
+    # #49) — None when none of that day's orders had a price set.
+    orders_value: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     hot_leads: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     warm_leads: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     cold_leads: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     follow_ups_scheduled: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    # Attendance summary (checklist #46) — captured at generation time instead
+    # of being computed and discarded.
+    check_in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    check_out_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    check_in_lat: Mapped[float | None] = mapped_column(Float)
+    check_in_lng: Mapped[float | None] = mapped_column(Float)
     end_of_day_note: Mapped[str | None] = mapped_column(Text)  # max 300 chars (validated in schema)
     manager_comment: Mapped[str | None] = mapped_column(Text)   # added migration 0006
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
