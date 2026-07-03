@@ -49,6 +49,29 @@
     @androidx.annotation.Keep <methods>;
 }
 -keep @androidx.annotation.Keep class * { *; }
+#
+# CRASH FIX — Gson "Missing type parameter" on IsolateHolderService start.
+#
+# background_locator_2 stores its callback handle in SharedPreferences using
+# Gson with an anonymous TypeToken subclass (PreferencesManager.getDataCallback).
+# Gson 2.10+ changed how it resolves generic type parameters on anonymous
+# subclasses: it now calls TypeToken.getSuperclassTypeParam() which walks the
+# class hierarchy via reflection and throws RuntimeException("Missing type
+# parameter") when R8 has stripped the generic Signature attribute from the
+# anonymous class.
+#
+# Two rules are required:
+#   1. Keep the TypeToken class itself and all subclasses (including anonymous
+#      ones generated inside background_locator_2) with full member detail.
+#   2. Preserve generic Signature attributes on those subclasses so Gson's
+#      reflection can recover the type parameter at runtime.
+#
+# The root -keepattributes Signature line lower in this file covers the whole
+# app, but R8 can still strip the class members that carry the signature;  
+# the explicit -keep below prevents that.
+-keep class com.google.gson.reflect.TypeToken { *; }
+-keep class * extends com.google.gson.reflect.TypeToken { *; }
+-keepattributes Signature
 
 # ── flutter_local_notifications ──────────────────────────────────────────
 -keep class com.dexterous.** { *; }

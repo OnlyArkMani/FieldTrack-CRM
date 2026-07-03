@@ -3,6 +3,24 @@ allprojects {
         google()
         mavenCentral()
     }
+
+    // CRASH FIX — background_locator_2 v2.0.6 uses Gson's TypeToken with an
+    // anonymous subclass (PreferencesManager.getDataCallback). Gson 2.10+
+    // changed how it resolves generic type parameters on anonymous subclasses:
+    // TypeToken.getSuperclassTypeParam() now throws RuntimeException("Missing
+    // type parameter") instead of gracefully returning null. This causes
+    // IsolateHolderService to crash on every start, i.e. every time location
+    // permission is granted or attendance tracking starts.
+    //
+    // Force Gson 2.9.1 (the last version with the old compatible behaviour)
+    // across ALL subprojects so no transitive dependency can pull in 2.10+.
+    // The companion ProGuard rules (proguard-rules.pro) keep TypeToken and its
+    // subclasses in release builds as an additional safety net.
+    configurations.all {
+        resolutionStrategy {
+            force("com.google.code.gson:gson:2.9.1")
+        }
+    }
 }
 
 // Old plugins (e.g. background_locator_2) predate AGP's mandatory `namespace`
