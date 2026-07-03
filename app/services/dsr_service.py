@@ -95,6 +95,35 @@ async def generate_dsr(
         return await _generate_in_session(db, employee_id, attendance_id, report_date)
 
 
+def _checkpoints_from_sessions(sessions) -> dict:
+    """First START and last END timestamp+lat/lng from a list of
+    AttendanceSession rows, ordered by timestamp. Shared by DSR generation
+    and by the detail-view live override (checklist #46)."""
+    check_in_time: datetime | None = None
+    check_out_time: datetime | None = None
+    check_in_lat: float | None = None
+    check_in_lng: float | None = None
+    check_out_lat: float | None = None
+    check_out_lng: float | None = None
+    for s in sessions:
+        if s.type == SessionType.START and check_in_time is None:
+            check_in_time = s.timestamp
+            check_in_lat = s.lat
+            check_in_lng = s.lng
+        if s.type == SessionType.END:
+            check_out_time = s.timestamp
+            check_out_lat = s.lat
+            check_out_lng = s.lng
+    return {
+        "check_in_at": check_in_time,
+        "check_out_at": check_out_time,
+        "check_in_lat": check_in_lat,
+        "check_in_lng": check_in_lng,
+        "check_out_lat": check_out_lat,
+        "check_out_lng": check_out_lng,
+    }
+
+
 async def _generate_in_session(
     db: AsyncSession,
     employee_id: int,
@@ -114,18 +143,13 @@ async def _generate_in_session(
         .order_by(AttendanceSession.timestamp)
     )
     sessions = sessions_q.scalars().all()
-
-    check_in_time: datetime | None = None
-    check_out_time: datetime | None = None
-    check_in_lat: float | None = None
-    check_in_lng: float | None = None
-    for s in sessions:
-        if s.type == SessionType.START and check_in_time is None:
-            check_in_time = s.timestamp
-            check_in_lat = s.lat
-            check_in_lng = s.lng
-        if s.type == SessionType.END:
-            check_out_time = s.timestamp
+    checkpoints = _checkpoints_from_sessions(sessions)
+    check_in_time = checkpoints["check_in_at"]
+    check_out_time = checkpoints["check_out_at"]
+    check_in_lat = checkpoints["check_in_lat"]
+    check_in_lng = checkpoints["check_in_lng"]
+    check_out_lat = checkpoints["check_out_lat"]
+    check_out_lng = checkpoints["check_out_lng"]
 
     # ── b) Visit plan for today — planned count ───────────────────────────
     plan_q = await db.execute(
@@ -234,6 +258,8 @@ async def _generate_in_session(
             check_out_at=check_out_time,
             check_in_lat=check_in_lat,
             check_in_lng=check_in_lng,
+            check_out_lat=check_out_lat,
+            check_out_lng=check_out_lng,
             is_late=is_late,
             status="DRAFT",
         )
@@ -254,6 +280,8 @@ async def _generate_in_session(
                 "check_out_at": check_out_time,
                 "check_in_lat": check_in_lat,
                 "check_in_lng": check_in_lng,
+                "check_out_lat": check_out_lat,
+                "check_out_lng": check_out_lng,
                 # is_late: only set to True, never downgrade back to False
                 "is_late": text("daily_reports.is_late OR EXCLUDED.is_late"),
             },
@@ -437,6 +465,21 @@ async def get_dsr_with_details(
     if report is None:
         return None
 
+    # Live override for check-in/out time+location (checklist #46) — the
+    # daily_reports snapshot is only written once at generation time and can
+    # go stale (e.g. generated before check-out, or a report row created via
+    # a path that skipped it). Re-derive from the session log so the detail
+    # view always matches reality, same as the team-list endpoint already
+    # does independently in `_attendance_times()`.
+    checkpoints: dict = {}
+    if report.attendance_id is not None:
+        sessions_q = await db.execute(
+            select(AttendanceSession)
+            .where(AttendanceSession.attendance_id == report.attendance_id)
+            .order_by(AttendanceSession.timestamp)
+        )
+        checkpoints = _checkpoints_from_sessions(sessions_q.scalars().all())
+
     day_start, day_end = _day_bounds_utc(report_date)
 
     # Completed visits with farmer name/location + purpose + lead status chip
@@ -506,6 +549,7 @@ async def get_dsr_with_details(
 
     return {
         "report": report,
+        "checkpoints": checkpoints,
         "visits": [
             {
                 "id": r.Visit.id,

@@ -471,8 +471,15 @@ def _build_detail_response(detail: dict) -> DsrDetailResponse:
     # `TypeError: got multiple values for keyword argument 'manager_comment'`
     # on every single call to this endpoint. Pre-existing bug, unrelated to
     # this change — found via live testing, fixed here.
+    data = base.model_dump()
+    # Live checkpoints (checklist #46) win over the daily_reports snapshot,
+    # which can go stale — but only when a live value is actually available,
+    # so an old report with no attendance row left doesn't lose its data.
+    data.update(
+        {k: v for k, v in detail.get("checkpoints", {}).items() if v is not None}
+    )
     return DsrDetailResponse(
-        **base.model_dump(),
+        **data,
         visits=[VisitSummaryItem(**v) for v in detail["visits"]],
         orders=[OrderSummaryItem(**o) for o in detail["orders"]],
         follow_ups=[FollowUpSummaryItem(**f) for f in detail["follow_ups"]],

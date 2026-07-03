@@ -373,6 +373,11 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
                   <span>
                     <span className="text-text-primary font-medium">Out:</span>{' '}
                     {dayjs(dsr.check_out_at).format('HH:mm')}
+                    {dsr.check_out_lat != null && dsr.check_out_lng != null && (
+                      <span className="text-text-secondary">
+                        {' '}({dsr.check_out_lat.toFixed(4)}, {dsr.check_out_lng.toFixed(4)})
+                      </span>
+                    )}
                   </span>
                 )}
               </div>
