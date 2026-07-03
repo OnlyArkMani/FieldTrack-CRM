@@ -171,12 +171,15 @@ class AttendanceService:
         if state not in _ALLOWED_FROM[action]:
             raise conflict(_INVALID_MESSAGE[action])
 
-        # END requires a work summary (the schema enforces 10–500 at the edge;
-        # this is the defensive backstop for any non-HTTP caller).
-        if action == SessionType.END and (
-            not work_summary or not (10 <= len(work_summary) <= 500)
-        ):
-            raise bad_request("Work summary must be 10–500 characters")
+        # END requires a work summary. When called by the auto-logout path
+        # work_summary arrives as None — fill in a default rather
+        # than rejecting it. Manual End from the UI always sends a value and
+        # the length check still applies.
+        if action == SessionType.END:
+            if work_summary is None:
+                work_summary = "Auto clock-out on logout."
+            elif not (10 <= len(work_summary) <= 500):
+                raise bad_request("Work summary must be 10–500 characters")
 
         now = datetime.now(timezone.utc)
 
