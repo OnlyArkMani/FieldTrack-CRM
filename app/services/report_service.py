@@ -18,8 +18,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
-import time
 import uuid
 from calendar import monthrange
 from dataclasses import dataclass, field
@@ -34,6 +32,7 @@ from app.core.config import get_settings
 from app.core.database import async_session_factory
 from app.core.exceptions import bad_request, forbidden, not_found
 from app.core.redis import Keys, get_redis
+from app.core.storage import get_storage
 from app.models.attendance import Attendance, AttendanceSession
 from app.models.enums import AttendanceStatus, SessionType, UserRole
 from app.models.user import User
@@ -1380,25 +1379,24 @@ class ReportService:
         return parts
 
 
-# ── Async job store (Redis status + filesystem files) ────────────────────
+# ── Async job store (Redis status + S3 object storage) ────────────────────
 class ReportStore:
-    """Status in Redis (TTL = retention), bytes on the filesystem. Both expire
-    together so a stale status never points at a deleted file."""
+    """Status in Redis (TTL = retention), bytes in S3. Both expire together —
+    on retention expiry, `prune_expired_objects` removes the S3 object and the
+    Redis key ages out on its own TTL, so a stale status never points at a
+    deleted object."""
 
     def __init__(self) -> None:
         self.settings = get_settings()
         self.redis = get_redis()
+        self.storage = get_storage()
 
     @property
     def _ttl(self) -> int:
         return self.settings.report_retention_minutes * 60
 
-    def _dir(self) -> str:
-        os.makedirs(self.settings.report_storage_dir, exist_ok=True)
-        return self.settings.report_storage_dir
-
-    def file_path(self, report_id: str, fmt: ReportFormat) -> str:
-        return os.path.join(self._dir(), f"{report_id}.{fmt.extension}")
+    def object_key(self, report_id: str, fmt: ReportFormat) -> str:
+        return f"{self.settings.report_s3_prefix}/{report_id}.{fmt.extension}"
 
     def download_url(self, report_id: str) -> str:
         return f"{self.settings.api_v1_prefix}/reports/{report_id}/download"
@@ -1429,14 +1427,14 @@ class ReportStore:
         return report_id
 
     async def mark_ready(
-        self, report_id: str, *, path: str, filename: str, ttl_seconds: int | None = None
+        self, report_id: str, *, object_key: str, filename: str, ttl_seconds: int | None = None
     ) -> None:
         key = Keys.report(report_id)
         await self.redis.hset(
             key,
             mapping={
                 "status": ReportStatus.READY.value,
-                "path": path,
+                "object_key": object_key,
                 "filename": filename,
                 "download_url": self.download_url(report_id),
             },
@@ -1455,23 +1453,29 @@ class ReportStore:
         data = await self.redis.hgetall(Keys.report(report_id))
         return data or None
 
-    def prune_expired_files(self) -> None:
-        """Best-effort: delete files older than the retention window. Called at
-        generation start so storage self-maintains without a dedicated cron."""
+    async def object_exists(self, object_key: str | None) -> bool:
+        if not object_key:
+            return False
+        return await asyncio.to_thread(self.storage.exists, object_key)
+
+    def prune_expired_objects(self) -> None:
+        """Best-effort: delete S3 objects older than the retention window.
+        Called at generation start so storage self-maintains without a
+        dedicated cron. Only scans the top-level prefix — `auto/` reports
+        carry their own longer TTL and are pruned separately if ever needed."""
         try:
-            cutoff = time.time() - self._ttl
-            d = self.settings.report_storage_dir
-            if not os.path.isdir(d):
-                return
-            for name in os.listdir(d):
-                fp = os.path.join(d, name)
-                try:
-                    if os.path.isfile(fp) and os.path.getmtime(fp) < cutoff:
-                        os.remove(fp)
-                except OSError:
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._ttl)
+            for object_key, last_modified in self.storage.list_with_last_modified(
+                f"{self.settings.report_s3_prefix}/"
+            ):
+                # Skip the auto/ subtree (long-TTL scheduled reports).
+                rel = object_key[len(self.settings.report_s3_prefix) + 1 :]
+                if rel.startswith("auto/"):
                     continue
+                if last_modified < cutoff:
+                    self.storage.delete(object_key)
         except Exception:  # noqa: BLE001
-            logger.warning("report file prune skipped", exc_info=True)
+            logger.warning("report object prune skipped", exc_info=True)
 
 
 # ── Background entry point ───────────────────────────────────────────────
@@ -1485,16 +1489,17 @@ async def run_report_job(
 
     store = ReportStore()
     try:
-        store.prune_expired_files()
+        await asyncio.to_thread(store.prune_expired_objects)
         async with async_session_factory() as db:
             data = await ReportService(db).build_data(normalized)
         # Rendering is CPU-bound (openpyxl/reportlab) — keep it off the loop.
         content: bytes = await asyncio.to_thread(render_report, data, fmt)
-        path = store.file_path(report_id, fmt)
-        with open(path, "wb") as fh:
-            fh.write(content)
+        object_key = store.object_key(report_id, fmt)
+        await asyncio.to_thread(
+            store.storage.upload_bytes, object_key, content, content_type=fmt.media_type
+        )
         filename = f"{data.filename_stem}.{fmt.extension}"
-        await store.mark_ready(report_id, path=path, filename=filename)
+        await store.mark_ready(report_id, object_key=object_key, filename=filename)
         logger.info("report %s ready (%s, %s)", report_id, normalized.type.value, fmt.value)
     except Exception as exc:  # noqa: BLE001
         logger.exception("report %s failed", report_id)
@@ -1540,15 +1545,14 @@ async def generate_team_report_file(
         async with async_session_factory() as db:
             data = await ReportService(db).build_data(normalized)
         content: bytes = await asyncio.to_thread(render_report, data, fmt)
-        # Persist under auto/ so prune_expired_files (top-level only) skips it.
-        auto_dir = os.path.join(store.settings.report_storage_dir, "auto")
-        os.makedirs(auto_dir, exist_ok=True)
-        path = os.path.join(auto_dir, f"{report_id}.{fmt.extension}")
-        with open(path, "wb") as fh:
-            fh.write(content)
+        # Persist under auto/ so prune_expired_objects (top-level only) skips it.
+        object_key = f"{store.settings.report_s3_prefix}/auto/{report_id}.{fmt.extension}"
+        await asyncio.to_thread(
+            store.storage.upload_bytes, object_key, content, content_type=fmt.media_type
+        )
         filename = f"{data.filename_stem}.{fmt.extension}"
         await store.mark_ready(
-            report_id, path=path, filename=filename, ttl_seconds=ttl_seconds
+            report_id, object_key=object_key, filename=filename, ttl_seconds=ttl_seconds
         )
         logger.info("auto team report %s ready (team=%s, %s)", report_id, team_id, period_label)
         return report_id, store.download_url(report_id)

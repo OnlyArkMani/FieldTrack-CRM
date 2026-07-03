@@ -30,8 +30,9 @@
 #   Gunicorn restarts a worker that hangs/crashes; bare uvicorn won't.
 # - restart: always everywhere — a VPS reboot or OOM kill should bring every
 #   container back without manual intervention.
-# - Named volumes: postgres_data, redis_data, nginx_logs, reports_data — all
-#   survive `docker compose down` (only `down -v` removes them).
+# - Named volumes: postgres_data, redis_data, nginx_logs — all survive
+#   `docker compose down` (only `down -v` removes them). Reports and visit
+#   photos live in S3-compatible object storage instead (no local volume).
 # - Single bridge network `fieldtrack_network` — every service can resolve
 #   the others by service name (postgres, redis, app, nginx).
 # - No `version:` key — obsolete in Compose v2.
@@ -149,9 +150,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - reports_data:/srv/fieldtrack/reports
-      - visit_photos_data:/srv/fieldtrack/visit_photos  # visit photos (#24)
+    # No reports/visit_photos volumes — both now live in S3-compatible object
+    # storage (see app/core/storage.py), configured entirely via S3_* env vars
+    # in .env.prod. Local-disk storage doesn't survive host loss and doesn't
+    # work across multiple app replicas.
     # NO ports: — only Nginx talks to `app` over fieldtrack_network.
     expose:
       - "8000"
@@ -195,8 +197,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  reports_data:
-  visit_photos_data:
   nginx_logs:
 
 networks:

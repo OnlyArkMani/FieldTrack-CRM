@@ -47,17 +47,37 @@ class Settings(BaseSettings):
     # Rate limiting
     rate_limit_per_minute: int = 120
 
-    # Reports — generated export files live on the VPS filesystem; status +
-    # metadata live in Redis with a matching TTL. Files older than the
-    # retention window are pruned best-effort on the next generation.
-    report_storage_dir: str = "/srv/fieldtrack/reports"
-    report_retention_minutes: int = 60
+    # Object storage — S3-compatible (AWS S3, Backblaze B2, MinIO, DigitalOcean
+    # Spaces, ...). endpoint_url empty => real AWS; set it to point at any
+    # S3-compatible provider instead. Replaces the old VPS-local-filesystem
+    # storage for both reports and visit photos (see storage.py) — local disk
+    # doesn't survive host loss and doesn't work across multiple app replicas.
+    s3_bucket: str = ""
+    s3_region: str = "us-east-1"
+    s3_endpoint_url: str = ""
+    s3_access_key_id: str = ""
+    s3_secret_access_key: str = ""
+    # Some S3-compatible providers (MinIO, some self-hosted setups) need
+    # path-style addressing (https://host/bucket/key) instead of the AWS
+    # default virtual-hosted style (https://bucket.host/key).
+    s3_use_path_style: bool = False
 
-    # Visit photos (checklist #24) — image bytes on the VPS filesystem; DB holds
-    # metadata only. Unlike reports these are permanent evidence, so no TTL prune.
-    visit_photo_storage_dir: str = "/srv/fieldtrack/visit_photos"
+    # Reports — status + metadata live in Redis with a matching TTL; the
+    # rendered file bytes live in S3 under this key prefix. Objects older than
+    # the retention window are pruned best-effort on the next generation.
+    report_s3_prefix: str = "reports"
+    report_retention_minutes: int = 60
+    # How long a presigned download URL stays valid — short-lived by design,
+    # the client is expected to use it immediately after polling READY.
+    report_download_url_ttl_seconds: int = 300
+
+    # Visit photos (checklist #24) — image bytes in S3 under this key prefix;
+    # DB holds metadata only. Unlike reports these are permanent evidence, so
+    # no TTL prune.
+    visit_photo_s3_prefix: str = "visit_photos"
     max_visit_photos: int = 5
     max_visit_photo_bytes: int = 8 * 1024 * 1024  # 8 MB per photo
+    visit_photo_download_url_ttl_seconds: int = 300
 
     # Data retention — location_logs is the hottest, highest-volume table.
     # 31 days keeps storage (and the VPS disk) small while still covering the

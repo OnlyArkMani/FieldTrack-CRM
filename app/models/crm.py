@@ -196,8 +196,9 @@ class VisitNote(Base, TimestampMixin):
 class VisitPhoto(Base):
     """A photograph attached to a visit (checklist #24). Up to 5 per visit —
     the cap is enforced in the service. Only metadata lives here; the image
-    bytes live on the VPS filesystem (settings.visit_photo_storage_dir) and are
-    streamed via the download endpoint (owner/team scoped)."""
+    bytes live in S3 (settings.visit_photo_s3_prefix) — file_path holds the S3
+    key, not a filesystem path — and are served via a presigned-URL redirect
+    from the download endpoint (owner/team scoped)."""
 
     __tablename__ = "visit_photos"
 

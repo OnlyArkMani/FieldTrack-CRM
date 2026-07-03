@@ -7,7 +7,7 @@ the dynamic /{visit_id} so they're never swallowed by the id matcher.
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import CurrentUser, get_db
@@ -139,10 +139,13 @@ async def download_visit_photo(
     photo_id: int,
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> FileResponse:
-    """Stream the image bytes for one photo (owner/team scoped)."""
-    path, media_type, filename = await VisitService(db).get_photo_file(user, photo_id)
-    return FileResponse(path, media_type=media_type, filename=filename)
+) -> RedirectResponse:
+    """307-redirect to a short-lived presigned S3 URL (owner/team scoped).
+    `CachedNetworkImage` on mobile and the admin-web fetch both follow
+    redirects transparently, so this is a drop-in replacement for the old
+    FileResponse — no client-side changes needed."""
+    url = await VisitService(db).get_photo_download_url(user, photo_id)
+    return RedirectResponse(url, status_code=307)
 
 
 @router.delete("/photos/{photo_id}", status_code=204)

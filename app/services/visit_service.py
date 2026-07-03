@@ -13,9 +13,9 @@ KEY RULES:
 - Completion sets a lead row; WARM/COLD require a follow-up date and create a
   follow_up; a linked plan item is marked COMPLETED.
 """
+import asyncio
 import logging
 import math
-import os
 import uuid
 from datetime import date as date_type
 from datetime import datetime, timezone
@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.exceptions import bad_request, forbidden, not_found
+from app.core.storage import get_storage
 from app.models.crm import (
     Farmer,
     FollowUp,
@@ -429,8 +430,10 @@ class VisitService:
         caption: str | None = None,
     ) -> VisitPhotoResponse:
         """Attach a photo to a visit. Enforces the per-visit cap, allowed image
-        types, and the size limit. Bytes are written under
-        visit_photo_storage_dir/{visit_id}/; only metadata is persisted in DB."""
+        types, and the size limit. Bytes go to S3 under
+        visit_photo_s3_prefix/{visit_id}/; only metadata + the S3 key are
+        persisted in DB (VisitPhoto.file_path now holds an S3 key, not an
+        absolute filesystem path)."""
         visit = await self._load_owned_visit(visit_id, user)
         settings = get_settings()
 
@@ -449,17 +452,15 @@ class VisitService:
                 f"A visit can have at most {settings.max_visit_photos} photos"
             )
 
-        visit_dir = os.path.join(settings.visit_photo_storage_dir, str(visit.id))
-        os.makedirs(visit_dir, exist_ok=True)
         ext = _PHOTO_EXT.get(ctype, "jpg")
-        path = os.path.join(visit_dir, f"{uuid.uuid4().hex}.{ext}")
-        with open(path, "wb") as fh:
-            fh.write(content)
+        object_key = f"{settings.visit_photo_s3_prefix}/{visit.id}/{uuid.uuid4().hex}.{ext}"
+        storage = get_storage()
+        await asyncio.to_thread(storage.upload_bytes, object_key, content, content_type=ctype)
 
         photo = VisitPhoto(
             visit_id=visit.id,
             uploaded_by=user.id,
-            file_path=path,
+            file_path=object_key,
             content_type=ctype,
             size_bytes=len(content),
             caption=(caption.strip()[:200] if caption else None),
@@ -476,23 +477,26 @@ class VisitService:
         photos = await self.repo.photos_for(visit.id)
         return [self._photo_response(p) for p in photos]
 
-    async def get_photo_file(
-        self, user: User, photo_id: int
-    ) -> tuple[str, str, str]:
-        """Return (absolute_path, media_type, download_filename) for streaming.
-        Authorizes via the parent visit's ownership rules."""
+    async def get_photo_download_url(self, user: User, photo_id: int) -> str:
+        """Presigned, short-lived S3 URL for one photo. Authorizes via the
+        parent visit's ownership rules."""
         photo = await self.repo.get_photo(photo_id)
         if photo is None:
             raise not_found("Photo not found")
         # Reuse visit ownership scoping.
         await self._load_owned_visit(photo.visit_id, user)
-        if not photo.file_path or not os.path.isfile(photo.file_path):
+        storage = get_storage()
+        if not photo.file_path or not await asyncio.to_thread(storage.exists, photo.file_path):
             raise not_found("Photo file is missing")
+        settings = get_settings()
         ext = _PHOTO_EXT.get(photo.content_type or "", "jpg")
-        return (
+        filename = f"visit_{photo.visit_id}_photo_{photo.id}.{ext}"
+        return await asyncio.to_thread(
+            storage.presigned_url,
             photo.file_path,
-            photo.content_type or "application/octet-stream",
-            f"visit_{photo.visit_id}_photo_{photo.id}.{ext}",
+            expires_in=settings.visit_photo_download_url_ttl_seconds,
+            filename=filename,
+            content_type=photo.content_type or "application/octet-stream",
         )
 
     async def delete_photo(self, user: User, photo_id: int) -> None:
@@ -500,15 +504,15 @@ class VisitService:
         if photo is None:
             raise not_found("Photo not found")
         await self._load_owned_visit(photo.visit_id, user)
-        path = photo.file_path
+        object_key = photo.file_path
         await self.repo.delete_photo(photo)
         await self.db.commit()
-        # Remove the file after the DB row is gone (best-effort).
-        try:
-            if path and os.path.isfile(path):
-                os.remove(path)
-        except OSError:
-            logger.warning("could not remove photo file %s", path)
+        # Remove the object after the DB row is gone (best-effort).
+        if object_key:
+            try:
+                await asyncio.to_thread(get_storage().delete, object_key)
+            except Exception:  # noqa: BLE001
+                logger.warning("could not remove photo object %s", object_key)
 
     @staticmethod
     def _photo_response(photo: VisitPhoto) -> VisitPhotoResponse:

@@ -14,9 +14,9 @@ services:
     ports:
       - "3991:8000"
 
-    volumes:
-      - /home/wiladmin/ALL_VOLUMES/cattle-feed-gatipay-backend-dev/reports:/srv/fieldtrack/reports
-      - /home/wiladmin/ALL_VOLUMES/cattle-feed-gatipay-backend-dev/visit_photos:/srv/fieldtrack/visit_photos
+    # No reports/visit_photos bind mounts — both now live in S3-compatible
+    # object storage (S3_* env vars in .env), which also removes the
+    # host-bind-mount-permission bug these two lines used to cause.
 
     healthcheck:
       test:
