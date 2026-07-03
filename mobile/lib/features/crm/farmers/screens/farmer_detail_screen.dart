@@ -447,6 +447,10 @@ class _LivestockCard extends StatelessWidget {
               children: [
                 _kv(context, 'Breed', ls.breed ?? '—'),
                 _kv(context, 'Brand', ls.currentBrand ?? '—'),
+                _kv(context, 'Kg/animal/day',
+                    ls.kgPerAnimalPerDay != null
+                        ? '${ls.kgPerAnimalPerDay} kg'
+                        : '—'),
                 _kv(context, 'Bags/mo', ls.bagsPerMonth?.toString() ?? '—'),
                 _kv(context, 'Price/bag', money(ls.currentPricePerBag)),
               ],

@@ -100,6 +100,10 @@ class _LivestockCard extends StatelessWidget {
               _kv(context, 'Breed', profile.breed ?? '—'),
               _kv(context, 'Age group', profile.ageGroup ?? '—'),
               _kv(context, 'Brand', profile.currentBrand ?? '—'),
+              _kv(context, 'Kg/animal/day',
+                  profile.kgPerAnimalPerDay != null
+                      ? '${profile.kgPerAnimalPerDay} kg'
+                      : '—'),
               _kv(context, 'Bags/mo', profile.bagsPerMonth?.toString() ?? '—'),
               _kv(context, 'Price/bag', money(profile.currentPricePerBag)),
               _kv(context, 'Health', profile.healthStatus ?? '—'),

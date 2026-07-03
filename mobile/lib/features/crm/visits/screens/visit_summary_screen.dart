@@ -120,6 +120,12 @@ class _Body extends StatelessWidget {
             _kv(context, 'Breed', visit.livestock!.breed),
             _kv(context, 'Age group', visit.livestock!.ageGroup),
             _kv(context, 'Current brand', visit.livestock!.currentBrand),
+            _kv(
+                context,
+                'Kg / animal / day',
+                visit.livestock!.kgPerAnimalPerDay != null
+                    ? '${visit.livestock!.kgPerAnimalPerDay} kg'
+                    : null),
             _kv(context, 'Bags / month',
                 visit.livestock!.bagsPerMonth?.toString()),
             _kv(context, 'Price / bag', money(visit.livestock!.currentPricePerBag)),
