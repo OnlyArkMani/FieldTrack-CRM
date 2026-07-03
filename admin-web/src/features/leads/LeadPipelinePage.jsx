@@ -70,12 +70,30 @@ export default function LeadPipelinePage() {
   async function handleExport() {
     setExporting(true);
     try {
-      const params = { format: 'EXCEL', report_type: 'LEAD_PIPELINE' };
-      if (employeeId) params.employee_id = employeeId;
-      const res = await api.get('/reports/generate', {
-        params,
-        responseType: 'blob',
+      // /reports/generate is an async job (POST -> poll -> download), not a
+      // synchronous GET — matches the pattern in features/reports/ReportsPage.jsx.
+      const filters = {};
+      if (employeeId) filters.user_id = Number(employeeId);
+      const { data } = await api.post('/reports/generate', {
+        type: 'LEAD_PIPELINE',
+        format: 'EXCEL',
+        filters,
       });
+
+      const reportId = data.report_id;
+      let ready = false;
+      for (let tick = 0; tick < 20 && !ready; tick += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const { data: status } = await api.get(`/reports/${reportId}/status`);
+        if (status.status === 'READY') {
+          ready = true;
+        } else if (status.status === 'FAILED' || status.status === 'EXPIRED') {
+          throw new Error(status.error || 'Report generation failed');
+        }
+      }
+      if (!ready) throw new Error('Report is taking too long — please retry.');
+
+      const res = await api.get(`/reports/${reportId}/download`, { responseType: 'blob' });
       const url = URL.createObjectURL(res.data);
       const a = document.createElement('a');
       a.href = url;
@@ -94,7 +112,7 @@ export default function LeadPipelinePage() {
       <PageHeader
         title="Lead Pipeline"
         subtitle="Track Hot, Warm, and Cold leads across your team"
-        action={
+        actions={
           <button
             type="button"
             onClick={handleExport}

@@ -30,6 +30,7 @@ class ReportType(str, Enum):
     # One FPO/farmer's full history (visits + orders + livestock + leads).
     # Excel-only (multi-sheet). Used by the mobile "Export" button.
     FARMER_EXPORT = "FARMER_EXPORT"
+    LEAD_PIPELINE = "LEAD_PIPELINE"  # current Hot/Warm/Cold snapshot, no date range
 
 
 class ReportFormat(str, Enum):
