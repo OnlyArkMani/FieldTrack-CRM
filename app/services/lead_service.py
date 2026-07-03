@@ -69,11 +69,20 @@ class LeadService:
 
     # ── team leads (supervisor/admin) ────────────────────────────────────
     async def get_team_leads(
-        self, user: User, *, status: str | None, employee_id: int | None
+        self,
+        user: User,
+        *,
+        status: str | None,
+        employee_id: int | None,
+        team_id: int | None = None,
+        territory: str | None = None,
     ) -> TeamLeadsResponse:
-        team_ids = await self._scope_team_ids(user)
+        team_ids = await self._scope_team_ids(user, team_id=team_id)
         rows = await self.repo.latest_lead_rows(
-            team_ids=team_ids, employee_id=employee_id, status=status
+            team_ids=team_ids,
+            employee_id=employee_id,
+            status=status,
+            territory=territory,
         )
         items = [self._item(r, team_view=True) for r in rows]
         hot = sum(1 for i in items if i.lead_status == "HOT")
@@ -83,11 +92,21 @@ class LeadService:
             hot_count=hot, warm_count=warm, cold_count=cold, items=items
         )
 
-    async def _scope_team_ids(self, user: User) -> list[int] | None:
+    async def _scope_team_ids(
+        self, user: User, *, team_id: int | None = None
+    ) -> list[int] | None:
+        """checklist #44 — the admin-web Team dropdown now actually narrows
+        this query (it previously only narrowed the Employee dropdown)."""
         if user.role == UserRole.ADMIN:
+            if team_id is not None:
+                return [team_id]
             return None
         if user.role == UserRole.SUPERVISOR:
-            return await self.repo.supervised_team_ids(user.id)
+            supervised = await self.repo.supervised_team_ids(user.id)
+            if team_id is not None:
+                # Never let a supervisor narrow to a team they don't own.
+                return [team_id] if team_id in supervised else []
+            return supervised
         raise forbidden("Team leads are supervisor/admin only")
 
     # ── pipeline (admin) ─────────────────────────────────────────────────

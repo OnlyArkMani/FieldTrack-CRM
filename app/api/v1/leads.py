@@ -50,10 +50,20 @@ async def team_leads(
     db: Annotated[AsyncSession, Depends(get_db)],
     status: str | None = Query(default=None, description="HOT | WARM | COLD"),
     employee_id: int | None = Query(default=None),
+    team_id: int | None = Query(
+        default=None, description="Admin: narrow to one team. Supervisor: must be one of their own teams."
+    ),
+    territory: str | None = Query(
+        default=None, description="Farmer village/district substring match"
+    ),
 ) -> TeamLeadsResponse:
     """Team farmers with lead status, grouped counts + a filterable list."""
     return await LeadService(db).get_team_leads(
-        supervisor, status=_norm_status(status), employee_id=employee_id
+        supervisor,
+        status=_norm_status(status),
+        employee_id=employee_id,
+        team_id=team_id,
+        territory=territory,
     )
 
 

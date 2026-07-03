@@ -304,6 +304,10 @@ class VisitService:
             raise bad_request(
                 "A follow-up date is required for Warm or Cold leads"
             )
+        if needs_follow_up and payload.follow_up_time is None:
+            raise bad_request(
+                "A follow-up time is required for Warm or Cold leads"
+            )
 
         now = datetime.now(timezone.utc)
         today = self._today()

@@ -2,9 +2,11 @@
 methods return ORM FollowUp objects so the jobs can flip reminder flags / status
 and commit within their own unit of work."""
 from datetime import date as date_type
+from datetime import datetime as datetime_type
 from datetime import time as time_type
+from datetime import timedelta
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.crm import Farmer, FollowUp
@@ -87,12 +89,55 @@ class FollowUpRepository:
 
     # ── scheduler queries (return ORM objects to mutate) ─────────────────
     async def due_24h(self, target_date: date_type) -> list:
-        """(FollowUp, farmer_name) due on target_date, PENDING, no 24h sent."""
+        """(FollowUp, farmer_name) due on target_date, PENDING, no 24h sent.
+
+        Fallback path ONLY for follow-ups with no scheduled_time (legacy rows,
+        or ones created via the standalone lead-status-update endpoint, where
+        time is optional). Follow-ups WITH a time use `due_24h_precise`
+        instead, which targets an exact rolling 24h window (checklist #39)."""
         stmt = (
             select(FollowUp, Farmer.name)
             .outerjoin(Farmer, Farmer.id == FollowUp.farmer_id)
             .where(
                 FollowUp.scheduled_date == target_date,
+                FollowUp.scheduled_time.is_(None),
+                FollowUp.status == "PENDING",
+                FollowUp.reminder_sent_24h.is_(False),
+            )
+        )
+        return list((await self.db.execute(stmt)).all())
+
+    async def due_24h_precise(
+        self, window_start: datetime_type, window_end: datetime_type
+    ) -> list:
+        """(FollowUp, farmer_name) whose scheduled_date+scheduled_time falls in
+        [window_start, window_end) — i.e. ~24h from now, checked every 30 min
+        by the caller so the reminder fires close to an exact rolling 24h
+        offset rather than once daily at a fixed hour. PENDING, has a
+        scheduled_time, no 24h sent."""
+        clauses = []
+        cursor = window_start
+        while cursor < window_end:
+            day_end = datetime_type.combine(
+                cursor.date() + timedelta(days=1), time_type.min, tzinfo=cursor.tzinfo
+            )
+            segment_end = min(window_end, day_end)
+            clauses.append(
+                and_(
+                    FollowUp.scheduled_date == cursor.date(),
+                    FollowUp.scheduled_time >= cursor.time(),
+                    FollowUp.scheduled_time < segment_end.time()
+                    if segment_end.time() != time_type.min
+                    else FollowUp.scheduled_time <= time_type(23, 59, 59, 999999),
+                )
+            )
+            cursor = segment_end
+        stmt = (
+            select(FollowUp, Farmer.name)
+            .outerjoin(Farmer, Farmer.id == FollowUp.farmer_id)
+            .where(
+                or_(*clauses),
+                FollowUp.scheduled_time.is_not(None),
                 FollowUp.status == "PENDING",
                 FollowUp.reminder_sent_24h.is_(False),
             )
