@@ -348,50 +348,50 @@ async def escalate_unacknowledged_followups() -> None:
 
 
 async def late_dsr_check_job() -> None:
-    """19:30 — mark DRAFT DSRs as is_late; notify each team supervisor of the
-    count of employees who haven't submitted yet.
+    """19:30 — mark DRAFT DSRs as is_late; notify each late employee's team
+    supervisor(s) individually (checklist #53 — was previously one aggregate
+    "N employees late" FCM broadcast to every active supervisor regardless of
+    team; now a per-employee flag sent only to that employee's own team
+    supervisor(s)).
 
     Business rule: DSRs that are still DRAFT after 19:30 in the business
-    timezone are marked late. The supervisor gets one aggregate FCM per team.
+    timezone are marked late.
     """
     today = _today_utc()
     if not await _claim(f"late_dsr_check:{today}"):
         return
     try:
-        late_count = await mark_late_reports(today)
-        if late_count == 0:
+        late_rows = await mark_late_reports(today)
+        if not late_rows:
             return
-        # Notify supervisors. We do a simple broadcast to all active supervisors
-        # and let the message convey the count. A per-team count would require
-        # joining users → teams → supervisors; the aggregate count is sufficient.
         async with async_session_factory() as db:
-            from app.models.enums import UserRole
-            from app.models.user import User
-            from sqlalchemy import select
-
-            sup_q = await db.execute(
-                select(User.id).where(
-                    User.role == UserRole.SUPERVISOR,
-                    User.is_active.is_(True),
-                )
-            )
-            sup_ids = list(sup_q.scalars().all())
-            if not sup_ids:
-                return
             svc = NotificationService(db)
-            for sup_id in sup_ids:
-                await svc.send_fcm(
-                    sup_id,
-                    title="DSR Reminder",
-                    body=f"{late_count} employee(s) have not submitted their DSR.",
-                    type="DSR_LATE_SUPERVISOR",
-                    data={"screen": "daily_reports"},
-                    commit=False,
-                )
+            # Cache team -> supervisor lookups since multiple late employees
+            # commonly share a team.
+            team_supervisors: dict[int, list[int]] = {}
+            notified = 0
+            for employee_id, employee_name, team_id in late_rows:
+                sup_ids: list[int] = []
+                if team_id is not None:
+                    if team_id not in team_supervisors:
+                        team_supervisors[team_id] = await _supervisor_ids_for_team(
+                            db, team_id
+                        )
+                    sup_ids = team_supervisors[team_id]
+                for sup_id in sup_ids:
+                    await svc.send_fcm(
+                        sup_id,
+                        title="DSR Not Submitted",
+                        body=f"{employee_name or 'An employee'} has not submitted their DSR.",
+                        type="DSR_LATE_EMPLOYEE",
+                        data={"screen": "daily_reports", "employee_id": str(employee_id)},
+                        commit=False,
+                    )
+                    notified += 1
             await db.commit()
             logger.info(
-                "late_dsr_check: notified %d supervisor(s) about %d late DSR(s)",
-                len(sup_ids), late_count,
+                "late_dsr_check: %d employee(s) late, %d individual notification(s) sent",
+                len(late_rows), notified,
             )
     except Exception:  # noqa: BLE001
         logger.exception("late_dsr_check job failed")

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { LogIn } from 'lucide-react';
 
 import { api, apiErrorMessage } from '@/services/api/client';
@@ -13,6 +13,8 @@ export default function LoginPage() {
   const isAdmin = useAuthStore(selectIsAdmin);
   const setSession = useAuthStore((s) => s.setSession);
   const navigate = useNavigate();
+  const location = useLocation();
+  const idleLogout = location.state?.reason === 'idle';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -58,6 +60,11 @@ export default function LoginPage() {
           <p className="mt-1 text-sm text-text-secondary">
             Manage employees, teams, attendance and live tracking.
           </p>
+          {idleLogout && (
+            <p className="mt-3 rounded-btn bg-primary/10 px-3 py-2 text-sm text-primary">
+              You were signed out after 30 minutes of inactivity. Please sign in again.
+            </p>
+          )}
           <form onSubmit={submit} className="mt-5 space-y-4">
             <Input
               label="Email"

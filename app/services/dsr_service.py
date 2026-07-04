@@ -410,23 +410,39 @@ async def add_manager_comment(
     return report
 
 
-async def mark_late_reports(report_date: date_type) -> int:
+async def mark_late_reports(report_date: date_type) -> list[tuple[int, str, int | None]]:
     """APScheduler job body: mark DRAFT reports for today as is_late=True.
-    Returns the count of rows updated.
+    Returns (employee_id, employee_name, team_id) for each newly-late report,
+    so the scheduler can notify supervisors with an individual per-employee
+    flag instead of just an aggregate count (checklist #53).
     Called by the 19:30 scheduler job.
     """
     async with async_session_factory() as db:
-        result = await db.execute(
+        # Select the about-to-flip rows FIRST — the UPDATE alone can't tell us
+        # who they belong to.
+        rows = (
+            await db.execute(
+                select(DailyReport.employee_id, User.name, User.team_id)
+                .join(User, User.id == DailyReport.employee_id)
+                .where(
+                    DailyReport.report_date == report_date,
+                    DailyReport.status == "DRAFT",
+                    DailyReport.is_late.is_(False),
+                )
+            )
+        ).all()
+        if not rows:
+            return []
+        await db.execute(
             text(
                 "UPDATE daily_reports SET is_late = TRUE "
                 "WHERE report_date = :d AND status = 'DRAFT' AND is_late = FALSE"
             ),
             {"d": report_date},
         )
-        count = result.rowcount
         await db.commit()
-        logger.info("late_dsr_check: marked %d report(s) late on %s", count, report_date)
-        return count
+        logger.info("late_dsr_check: marked %d report(s) late on %s", len(rows), report_date)
+        return [(r[0], r[1], r[2]) for r in rows]
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
