@@ -448,13 +448,25 @@ async def mark_late_reports(report_date: date_type) -> list[tuple[int, str, int 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 async def _supervisor_ids_for_team(db: AsyncSession, team_id: int) -> list[int]:
-    """Returns user IDs of supervisors assigned to this team."""
+    """Returns user IDs of supervisors assigned to this team.
+
+    A team's supervisor is `Team.supervisor_id` — the FK `TeamService.create`/
+    `update` actually maintain — NOT `User.team_id`. `User.team_id` is only
+    ever set via `TeamService.add_member`/`remove_member`, which is for
+    employees joining a team; the supervisor's own `team_id` is never
+    populated by the app. Fixed: this used to filter on `User.team_id`,
+    which silently returned zero supervisors for any team assigned through
+    the normal admin API — it only ever worked in this session's own testing
+    because `scripts/seed_users.py` happens to also set the supervisor's
+    `team_id` as a seeding convenience, masking the bug."""
     from app.models.user import Team
     from app.models.enums import UserRole
 
     q = await db.execute(
-        select(User.id).where(
-            User.team_id == team_id,
+        select(User.id)
+        .join(Team, Team.supervisor_id == User.id)
+        .where(
+            Team.id == team_id,
             User.role == UserRole.SUPERVISOR,
             User.is_active.is_(True),
         )
