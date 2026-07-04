@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
 import { api } from './services/api/client';
 import { useAuthStore, selectIsAdmin } from './store/authStore';
+import { useIdleLogout } from './hooks/useIdleLogout';
 
 import AppLayout from './components/layout/AppLayout';
 import Spinner from './components/ui/Spinner';
@@ -56,6 +57,10 @@ function Protected({ children }) {
   const status = useAuthStore((s) => s.status);
   const isAdmin = useAuthStore(selectIsAdmin);
   const location = useLocation();
+  // checklist #70 — 30-min inactivity auto-logout. Called unconditionally
+  // (hook rules) but only meaningfully active once actually authenticated;
+  // logging out an already-unauthenticated session is a harmless no-op.
+  useIdleLogout();
 
   if (status !== 'authenticated') {
     return <Navigate to="/login" replace state={{ from: location }} />;

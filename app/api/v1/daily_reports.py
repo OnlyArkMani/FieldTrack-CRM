@@ -311,10 +311,15 @@ async def archive(
     search: str | None = Query(
         default=None, description="Customer/farmer name — matches any visit that day"
     ),
+    executive_name: str | None = Query(
+        default=None, description="Executive/employee name — free-text substring match (checklist #55)"
+    ),
     cursor: str | None = Query(default=None),
     limit: int = Query(default=30, ge=1, le=100),
 ) -> CursorPage[ArchiveDsrItem]:
     """Date-range DSR archive (one row per employee-day), scope-aware.
+    Searchable by date range, executive name (`executive_name`), or
+    customer/farmer name (`search`) — checklist #55.
 
     ADMIN: all employees, optionally filtered by team_id / employee_id.
     SUPERVISOR: always restricted to their own team.
@@ -354,6 +359,10 @@ async def archive(
         base_filters.append(DailyReport.report_date <= date_to)
     if status:
         base_filters.append(DailyReport.status == status.upper())
+    if executive_name:
+        # User is already joined into the base query below — a direct filter,
+        # no subquery needed (checklist #55: search by executive name).
+        base_filters.append(User.name.ilike(f"%{executive_name.strip()}%"))
     if search:
         # A DSR row has no farmer of its own (it's per employee-day) — match
         # if any visit that employee logged that day was with a matching farmer.
