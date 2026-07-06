@@ -59,19 +59,46 @@ class FarmerDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(farmerDetailProvider(farmerId));
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('FPO', maxLines: 1, overflow: TextOverflow.ellipsis),
-      ),
-      body: SafeArea(
-        child: async.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => ErrorStateView(
-            message: e.toString(),
-            onRetry: () =>
-                ref.read(farmerDetailProvider(farmerId).notifier).refresh(),
+    return PopScope(
+      // Prevent the default pop (which exits the app when there's no back stack).
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          // If there's a previous route in the stack, go back normally.
+          // Otherwise, navigate to the farmers list (home of this section).
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/home/farmers');
+          }
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('FPO', maxLines: 1, overflow: TextOverflow.ellipsis),
+          // No custom leading — Flutter's automaticallyImplyLeading renders
+          // the standard back arrow when there is a previous route, which
+          // matches every other screen. PopScope above handles the hardware
+          // back key. When there is no back stack (direct deep-link), we
+          // show the home icon so the user can still navigate back.
+          leading: context.canPop()
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.home_rounded),
+                  tooltip: 'Home',
+                  onPressed: () => context.go('/home/farmers'),
+                ),
+        ),
+        body: SafeArea(
+          child: async.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => ErrorStateView(
+              message: e.toString(),
+              onRetry: () =>
+                  ref.read(farmerDetailProvider(farmerId).notifier).refresh(),
+            ),
+            data: (farmer) => _Content(farmer: farmer),
           ),
-          data: (farmer) => _Content(farmer: farmer),
         ),
       ),
     );

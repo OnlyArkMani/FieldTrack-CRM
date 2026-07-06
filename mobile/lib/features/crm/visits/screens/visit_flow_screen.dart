@@ -646,7 +646,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
         _sectionTitle('Meeting notes'),
         _counterField(_highlights, 'Meeting highlights',
             'What was discussed?', maxLen: 1000),
-        _counterField(_concerns, 'Farmer concerns', 'Any concerns raised?',
+        _counterField(_concerns, 'Concerns', 'Any concerns raised?',
             maxLen: 1000),
         _counterField(_interest, 'Product interest', 'What are they interested in?',
             maxLen: 1000),
@@ -791,6 +791,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
             child: Container(
               padding: const EdgeInsets.all(AppDimens.grid * 1.5),
               decoration: BoxDecoration(
+                color: scheme.surface,
                 border: Border.all(
                     color: colors.textSecondary.withValues(alpha: 0.25)),
                 borderRadius: BorderRadius.circular(AppDimens.buttonRadius),

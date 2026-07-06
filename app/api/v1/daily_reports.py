@@ -64,6 +64,7 @@ class VisitSummaryItem(BaseModel):
     check_out_at: Any
     lead_status: str | None
     meeting_highlights: str | None = None
+    farmer_concerns: str | None = None
 
 
 class OrderSummaryItem(BaseModel):

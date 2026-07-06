@@ -165,7 +165,7 @@ function DailyView({ isAdmin, teams }) {
   ];
 
   return (
-    <div className="flex h-full gap-4">
+    <div className="flex gap-4" style={{ maxHeight: 'calc(100vh - 140px)' }}>
       <div className={`flex flex-col gap-4 transition-all duration-300 ${selectedRow ? 'w-1/2' : 'w-full'}`}>
         <Card>
           <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -339,7 +339,7 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
   }
 
   return (
-    <div className="flex w-1/2 flex-col rounded-card border border-border bg-card shadow-md overflow-hidden">
+    <div className="flex h-full w-1/2 flex-col rounded-card border border-border bg-card shadow-md overflow-hidden">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div>
           <h3 className="font-semibold text-text-primary">{employeeName}</h3>
@@ -447,6 +447,9 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
                     {v.meeting_highlights && (
                       <p className="text-xs italic text-text-primary">{v.meeting_highlights}</p>
                     )}
+                    {v.farmer_concerns && (
+                      <p className="text-xs italic text-danger">{v.farmer_concerns}</p>
+                    )}
                   </div>
                 ))}
               </Section>
@@ -502,6 +505,8 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
                 <p className="text-sm text-text-primary whitespace-pre-wrap">{existingComment}</p>
               </Section>
             )}
+          </>
+        )}
 
             {reportId && (
               <Section title="Manager Comment">
@@ -514,17 +519,13 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
                   className="w-full rounded-btn border border-border bg-bg p-2 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                 />
                 <div className="mt-2 flex justify-end">
-                  <Button size="sm" disabled={!comment.trim() || saving} isLoading={saving} onClick={handleAddComment}>
-                    <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
+                  <Button size="sm" icon={MessageSquare} disabled={!comment.trim() || saving} loading={saving} onClick={handleAddComment}>
                     Save Comment
                   </Button>
                 </div>
               </Section>
             )}
-          </>
-        )}
       </div>
-         
     </div>
   );
 }

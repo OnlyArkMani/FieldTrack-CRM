@@ -511,7 +511,7 @@ async def get_dsr_with_details(
     day_start, day_end = _day_bounds_utc(report_date)
 
     # Completed visits with farmer name/location + purpose + lead status chip
-    # + meeting highlights (checklist #47 location, #48 highlights).
+    # + meeting highlights and farmer concerns (checklist #47 location, #48 highlights).
     visits_q = await db.execute(
         select(
             Visit,
@@ -520,6 +520,7 @@ async def get_dsr_with_details(
             Farmer.district.label("district"),
             Farmer.customer_type.label("customer_type"),
             VisitNote.meeting_highlights.label("meeting_highlights"),
+            VisitNote.farmer_concerns.label("farmer_concerns"),
         )
         .join(Farmer, Visit.farmer_id == Farmer.id, isouter=True)
         .outerjoin(VisitNote, VisitNote.visit_id == Visit.id)
@@ -595,6 +596,7 @@ async def get_dsr_with_details(
                 "check_out_at": r.Visit.check_out_at,
                 "lead_status": lead_status_map.get(r.Visit.farmer_id),
                 "meeting_highlights": r.meeting_highlights,
+                "farmer_concerns": r.farmer_concerns,
             }
             for r in visits_rows
         ],
