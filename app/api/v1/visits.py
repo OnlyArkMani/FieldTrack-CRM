@@ -26,6 +26,7 @@ from app.schemas.crm import (
     VisitNotesUpsert,
     VisitOrderResponse,
     VisitPhotoResponse,
+    VetRequestUpsert,
 )
 from app.services.visit_service import VisitService
 
@@ -104,6 +105,18 @@ async def upsert_org_answers(
     in supply (Q5) with a bag count, a real visit_orders row is also created so
     it shows in DSR, reports and the manager dashboard."""
     return await VisitService(db).upsert_org_answers(user, visit_id, body)
+
+
+@router.patch("/{visit_id}/vet", response_model=VisitDetailResponse)
+async def set_vet(
+    visit_id: int,
+    body: VetRequestUpsert,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> VisitDetailResponse:
+    """Record whether the customer needs a vet (and for how many cattle) during
+    this visit. Powers the Vet dashboard. Setting vet_required=false clears it."""
+    return await VisitService(db).set_vet(user, visit_id, body)
 
 
 @router.post("/{visit_id}/orders", response_model=VisitOrderResponse, status_code=201)

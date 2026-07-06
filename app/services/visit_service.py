@@ -56,6 +56,7 @@ from app.schemas.crm import (
     VisitOrderResponse,
     VisitPhotoResponse,
     VisitResponse,
+    VetRequestUpsert,
 )
 
 logger = logging.getLogger("fieldtrack.visit")
@@ -211,6 +212,27 @@ class VisitService:
         await self.db.commit()
         await self.db.refresh(note)
         return VisitNoteResponse.model_validate(note)
+
+    # ── vet requirement ──────────────────────────────────────────────────
+    async def set_vet(
+        self, user: User, visit_id: int, payload: "VetRequestUpsert"
+    ) -> VisitDetailResponse:
+        visit = await self._load_owned_visit(visit_id, user)
+        visit.vet_required = payload.vet_required
+        if payload.vet_required:
+            visit.vet_cattle_count = payload.vet_cattle_count
+            visit.vet_notes = payload.vet_notes
+            # Preserve an existing status (a manager may have moved it to
+            # SCHEDULED/DONE) — only default it the first time it's raised.
+            if not visit.vet_status:
+                visit.vet_status = "REQUESTED"
+        else:
+            visit.vet_cattle_count = None
+            visit.vet_notes = None
+            visit.vet_status = None
+        self.repo.add(visit)
+        await self.db.commit()
+        return await self._build_detail(visit)
 
     # ── livestock (append new row + denormalize farmer) ──────────────────
     async def upsert_livestock(
