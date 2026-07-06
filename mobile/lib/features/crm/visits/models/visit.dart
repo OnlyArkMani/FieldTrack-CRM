@@ -172,6 +172,10 @@ class VisitDetail {
     this.locationWarningRemark,
     this.purpose,
     required this.status,
+    this.vetRequired = false,
+    this.vetCattleCount,
+    this.vetNotes,
+    this.vetStatus,
     this.notes,
     this.livestock,
     this.orgAnswers,
@@ -193,6 +197,10 @@ class VisitDetail {
   final String? locationWarningRemark;
   final String? purpose;
   final String status;
+  final bool vetRequired;
+  final int? vetCattleCount;
+  final String? vetNotes;
+  final String? vetStatus;
   final VisitNoteData? notes;
   final LivestockProfile? livestock;
   final OrgAnswers? orgAnswers;
@@ -214,6 +222,10 @@ class VisitDetail {
         locationWarningRemark: json['location_warning_remark'] as String?,
         purpose: json['purpose'] as String?,
         status: (json['status'] as String?) ?? 'CHECKED_IN',
+        vetRequired: (json['vet_required'] as bool?) ?? false,
+        vetCattleCount: json['vet_cattle_count'] as int?,
+        vetNotes: json['vet_notes'] as String?,
+        vetStatus: json['vet_status'] as String?,
         notes: json['notes'] != null
             ? VisitNoteData.fromJson(json['notes'] as Map<String, dynamic>)
             : null,

@@ -79,6 +79,11 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
   final _orgNotes = TextEditingController();
   bool _orgInterested = false;
 
+  // vet requirement (captured on step 2, for both farmer & org customers)
+  bool _vetRequired = false;
+  final _vetCattle = TextEditingController();
+  final _vetNotes = TextEditingController();
+
   // order
   bool _orderEnabled = false;
   final _bagsCount = TextEditingController();
@@ -112,6 +117,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       _bagsPerMonth, _kgPerAnimal, _pricePerBag, _payMin, _payMax, _healthNotes,
       _orgMembers, _orgCattle, _orgBrand, _orgMonthlyBags,
       _orgInterestedBags, _orgNotes,
+      _vetCattle, _vetNotes,
       _bagsCount, _deliveryAddress, _orderNotes, _followUpPurpose,
     ]) {
       c.dispose();
@@ -257,6 +263,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
           } else {
             await _saveLivestock();
           }
+          await _saveVet();
           await _saveNotes(step: 2, silent: true);
           if (!mounted) return;
           _enterStep(3);
@@ -322,9 +329,24 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
             'You can record livestock details on a later visit.');
     if (ok != true) return;
     if (!mounted) return;
+    // Even when skipping the details form, persist a raised vet request.
+    if (_vetRequired) await _saveVet();
+    if (!mounted) return;
     await _saveNotes(step: 2, silent: true);
     if (!mounted) return;
     _enterStep(3);
+  }
+
+  Future<void> _saveVet() async {
+    if (_visitId == null) return;
+    // Only hit the endpoint when there's something to record (or clear).
+    await _repo.setVet(
+      _visitId!,
+      vetRequired: _vetRequired,
+      vetCattleCount:
+          _vetRequired ? int.tryParse(_vetCattle.text.trim()) : null,
+      vetNotes: _vetRequired ? _vetNotes.text.trim() : null,
+    );
   }
 
   Future<void> _saveOrder() async {
@@ -711,6 +733,47 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
         _chipsField('Health status', _healthLevels, _health,
             (v) => setState(() => _health = v)),
         _textField(_healthNotes, 'Health notes (optional)'),
+        _vetSection(),
+      ],
+    );
+  }
+
+  // ── vet requirement (shared by farmer + org step 2) ───────────────────────
+  Widget _vetSection() {
+    final scheme = Theme.of(context).colorScheme;
+    final colors = context.appColors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: AppDimens.grid),
+        const Divider(),
+        const SizedBox(height: AppDimens.grid),
+        AppCard(
+          child: Row(
+            children: [
+              Icon(Icons.medical_services_rounded,
+                  size: 18, color: scheme.secondary),
+              const SizedBox(width: AppDimens.grid),
+              Expanded(
+                child: Text('Needs a veterinary visit?',
+                    style: AppTextStyles.bodyMedium
+                        .copyWith(color: scheme.onSurface)),
+              ),
+              Switch(
+                value: _vetRequired,
+                onChanged: (v) => setState(() => _vetRequired = v),
+              ),
+            ],
+          ),
+        ),
+        if (_vetRequired) ...[
+          const SizedBox(height: AppDimens.grid),
+          _numField(_vetCattle, 'How many cattle need the vet?'),
+          _textField(_vetNotes, 'Vet notes (symptoms / details)'),
+          Text('Raised requests appear on the Vet dashboard.',
+              style:
+                  AppTextStyles.caption.copyWith(color: colors.textSecondary)),
+        ],
       ],
     );
   }
@@ -759,6 +822,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
         ],
         const SizedBox(height: AppDimens.grid),
         _textField(_orgNotes, 'Notes (optional)'),
+        _vetSection(),
       ],
     );
   }

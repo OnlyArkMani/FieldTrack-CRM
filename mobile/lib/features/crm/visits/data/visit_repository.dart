@@ -111,6 +111,24 @@ class VisitRepository {
     return OrgAnswers.fromJson(data);
   }
 
+  /// Record (or clear) the veterinary requirement for this visit. Powers the
+  /// Vet dashboard. Passing [vetRequired] false clears the count/notes.
+  Future<VisitDetail> setVet(
+    int visitId, {
+    required bool vetRequired,
+    int? vetCattleCount,
+    String? vetNotes,
+  }) async {
+    final data = await _api.patch('/visits/$visitId/vet', body: {
+      'vet_required': vetRequired,
+      if (vetRequired && vetCattleCount != null)
+        'vet_cattle_count': vetCattleCount,
+      if (vetRequired && vetNotes != null && vetNotes.isNotEmpty)
+        'vet_notes': vetNotes,
+    });
+    return VisitDetail.fromJson(data);
+  }
+
   Future<VisitDetail> complete(
     int visitId, {
     required LeadStatus leadStatus,
