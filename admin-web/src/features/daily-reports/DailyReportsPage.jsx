@@ -151,7 +151,7 @@ function DailyView({ isAdmin, teams }) {
     )},
     { key: 'in', header: 'Check In', render: (r) => fmtTime(r.check_in_time) },
     { key: 'out', header: 'Check Out', render: (r) => fmtTime(r.check_out_time) },
-    { key: 'visits', header: 'Visits', render: (r) => r.visits_completed },
+    { key: 'visits', header: 'Visits (Done/Planned)', render: (r) => `${r.visits_completed}/${r.visits_planned}` },
     { key: 'orders', header: 'Orders', render: (r) => r.orders_captured },
     { key: 'leads', header: 'Leads (H/W/C)', render: (r) => (
       <LeadPills h={r.hot_leads} w={r.warm_leads} c={r.cold_leads} />

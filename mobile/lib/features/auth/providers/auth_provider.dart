@@ -5,6 +5,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exceptions.dart';
 import '../../../core/widgets/app_messenger.dart';
 import '../../attendance/data/attendance_repository.dart';
+import '../../attendance/providers/attendance_provider.dart';
 import '../data/auth_repository.dart';
 import '../models/user.dart';
 
@@ -131,12 +132,17 @@ class AuthNotifier extends Notifier<AuthState> {
       await ref
           .read(attendanceRepositoryProvider)
           .start(pos.latitude, pos.longitude);
+
+      // 5. Refresh the UI to reflect the auto check-in.
+      ref.read(attendanceProvider.notifier).load(silent: true);
     } on ApiException catch (e) {
       // CONFLICT ("already started today") means the day is already clocked
       // in — that's a successful outcome, not a failure. Everything else
       // (network, server error) is a real failure worth surfacing.
       if (e.code != 'CONFLICT') {
         showAppSnackBar('Auto clock-in failed: ${e.message}');
+      } else {
+        ref.read(attendanceProvider.notifier).load(silent: true);
       }
     } catch (_) {
       // GPS timeout / position unavailable.
