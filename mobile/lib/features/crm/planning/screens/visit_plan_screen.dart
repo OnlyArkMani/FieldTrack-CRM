@@ -92,6 +92,8 @@ class VisitPlanScreen extends ConsumerWidget {
       return ErrorStateView(message: state.error!, onRetry: notifier.load);
     }
 
+    final carryOver = notifier.carryOverItems;
+
     if (state.items.isEmpty) {
       return EmptyStateView(
         icon: Icons.event_note_rounded,
@@ -102,8 +104,30 @@ class VisitPlanScreen extends ConsumerWidget {
       );
     }
 
+    final main = _mainList(context, ref, notifier, carryOver);
+    if (carryOver.isEmpty) return main;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _CarryOverSection(items: carryOver, notifier: notifier),
+        Expanded(child: main),
+      ],
+    );
+  }
+
+  Widget _mainList(
+    BuildContext context,
+    WidgetRef ref,
+    VisitPlanNotifier notifier,
+    List<PlanItem> carryOver,
+  ) {
     final active = notifier.activeItems;
     final completed = notifier.completedItems;
+
+    if (active.isEmpty && completed.isEmpty) {
+      // Only carry-over stops remain — nothing to edit below the section.
+      return const SizedBox.shrink();
+    }
 
     // Planning mode (nothing completed yet): keep the full reorderable /
     // swipe-to-remove editing experience.
@@ -264,6 +288,135 @@ class VisitPlanScreen extends ConsumerWidget {
           ),
         ),
       );
+  }
+}
+
+/// Missed stops carried over from earlier days. Each can be started now,
+/// rescheduled onto another day, or dropped.
+class _CarryOverSection extends StatelessWidget {
+  const _CarryOverSection({required this.items, required this.notifier});
+  final List<PlanItem> items;
+  final VisitPlanNotifier notifier;
+
+  Future<void> _reschedule(BuildContext context, PlanItem item) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().add(const Duration(days: 1)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 90)),
+    );
+    if (picked == null) return;
+    final ok = await notifier.rescheduleCarryOver(item, picked);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok
+            ? '${item.farmerName} moved to a new day'
+            : 'Could not reschedule'),
+      ));
+    }
+  }
+
+  Future<void> _drop(BuildContext context, PlanItem item) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Drop this visit?'),
+        content: Text(
+            "${item.farmerName} won't be carried over anymore."),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Drop')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final done = await notifier.dropCarryOver(item);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(done ? '${item.farmerName} dropped' : 'Could not drop'),
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(AppDimens.grid * 2, AppDimens.grid,
+          AppDimens.grid * 2, AppDimens.grid),
+      padding: const EdgeInsets.all(AppDimens.grid * 1.5),
+      decoration: BoxDecoration(
+        color: scheme.secondary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppDimens.cardRadius),
+        border: Border.all(color: scheme.secondary.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.history_rounded, size: 16, color: scheme.secondary),
+              const SizedBox(width: AppDimens.grid),
+              Text('Carried over · ${items.length}',
+                  style: AppTextStyles.caption.copyWith(
+                      color: scheme.secondary, fontWeight: FontWeight.w700)),
+            ],
+          ),
+          const SizedBox(height: AppDimens.grid),
+          for (final item in items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppDimens.grid),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.farmerName,
+                            style: AppTextStyles.bodyMedium
+                                .copyWith(color: scheme.onSurface),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                        Text(
+                          item.village ?? 'Missed earlier',
+                          style: AppTextStyles.caption
+                              .copyWith(color: colors.textSecondary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Start',
+                    visualDensity: VisualDensity.compact,
+                    icon: Icon(Icons.play_arrow_rounded, color: scheme.primary),
+                    onPressed: () => context.push(
+                        '/visit/start/${item.farmerId}?plan_item=${item.id}'),
+                  ),
+                  IconButton(
+                    tooltip: 'Reschedule',
+                    visualDensity: VisualDensity.compact,
+                    icon: Icon(Icons.event_rounded, color: scheme.secondary),
+                    onPressed: () => _reschedule(context, item),
+                  ),
+                  IconButton(
+                    tooltip: 'Drop',
+                    visualDensity: VisualDensity.compact,
+                    icon: Icon(Icons.close_rounded, color: colors.textSecondary),
+                    onPressed: () => _drop(context, item),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 

@@ -72,13 +72,46 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
     return s == 'COMPLETED' || s == 'SKIPPED';
   }
 
-  /// Actionable stops (PLANNED / IN_PROGRESS + pending follow-ups).
+  /// Actionable stops (PLANNED / IN_PROGRESS + pending follow-ups). Carried-over
+  /// items are excluded — they render in their own section and aren't re-saved.
   List<PlanItem> get activeItems =>
-      state.items.where((i) => !isDone(i)).toList();
+      state.items.where((i) => !isDone(i) && !i.isCarryOver).toList();
 
   /// Resolved stops (COMPLETED / SKIPPED) — shown in a separate section.
   List<PlanItem> get completedItems =>
       state.items.where(isDone).toList();
+
+  /// Missed PLANNED stops carried over from earlier days.
+  List<PlanItem> get carryOverItems =>
+      state.items.where((i) => i.isCarryOver && !isDone(i)).toList();
+
+  /// Reschedule a missed item onto [targetDate] (source skipped server-side).
+  Future<bool> rescheduleCarryOver(
+    PlanItem item,
+    DateTime targetDate, {
+    String? timeSlot,
+  }) async {
+    try {
+      await _repo.carryOver(item.id, targetDate: targetDate, timeSlot: timeSlot);
+      await load();
+      return true;
+    } on ApiException catch (e) {
+      state = state.copyWith(error: e.message);
+      return false;
+    }
+  }
+
+  /// Drop a missed item (marks it SKIPPED) so it stops carrying over.
+  Future<bool> dropCarryOver(PlanItem item) async {
+    try {
+      await _repo.skipItem(item.id);
+      await load();
+      return true;
+    } on ApiException catch (e) {
+      state = state.copyWith(error: e.message);
+      return false;
+    }
+  }
 
   /// Defaults to tomorrow after 4 PM (planning for the next day), else today.
   static DateTime _initialDate() {
@@ -151,8 +184,9 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
     // Only real, unresolved plan stops are persisted — follow-ups (which the
     // server injects for the date) and completed/skipped stops must not be
     // re-submitted as plan items.
-    final toSave =
-        state.items.where((i) => !i.isFollowUp && !isDone(i)).toList();
+    final toSave = state.items
+        .where((i) => !i.isFollowUp && !i.isCarryOver && !isDone(i))
+        .toList();
     if (toSave.isEmpty || state.isSaving) return false;
     state = state.copyWith(isSaving: true, clearError: true);
     try {

@@ -46,4 +46,24 @@ class VisitPlanRepository {
     );
     return MyPlan.fromJson(data);
   }
+
+  /// Reschedule a missed (carried-over) item onto [targetDate] with an optional
+  /// time. The source item is skipped server-side. Returns the target plan.
+  Future<MyPlan> carryOver(
+    int itemId, {
+    required DateTime targetDate,
+    String? timeSlot, // "HH:MM:SS"
+  }) async {
+    final data = await _api.post('/visit-plans/items/$itemId/carry-over', body: {
+      'target_date': ymd(targetDate),
+      if (timeSlot != null) 'time_slot': timeSlot,
+    });
+    return MyPlan.fromJson(data);
+  }
+
+  /// Drop a missed (carried-over) item — marks it SKIPPED server-side.
+  Future<MyPlan> skipItem(int itemId) async {
+    final data = await _api.post('/visit-plans/items/$itemId/skip');
+    return MyPlan.fromJson(data);
+  }
 }

@@ -27,6 +27,8 @@ class PlanItem {
     this.status = 'PLANNED',
     this.isFollowUp = false,
     this.followUpId,
+    this.isCarryOver = false,
+    this.originalDate,
   });
 
   final int id;
@@ -47,6 +49,10 @@ class PlanItem {
   final String status; // PLANNED / COMPLETED / SKIPPED / PENDING (follow-up)
   final bool isFollowUp;
   final int? followUpId;
+
+  /// A missed PLANNED stop carried over from an earlier day's plan.
+  final bool isCarryOver;
+  final DateTime? originalDate;
 
   /// Stable key for list widgets (plan items and follow-ups share an id space).
   String get key => isFollowUp ? 'fu-$id' : 'pi-$id';
@@ -81,6 +87,8 @@ class PlanItem {
         status: status ?? this.status,
         isFollowUp: isFollowUp,
         followUpId: followUpId,
+        isCarryOver: isCarryOver,
+        originalDate: originalDate,
       );
 
   factory PlanItem.fromJson(Map<String, dynamic> json) => PlanItem(
@@ -100,6 +108,8 @@ class PlanItem {
         status: (json['status'] as String?) ?? 'PLANNED',
         isFollowUp: (json['is_follow_up'] as bool?) ?? false,
         followUpId: json['follow_up_id'] as int?,
+        isCarryOver: (json['is_carry_over'] as bool?) ?? false,
+        originalDate: _dt(json['original_date']),
       );
 
   /// Body shape for POST /visit-plans items.
