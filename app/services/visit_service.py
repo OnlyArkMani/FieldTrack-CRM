@@ -431,7 +431,7 @@ class VisitService:
     ) -> VisitPhotoResponse:
         """Attach a photo to a visit. Enforces the per-visit cap, allowed image
         types, and the size limit. Bytes go to S3 under
-        visit_photo_s3_prefix/{visit_id}/; only metadata + the S3 key are
+        visit_photo_minio_prefix/{visit_id}/; only metadata + the S3 key are
         persisted in DB (VisitPhoto.file_path now holds an S3 key, not an
         absolute filesystem path)."""
         visit = await self._load_owned_visit(visit_id, user)
@@ -453,7 +453,7 @@ class VisitService:
             )
 
         ext = _PHOTO_EXT.get(ctype, "jpg")
-        object_key = f"{settings.visit_photo_s3_prefix}/{visit.id}/{uuid.uuid4().hex}.{ext}"
+        object_key = f"{settings.visit_photo_minio_prefix}/{visit.id}/{uuid.uuid4().hex}.{ext}"
         storage = get_storage()
         await asyncio.to_thread(storage.upload_bytes, object_key, content, content_type=ctype)
 

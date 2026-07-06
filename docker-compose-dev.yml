@@ -1,4 +1,35 @@
 services:
+  # Object storage (reports + visit photos) — self-hosted, S3-compatible.
+  # The app auto-creates the bucket + CORS policy at startup (see
+  # app/main.py's lifespan), so nothing manual is needed here beyond setting
+  # MINIO_ACCESS_KEY_ID/MINIO_SECRET_ACCESS_KEY in .env (reused below as MinIO's own
+  # root credentials — one pair, no drift).
+  minio:
+    image: minio/minio:latest
+    container_name: cattle-feed-gatipay-backend-minio-dev
+    restart: always
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY_ID:?set MINIO_ACCESS_KEY_ID in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_ACCESS_KEY:?set MINIO_SECRET_ACCESS_KEY in .env}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data_dev:/data
+    ports:
+      # 9000 (S3 API) MUST be reachable by whatever fetches presigned
+      # download URLs (browser / mobile) — not just other containers. See the
+      # MINIO_ENDPOINT_URL note in .env.example. 9001 is the web console,
+      # handy for local debugging (http://localhost:9001).
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - cattle-feed-gatipay-backend-network-dev
+
   cattle-feed-gatipay-backend-dev:
     build:
       context: .
@@ -8,14 +39,18 @@ services:
 
     restart: always
 
+    depends_on:
+      minio:
+        condition: service_healthy
+
     env_file:
       - .env
 
     ports:
       - "3991:8000"
 
-    # No reports/visit_photos bind mounts — both now live in S3-compatible
-    # object storage (S3_* env vars in .env), which also removes the
+    # No reports/visit_photos bind mounts — both now live in the `minio`
+    # service above (MINIO_* env vars in .env), which also removes the
     # host-bind-mount-permission bug these two lines used to cause.
 
     healthcheck:
@@ -52,6 +87,9 @@ services:
 
     networks:
       - cattle-feed-gatipay-backend-network-dev
+
+volumes:
+  minio_data_dev:
 
 networks:
   cattle-feed-gatipay-backend-network-dev:

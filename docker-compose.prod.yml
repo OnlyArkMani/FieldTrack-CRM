@@ -30,11 +30,16 @@
 #   Gunicorn restarts a worker that hangs/crashes; bare uvicorn won't.
 # - restart: always everywhere — a VPS reboot or OOM kill should bring every
 #   container back without manual intervention.
-# - Named volumes: postgres_data, redis_data, nginx_logs — all survive
-#   `docker compose down` (only `down -v` removes them). Reports and visit
-#   photos live in S3-compatible object storage instead (no local volume).
+# - Named volumes: postgres_data, redis_data, nginx_logs, minio_data — all
+#   survive `docker compose down` (only `down -v` removes them). Reports and
+#   visit photos live in the self-hosted `minio` service, S3 API via boto3.
+# - minio has no `ports:` (same rule as postgres/redis), but its S3 API
+#   still needs to be reachable by browsers/phones fetching presigned
+#   download URLs — Nginx publishes a dedicated port (9000, same TLS cert as
+#   80/443) that proxies straight through at the root path. A path-prefixed
+#   proxy would break S3 request-signature validation.
 # - Single bridge network `fieldtrack_network` — every service can resolve
-#   the others by service name (postgres, redis, app, nginx).
+#   the others by service name (postgres, redis, minio, app, nginx).
 # - No `version:` key — obsolete in Compose v2.
 
 name: fieldtrack
@@ -77,6 +82,33 @@ services:
       retries: 5
       start_period: 30s
     mem_limit: 1g
+    networks:
+      - fieldtrack_network
+
+  minio:
+    image: minio/minio:latest
+    container_name: fieldtrack-minio
+    restart: always
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_ACCESS_KEY}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    # NO ports: — same "only Nginx talks in from outside" rule as
+    # postgres/redis. Presigned download URLs still need to be reachable by
+    # browsers/phones though, so Nginx publishes a DEDICATED port (9000,
+    # reusing this domain's existing TLS cert) that proxies straight to this
+    # service at the root path — see nginx.prod.conf. A path-prefixed proxy
+    # (e.g. /storage/) would break S3 signature validation, since the signed
+    # canonical path wouldn't match what MinIO actually receives.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 512m
     networks:
       - fieldtrack_network
 
@@ -150,9 +182,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # No reports/visit_photos volumes — both now live in S3-compatible object
-    # storage (see app/core/storage.py), configured entirely via S3_* env vars
-    # in .env.prod. Local-disk storage doesn't survive host loss and doesn't
+      minio:
+        condition: service_healthy
+    # No reports/visit_photos volumes — both now live in MinIO object storage
+    # (see app/core/storage.py), configured entirely via MINIO_* env vars in
+    # .env.prod. Local-disk storage doesn't survive host loss and doesn't
     # work across multiple app replicas.
     # NO ports: — only Nginx talks to `app` over fieldtrack_network.
     expose:
@@ -176,9 +210,12 @@ services:
     depends_on:
       app:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     ports:
       - "80:80"
       - "443:443"
+      - "9000:9000"   # MinIO S3 API, dedicated TLS port — see nginx.prod.conf
     volumes:
       - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
       # Static files are now baked into the image from Dockerfile.nginx
@@ -198,6 +235,7 @@ volumes:
   postgres_data:
   redis_data:
   nginx_logs:
+  minio_data:
 
 networks:
   fieldtrack_network:

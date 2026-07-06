@@ -1,4 +1,6 @@
 """FieldTrack API entrypoint."""
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -35,15 +37,39 @@ from app.core.database import engine
 from app.core.exceptions import DEFAULT_ERROR_CODES, ApiError
 from app.core.redis import close_redis, get_redis
 from app.core.scheduler import build_reminder_scheduler
+from app.core.storage import get_storage
 from app.workers.sync_cleanup import run_cleanup
 
 settings = get_settings()
+logger = logging.getLogger("fieldtrack.main")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Fail fast: verify Redis is reachable at startup.
     await get_redis().ping()
+
+    # Object storage (reports + visit photos): auto-create the bucket on
+    # startup so a fresh MinIO container (which starts with none at all)
+    # doesn't silently fail the first upload a user tries. CORS is NOT
+    # handled here — see storage.py's ensure_bucket docstring for why (a
+    # confirmed MinIO platform limitation, not something this app can fix).
+    # Best-effort — storage issues shouldn't block attendance/GPS/CRM
+    # endpoints that don't touch it at all.
+    if settings.minio_bucket:
+        try:
+            await asyncio.to_thread(get_storage().ensure_bucket)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "could not verify/provision the object storage bucket %r — "
+                "report/photo uploads may fail until this is resolved",
+                settings.minio_bucket,
+            )
+    else:
+        logger.warning(
+            "MINIO_BUCKET is not configured — report exports and visit photo "
+            "uploads will fail until it's set"
+        )
 
     # Daily housekeeping (location prune, sync_queue prune, attendance archive).
     # In-process APScheduler — no Celery (see ARCHITECTURE.md). 03:17 UTC is an

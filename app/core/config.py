@@ -47,25 +47,36 @@ class Settings(BaseSettings):
     # Rate limiting
     rate_limit_per_minute: int = 120
 
-    # Object storage — S3-compatible (AWS S3, Backblaze B2, MinIO, DigitalOcean
-    # Spaces, ...). endpoint_url empty => real AWS; set it to point at any
-    # S3-compatible provider instead. Replaces the old VPS-local-filesystem
-    # storage for both reports and visit photos (see storage.py) — local disk
-    # doesn't survive host loss and doesn't work across multiple app replicas.
-    s3_bucket: str = ""
-    s3_region: str = "us-east-1"
-    s3_endpoint_url: str = ""
-    s3_access_key_id: str = ""
-    s3_secret_access_key: str = ""
-    # Some S3-compatible providers (MinIO, some self-hosted setups) need
-    # path-style addressing (https://host/bucket/key) instead of the AWS
-    # default virtual-hosted style (https://bucket.host/key).
-    s3_use_path_style: bool = False
+
+    # Object storage — self-hosted MinIO by default (see docker-compose-dev.yml
+    # / docker-compose.prod.yml's `minio` service), speaking the S3 API via
+    # boto3. Replaces the old VPS-local-filesystem storage for both reports
+    # and visit photos (see storage.py) — local disk doesn't survive host loss
+    # and doesn't work across multiple app replicas. Still works unmodified
+    # against real AWS S3/Backblaze B2/DigitalOcean Spaces if minio_endpoint_url
+    # is pointed there instead (set minio_use_path_style=False for real AWS).
+    minio_bucket: str = "fieldtrack-storage"
+    minio_region: str = "us-east-1"
+    minio_endpoint_url: str = "http://minio:9000"
+    # ONLY used to sign presigned URLs — the browser/mobile app fetches those
+    # directly and can't resolve the docker-internal hostname above. Empty
+    # means "same as minio_endpoint_url" (fine for real AWS/B2, where there's
+    # only one true endpoint). See storage.py's module docstring for the full
+    # explanation — this isn't optional in a real Docker deployment; a
+    # presigned URL signed for `minio:9000` will fail to connect from outside
+    # the docker network entirely, not just look wrong.
+    minio_public_endpoint_url: str = ""
+    minio_access_key_id: str = ""
+    minio_secret_access_key: str = ""
+    # MinIO (and most self-hosted S3-compatible servers) need path-style
+    # addressing (https://host/bucket/key) — real AWS defaults to
+    # virtual-hosted style (https://bucket.host/key) and needs this False.
+    minio_use_path_style: bool = True
 
     # Reports — status + metadata live in Redis with a matching TTL; the
     # rendered file bytes live in S3 under this key prefix. Objects older than
     # the retention window are pruned best-effort on the next generation.
-    report_s3_prefix: str = "reports"
+    report_minio_prefix: str = "reports"
     report_retention_minutes: int = 60
     # How long a presigned download URL stays valid — short-lived by design,
     # the client is expected to use it immediately after polling READY.
@@ -74,7 +85,7 @@ class Settings(BaseSettings):
     # Visit photos (checklist #24) — image bytes in S3 under this key prefix;
     # DB holds metadata only. Unlike reports these are permanent evidence, so
     # no TTL prune.
-    visit_photo_s3_prefix: str = "visit_photos"
+    visit_photo_minio_prefix: str = "visit_photos"
     max_visit_photos: int = 5
     max_visit_photo_bytes: int = 8 * 1024 * 1024  # 8 MB per photo
     visit_photo_download_url_ttl_seconds: int = 300

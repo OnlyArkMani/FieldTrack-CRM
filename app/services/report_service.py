@@ -1396,7 +1396,7 @@ class ReportStore:
         return self.settings.report_retention_minutes * 60
 
     def object_key(self, report_id: str, fmt: ReportFormat) -> str:
-        return f"{self.settings.report_s3_prefix}/{report_id}.{fmt.extension}"
+        return f"{self.settings.report_minio_prefix}/{report_id}.{fmt.extension}"
 
     def download_url(self, report_id: str) -> str:
         return f"{self.settings.api_v1_prefix}/reports/{report_id}/download"
@@ -1466,10 +1466,10 @@ class ReportStore:
         try:
             cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._ttl)
             for object_key, last_modified in self.storage.list_with_last_modified(
-                f"{self.settings.report_s3_prefix}/"
+                f"{self.settings.report_minio_prefix}/"
             ):
                 # Skip the auto/ subtree (long-TTL scheduled reports).
-                rel = object_key[len(self.settings.report_s3_prefix) + 1 :]
+                rel = object_key[len(self.settings.report_minio_prefix) + 1 :]
                 if rel.startswith("auto/"):
                     continue
                 if last_modified < cutoff:
@@ -1546,7 +1546,7 @@ async def generate_team_report_file(
             data = await ReportService(db).build_data(normalized)
         content: bytes = await asyncio.to_thread(render_report, data, fmt)
         # Persist under auto/ so prune_expired_objects (top-level only) skips it.
-        object_key = f"{store.settings.report_s3_prefix}/auto/{report_id}.{fmt.extension}"
+        object_key = f"{store.settings.report_minio_prefix}/auto/{report_id}.{fmt.extension}"
         await asyncio.to_thread(
             store.storage.upload_bytes, object_key, content, content_type=fmt.media_type
         )
