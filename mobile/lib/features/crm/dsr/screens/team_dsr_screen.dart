@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_text_styles.dart';
@@ -288,8 +289,7 @@ class _MemberDsrSheet extends ConsumerWidget {
               if (d.visits.isNotEmpty) ...[
                 const SizedBox(height: AppDimens.grid * 2),
                 _sectionTitle(context, 'Visits'),
-                ...d.visits.map((v) => _row(context, v.farmerName,
-                    '${v.purposeLabel}${v.leadStatus != null ? ' · ${v.leadStatus}' : ''}')),
+                ...d.visits.map((v) => _TeamVisitTile(visit: v)),
               ],
               if (d.orders.isNotEmpty) ...[
                 const SizedBox(height: AppDimens.grid * 2),
@@ -357,6 +357,131 @@ class _MemberDsrSheet extends ConsumerWidget {
               style:
                   AppTextStyles.caption.copyWith(color: colors.textSecondary)),
         ],
+      ),
+    );
+  }
+}
+
+/// Expandable, tappable visit row in the team-member DSR drill-down. Tap the
+/// name to open the customer's full history; expand to see meeting detail.
+class _TeamVisitTile extends StatefulWidget {
+  const _TeamVisitTile({required this.visit});
+  final DsrVisit visit;
+
+  @override
+  State<_TeamVisitTile> createState() => _TeamVisitTileState();
+}
+
+class _TeamVisitTileState extends State<_TeamVisitTile> {
+  bool _expanded = false;
+
+  String _money(double? v) => v == null
+      ? '—'
+      : '₹${v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2)}';
+
+  @override
+  Widget build(BuildContext context) {
+    final v = widget.visit;
+    final colors = context.appColors;
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: v.farmerId == null
+                      ? null
+                      : () => context.push('/farmer/${v.farmerId}'),
+                  child: Text(v.farmerName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.body.copyWith(
+                          color: v.farmerId == null
+                              ? scheme.onSurface
+                              : scheme.primary,
+                          fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${v.purposeLabel}${v.leadStatus != null ? ' · ${v.leadStatus}' : ''}',
+                style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+              ),
+              if (v.hasDetail)
+                GestureDetector(
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: Icon(
+                        _expanded
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                        size: 18,
+                        color: colors.textSecondary),
+                  ),
+                ),
+            ],
+          ),
+          if (_expanded && v.hasDetail)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, left: 4, bottom: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (v.timeLabel.isNotEmpty)
+                    _detail(context, 'Time', v.timeLabel),
+                  if (v.meetingHighlights != null &&
+                      v.meetingHighlights!.isNotEmpty)
+                    _detail(context, 'Highlights', v.meetingHighlights!),
+                  if (v.farmerConcerns != null && v.farmerConcerns!.isNotEmpty)
+                    _detail(context, 'Concerns', v.farmerConcerns!),
+                  if (v.productInterest != null && v.productInterest!.isNotEmpty)
+                    _detail(context, 'Product interest', v.productInterest!),
+                  if (v.orderBags != null && v.orderBags! > 0)
+                    _detail(context, 'Order',
+                        '${v.orderBags} bags · ${_money(v.orderValue)}'),
+                  if (v.vetRequired)
+                    _detail(context, 'Vet needed',
+                        '${v.vetCattleCount ?? '—'} cattle'),
+                  if (v.breed != null ||
+                      v.currentBrand != null ||
+                      v.livestockCattle != null)
+                    _detail(
+                        context,
+                        'Livestock',
+                        [
+                          if (v.livestockCattle != null)
+                            '${v.livestockCattle} cattle',
+                          if (v.breed != null) v.breed,
+                          if (v.currentBrand != null) v.currentBrand,
+                          if (v.pricePerBag != null) _money(v.pricePerBag),
+                        ].whereType<String>().join(' · ')),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detail(BuildContext context, String k, String val) {
+    final colors = context.appColors;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: RichText(
+        text: TextSpan(
+          style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+          children: [
+            TextSpan(
+                text: '$k: ',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+            TextSpan(text: val),
+          ],
+        ),
       ),
     );
   }

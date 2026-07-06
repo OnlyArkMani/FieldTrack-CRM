@@ -412,50 +412,128 @@ class _SectionHeader extends StatelessWidget {
 
 // ── Visit card ─────────────────────────────────────────────────────────────────
 
-class _VisitCard extends StatelessWidget {
+class _VisitCard extends StatefulWidget {
   const _VisitCard({required this.visit});
   final DsrVisit visit;
 
-  Color _leadColor(BuildContext context, String? status) =>
-      switch (status?.toUpperCase()) {
-        'HOT' => const Color(0xFFE8645A),
-        'WARM' => const Color(0xFFF5A623),
-        'COLD' => const Color(0xFF8B7FD4),
-        _ => Theme.of(context).colorScheme.outline,
-      };
+  @override
+  State<_VisitCard> createState() => _VisitCardState();
+}
+
+class _VisitCardState extends State<_VisitCard> {
+  bool _expanded = false;
+
+  String _money(double? v) => v == null
+      ? '—'
+      : '₹${v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2)}';
 
   @override
   Widget build(BuildContext context) {
+    final visit = widget.visit;
     final colors = context.appColors;
+    final scheme = Theme.of(context).colorScheme;
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  visit.farmerName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodyMedium
-                      .copyWith(fontWeight: FontWeight.w600),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Tap the customer name to open their full visit history.
+                    GestureDetector(
+                      onTap: visit.farmerId == null
+                          ? null
+                          : () => context.push('/farmer/${visit.farmerId}'),
+                      child: Text(
+                        visit.farmerName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: visit.farmerId == null
+                              ? scheme.onSurface
+                              : scheme.primary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${visit.purposeLabel}  ·  ${visit.timeLabel}',
+                      style: AppTextStyles.caption
+                          .copyWith(color: colors.textSecondary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  '${visit.purposeLabel}  ·  ${visit.timeLabel}',
-                  style: AppTextStyles.caption
-                      .copyWith(color: colors.textSecondary),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(width: 8),
+              if (visit.leadStatus != null) _LeadChip(status: visit.leadStatus!),
+              if (visit.hasDetail)
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(
+                    _expanded
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    color: colors.textSecondary,
+                  ),
+                  onPressed: () => setState(() => _expanded = !_expanded),
                 ),
-              ],
-            ),
+            ],
           ),
-          const SizedBox(width: 8),
-          if (visit.leadStatus != null)
-            _LeadChip(status: visit.leadStatus!),
+          if (_expanded && visit.hasDetail) ...[
+            const Divider(height: 16),
+            if (visit.meetingHighlights != null &&
+                visit.meetingHighlights!.isNotEmpty)
+              _kv(context, 'Highlights', visit.meetingHighlights!),
+            if (visit.farmerConcerns != null && visit.farmerConcerns!.isNotEmpty)
+              _kv(context, 'Concerns', visit.farmerConcerns!),
+            if (visit.productInterest != null &&
+                visit.productInterest!.isNotEmpty)
+              _kv(context, 'Product interest', visit.productInterest!),
+            if (visit.orderBags != null && visit.orderBags! > 0)
+              _kv(context, 'Order',
+                  '${visit.orderBags} bags · ${_money(visit.orderValue)}'),
+            if (visit.vetRequired)
+              _kv(context, 'Vet needed',
+                  '${visit.vetCattleCount ?? '—'} cattle'),
+            if (visit.breed != null || visit.currentBrand != null ||
+                visit.livestockCattle != null)
+              _kv(
+                  context,
+                  'Livestock',
+                  [
+                    if (visit.livestockCattle != null)
+                      '${visit.livestockCattle} cattle',
+                    if (visit.breed != null) visit.breed,
+                    if (visit.currentBrand != null) visit.currentBrand,
+                    if (visit.pricePerBag != null)
+                      _money(visit.pricePerBag),
+                  ].whereType<String>().join(' · ')),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _kv(BuildContext context, String k, String v) {
+    final colors = context.appColors;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(k,
+              style: AppTextStyles.caption
+                  .copyWith(color: colors.textSecondary, fontWeight: FontWeight.w600)),
+          Text(v,
+              style: AppTextStyles.caption
+                  .copyWith(color: Theme.of(context).colorScheme.onSurface)),
         ],
       ),
     );

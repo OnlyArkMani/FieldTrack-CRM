@@ -149,23 +149,72 @@ class DsrDetail extends DsrSummary {
 class DsrVisit {
   const DsrVisit({
     required this.id,
+    this.farmerId,
     required this.farmerName,
+    this.village,
+    this.customerType,
     this.purpose,
     this.checkInAt,
     this.checkOutAt,
     this.leadStatus,
+    this.meetingHighlights,
+    this.farmerConcerns,
+    this.productInterest,
+    this.vetRequired = false,
+    this.vetCattleCount,
+    this.orderBags,
+    this.orderValue,
+    this.breed,
+    this.currentBrand,
+    this.livestockCattle,
+    this.pricePerBag,
   });
 
   final int id;
+  final int? farmerId;
   final String farmerName;
+  final String? village;
+  final String? customerType;
   final String? purpose;
   final DateTime? checkInAt;
   final DateTime? checkOutAt;
   final String? leadStatus;
+  final String? meetingHighlights;
+  final String? farmerConcerns;
+  final String? productInterest;
+  final bool vetRequired;
+  final int? vetCattleCount;
+  final int? orderBags;
+  final double? orderValue;
+  final String? breed;
+  final String? currentBrand;
+  final int? livestockCattle;
+  final double? pricePerBag;
+
+  static double? _d(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v);
+    return null;
+  }
+
+  /// True when there is expandable detail worth showing.
+  bool get hasDetail =>
+      (meetingHighlights != null && meetingHighlights!.isNotEmpty) ||
+      (farmerConcerns != null && farmerConcerns!.isNotEmpty) ||
+      (productInterest != null && productInterest!.isNotEmpty) ||
+      vetRequired ||
+      (orderBags != null && orderBags! > 0) ||
+      breed != null ||
+      currentBrand != null ||
+      livestockCattle != null;
 
   factory DsrVisit.fromJson(Map<String, dynamic> j) => DsrVisit(
         id: j['id'] as int,
+        farmerId: j['farmer_id'] as int?,
         farmerName: j['farmer_name'] as String? ?? 'Unknown Farmer',
+        village: j['village'] as String?,
+        customerType: j['customer_type'] as String?,
         purpose: j['purpose'] as String?,
         checkInAt: j['check_in_at'] != null
             ? DateTime.parse(j['check_in_at'] as String)
@@ -174,6 +223,17 @@ class DsrVisit {
             ? DateTime.parse(j['check_out_at'] as String)
             : null,
         leadStatus: j['lead_status'] as String?,
+        meetingHighlights: j['meeting_highlights'] as String?,
+        farmerConcerns: j['farmer_concerns'] as String?,
+        productInterest: j['product_interest'] as String?,
+        vetRequired: j['vet_required'] as bool? ?? false,
+        vetCattleCount: j['vet_cattle_count'] as int?,
+        orderBags: j['order_bags'] as int?,
+        orderValue: _d(j['order_value']),
+        breed: j['breed'] as String?,
+        currentBrand: j['current_brand'] as String?,
+        livestockCattle: j['livestock_cattle'] as int?,
+        pricePerBag: _d(j['price_per_bag']),
       );
 
   String get purposeLabel {
