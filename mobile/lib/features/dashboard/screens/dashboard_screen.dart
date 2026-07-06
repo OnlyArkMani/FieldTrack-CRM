@@ -69,6 +69,13 @@ class DashboardScreen extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: AppDimens.grid * 1.5),
+            _QuickAction(
+              icon: Icons.medical_services_rounded,
+              label: 'Vet requests',
+              subtitle: 'Customers needing a vet',
+              onTap: () => context.push('/vet'),
+            ),
+            const SizedBox(height: AppDimens.grid * 1.5),
             if (isSupervisor) ...[
               Row(
                 children: [
@@ -97,6 +104,13 @@ class DashboardScreen extends ConsumerWidget {
                 label: 'Team DSR',
                 subtitle: 'Daily sales reports by member',
                 onTap: () => context.push('/dsr/team'),
+              ),
+              const SizedBox(height: AppDimens.grid * 1.5),
+              _QuickAction(
+                icon: Icons.fact_check_rounded,
+                label: 'Order approvals',
+                subtitle: 'Approve or reject field orders',
+                onTap: () => context.push('/orders/approvals'),
               ),
               const SizedBox(height: AppDimens.grid * 1.5),
             ],

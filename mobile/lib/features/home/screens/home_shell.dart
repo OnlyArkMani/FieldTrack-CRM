@@ -24,7 +24,7 @@ class HomeShell extends ConsumerWidget {
     (icon: Icons.dashboard_rounded, label: 'Dashboard'),
     (icon: Icons.fingerprint_rounded, label: 'Attendance'),
     (icon: Icons.map_rounded, label: 'Map'),
-    (icon: Icons.people_alt_rounded, label: 'FPO'),
+    (icon: Icons.people_alt_rounded, label: 'Customers'),
     (icon: Icons.person_rounded, label: 'Profile'),
   ];
 

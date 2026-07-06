@@ -18,6 +18,8 @@ import '../../features/crm/dsr/screens/dsr_review_screen.dart';
 import '../../features/crm/dsr/screens/team_dsr_screen.dart';
 import '../../features/crm/followups/screens/followups_screen.dart';
 import '../../features/crm/leads/screens/lead_pipeline_screen.dart';
+import '../../features/crm/orders/screens/order_approvals_screen.dart';
+import '../../features/crm/vet/screens/vet_dashboard_screen.dart';
 import '../../features/crm/visits/screens/visit_flow_screen.dart';
 import '../../features/crm/visits/screens/visit_summary_screen.dart';
 import '../../features/dashboard/screens/dashboard_screen.dart';
@@ -217,6 +219,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/followups',
         pageBuilder: (context, state) =>
             WaterPage(key: state.pageKey, child: const FollowUpsScreen()),
+      ),
+      GoRoute(
+        path: '/vet',
+        pageBuilder: (context, state) =>
+            WaterPage(key: state.pageKey, child: const VetDashboardScreen()),
+      ),
+      GoRoute(
+        path: '/orders/approvals',
+        pageBuilder: (context, state) => WaterPage(
+            key: state.pageKey, child: const OrderApprovalsScreen()),
       ),
 
       GoRoute(
