@@ -105,6 +105,12 @@ export default function FarmerDetailPanel({ farmerId, open, onClose }) {
                 {farmer.village && (
                   <Row icon={MapPin} text={[farmer.village, farmer.district].filter(Boolean).join(', ')} />
                 )}
+                {(farmer.address || farmer.landmark) && (
+                  <Row icon={MapPin} text={[farmer.address, farmer.landmark].filter(Boolean).join(', ')} />
+                )}
+                {farmer.pincode && (
+                  <Row icon={MapPin} text={`PIN ${farmer.pincode}`} />
+                )}
                 {farmer.phone && (
                   <Row icon={Phone} text={<a className="text-primary hover:underline" href={`tel:${farmer.phone}`}>{farmer.phone}</a>} />
                 )}
