@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_card.dart';
-import '../../../core/widgets/shimmer_card.dart';
+// import '../../../core/widgets/shimmer_card.dart';
 import '../../attendance/widgets/attendance_status_tile.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../notifications/widgets/notification_bell.dart';
@@ -109,10 +109,10 @@ class DashboardScreen extends ConsumerWidget {
               onTap: () => context.push('/reports'),
             ),
             const SizedBox(height: AppDimens.grid * 1.5),
-            // Shimmer placeholders until the remaining live metrics land.
-            const ShimmerCard(),
-            const SizedBox(height: AppDimens.grid * 1.5),
-            const ShimmerCard(),
+            // // Shimmer placeholders until the remaining live metrics land.
+            // const ShimmerCard(),
+            // const SizedBox(height: AppDimens.grid * 1.5),
+            // const ShimmerCard(),
           ],
         ),
       ),

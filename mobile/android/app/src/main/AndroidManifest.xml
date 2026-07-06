@@ -45,7 +45,7 @@
     <application
         android:label="FieldTrack"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/launcher_icon"
         android:enableOnBackInvokedCallback="true"
         android:allowBackup="false"
         android:fullBackupContent="false"
