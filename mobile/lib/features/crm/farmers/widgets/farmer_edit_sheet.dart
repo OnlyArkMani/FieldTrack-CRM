@@ -19,7 +19,7 @@ class FarmerEditSheet {
   static Future<void> show(BuildContext context, {required FarmerDetail farmer}) {
     return AppBottomSheet.show(
       context,
-      title: 'Edit farmer',
+      title: 'Edit customer',
       initialSize: 0.8,
       maxSize: 0.95,
       child: _FarmerEditForm(farmer: farmer),
@@ -42,6 +42,10 @@ class _FarmerEditFormState extends ConsumerState<_FarmerEditForm> {
   late final _district =
       TextEditingController(text: widget.farmer.district ?? '');
   late final _address = TextEditingController(text: widget.farmer.address ?? '');
+  late final _landmark =
+      TextEditingController(text: widget.farmer.landmark ?? '');
+  late final _pincode =
+      TextEditingController(text: widget.farmer.pincode ?? '');
   late final _cattle =
       TextEditingController(text: widget.farmer.totalCattle.toString());
   late final _notes = TextEditingController(text: widget.farmer.notes ?? '');
@@ -57,6 +61,8 @@ class _FarmerEditFormState extends ConsumerState<_FarmerEditForm> {
     _village.dispose();
     _district.dispose();
     _address.dispose();
+    _landmark.dispose();
+    _pincode.dispose();
     _cattle.dispose();
     _notes.dispose();
     super.dispose();
@@ -78,6 +84,8 @@ class _FarmerEditFormState extends ConsumerState<_FarmerEditForm> {
         'village': _village.text.trim(),
         'district': _district.text.trim(),
         'address': _address.text.trim(),
+        'landmark': _landmark.text.trim(),
+        'pincode': _pincode.text.trim(),
         'total_cattle': int.tryParse(_cattle.text.trim()) ?? 0,
         'notes': _notes.text.trim(),
       });
@@ -113,6 +121,13 @@ class _FarmerEditFormState extends ConsumerState<_FarmerEditForm> {
         AppTextField(label: 'District', controller: _district),
         const SizedBox(height: AppDimens.grid * 2),
         AppTextField(label: 'Address', controller: _address),
+        const SizedBox(height: AppDimens.grid * 2),
+        AppTextField(label: 'Landmark', controller: _landmark),
+        const SizedBox(height: AppDimens.grid * 2),
+        AppTextField(
+            label: 'PIN code',
+            controller: _pincode,
+            keyboardType: TextInputType.number),
         const SizedBox(height: AppDimens.grid * 2),
         AppTextField(
             label: 'Total cattle',

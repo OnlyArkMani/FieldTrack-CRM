@@ -306,6 +306,8 @@ class FarmerDetail {
     this.village,
     this.district,
     this.address,
+    this.pincode,
+    this.landmark,
     this.lat,
     this.lng,
     this.totalCattle = 0,
@@ -333,6 +335,8 @@ class FarmerDetail {
   final String? village;
   final String? district;
   final String? address;
+  final String? pincode;
+  final String? landmark;
   final double? lat;
   final double? lng;
   final int totalCattle;
@@ -360,6 +364,8 @@ class FarmerDetail {
         village: json['village'] as String?,
         district: json['district'] as String?,
         address: json['address'] as String?,
+        pincode: json['pincode'] as String?,
+        landmark: json['landmark'] as String?,
         lat: _d(json['lat']),
         lng: _d(json['lng']),
         totalCattle: (json['total_cattle'] as int?) ?? 0,

@@ -45,10 +45,13 @@ class FarmerRepository {
     String? village,
     String? district,
     String? address,
-    int totalCattle = 0,
+    String? pincode,
+    String? landmark,
     String? notes,
     int? teamId,
   }) async {
+    // Total cattle is intentionally NOT collected at add time — it's captured
+    // during the first meeting/visit (livestock form). Backend defaults it to 0.
     final data = await _api.post('/farmers', body: {
       'name': name,
       'customer_type': customerType.wire,
@@ -56,7 +59,8 @@ class FarmerRepository {
       if (village != null && village.isNotEmpty) 'village': village,
       if (district != null && district.isNotEmpty) 'district': district,
       if (address != null && address.isNotEmpty) 'address': address,
-      'total_cattle': totalCattle,
+      if (pincode != null && pincode.isNotEmpty) 'pincode': pincode,
+      if (landmark != null && landmark.isNotEmpty) 'landmark': landmark,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
       if (teamId != null) 'team_id': teamId,
     });

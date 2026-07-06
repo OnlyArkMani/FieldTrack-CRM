@@ -75,7 +75,8 @@ class FarmerDetailScreen extends ConsumerWidget {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('FPO', maxLines: 1, overflow: TextOverflow.ellipsis),
+          title: const Text('Customer',
+              maxLines: 1, overflow: TextOverflow.ellipsis),
           // No custom leading — Flutter's automaticallyImplyLeading renders
           // the standard back arrow when there is a previous route, which
           // matches every other screen. PopScope above handles the hardware
@@ -310,9 +311,34 @@ class _HeaderCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppDimens.grid),
+          Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppDimens.grid, vertical: 2),
+            decoration: BoxDecoration(
+              color: scheme.secondary.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+            ),
+            child: Text(
+              farmer.customerType.label,
+              style: AppTextStyles.caption.copyWith(
+                  color: scheme.secondary, fontWeight: FontWeight.w600),
+            ),
+          ),
+          const SizedBox(height: AppDimens.grid),
           if (farmer.village != null && farmer.village!.isNotEmpty)
             _line(context, Icons.home_work_rounded,
                 [farmer.village, farmer.district].whereType<String>().where((s) => s.isNotEmpty).join(', ')),
+          if ((farmer.address != null && farmer.address!.isNotEmpty) ||
+              (farmer.landmark != null && farmer.landmark!.isNotEmpty))
+            _line(
+                context,
+                Icons.location_on_rounded,
+                [farmer.address, farmer.landmark]
+                    .whereType<String>()
+                    .where((s) => s.isNotEmpty)
+                    .join(', ')),
+          if (farmer.pincode != null && farmer.pincode!.isNotEmpty)
+            _line(context, Icons.markunread_mailbox_rounded, farmer.pincode!),
           if (farmer.teamName != null)
             _line(context, Icons.groups_rounded, farmer.teamName!),
           if (hasPhone)

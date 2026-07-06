@@ -28,7 +28,8 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
   final _village = TextEditingController();
   final _district = TextEditingController();
   final _address = TextEditingController();
-  final _cattle = TextEditingController(text: '0');
+  final _landmark = TextEditingController();
+  final _pincode = TextEditingController();
   final _notes = TextEditingController();
 
   CustomerType _type = CustomerType.farmer;
@@ -43,7 +44,8 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
     _village.dispose();
     _district.dispose();
     _address.dispose();
-    _cattle.dispose();
+    _landmark.dispose();
+    _pincode.dispose();
     _notes.dispose();
     super.dispose();
   }
@@ -65,7 +67,8 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
             village: _village.text.trim(),
             district: _district.text.trim(),
             address: _address.text.trim(),
-            totalCattle: int.tryParse(_cattle.text.trim()) ?? 0,
+            landmark: _landmark.text.trim(),
+            pincode: _pincode.text.trim(),
             notes: _notes.text.trim(),
           );
       if (!mounted) return;
@@ -99,15 +102,23 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
                 style: AppTextStyles.caption
                     .copyWith(color: colors.textSecondary)),
             const SizedBox(height: AppDimens.grid),
-            SegmentedButton<CustomerType>(
-              segments: const [
-                ButtonSegment(
-                    value: CustomerType.farmer, label: Text('Farmer')),
-                ButtonSegment(value: CustomerType.fpo, label: Text('FPO')),
-                ButtonSegment(value: CustomerType.vlcc, label: Text('VLCC')),
-              ],
-              selected: {_type},
-              onSelectionChanged: (s) => setState(() => _type = s.first),
+            DropdownButtonFormField<CustomerType>(
+              initialValue: _type,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.category_rounded),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppDimens.radius),
+                ),
+              ),
+              items: CustomerType.values
+                  .map((t) => DropdownMenuItem(
+                        value: t,
+                        child: Text(t.label,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ))
+                  .toList(),
+              onChanged: (v) =>
+                  setState(() => _type = v ?? CustomerType.farmer),
             ),
             const SizedBox(height: AppDimens.grid * 2),
             AppTextField(
@@ -145,16 +156,26 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
             AppTextField(
               label: 'Address',
               controller: _address,
+              hint: 'House / building',
               textInputAction: TextInputAction.next,
               prefixIcon: Icons.location_on_rounded,
             ),
             const SizedBox(height: AppDimens.grid * 2),
             AppTextField(
-              label: 'Total cattle',
-              controller: _cattle,
+              label: 'Landmark',
+              controller: _landmark,
+              hint: 'Nearby landmark',
+              textInputAction: TextInputAction.next,
+              prefixIcon: Icons.push_pin_rounded,
+            ),
+            const SizedBox(height: AppDimens.grid * 2),
+            AppTextField(
+              label: 'PIN code',
+              controller: _pincode,
+              hint: '6-digit postal code',
               keyboardType: TextInputType.number,
               textInputAction: TextInputAction.next,
-              prefixIcon: Icons.pets_rounded,
+              prefixIcon: Icons.markunread_mailbox_rounded,
             ),
             const SizedBox(height: AppDimens.grid * 2),
             AppTextField(
