@@ -14,8 +14,9 @@ FROM python:3.11-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# Non-root user — never run app containers as root in production.
-RUN groupadd -r fieldtrack && useradd -r -g fieldtrack fieldtrack
+# Non-root user — never run app containers as root in production. UID/GID
+# pinned to 1000 (not auto-assigned) for reproducibility across environments.
+RUN groupadd -r -g 1000 fieldtrack && useradd -r -u 1000 -g fieldtrack fieldtrack
 
 COPY --from=builder /install /usr/local
 WORKDIR /srv/fieldtrack
@@ -23,11 +24,10 @@ COPY alembic.ini ./
 COPY alembic ./alembic
 COPY app ./app
 
-# Report exports dir, owned by the non-root user. Mounted as a named volume in
-# compose; Docker copies this dir's ownership to the fresh volume on first use,
-# so the app can write exports without running as root.
-RUN mkdir -p /srv/fieldtrack/reports \
-    && chown -R fieldtrack:fieldtrack /srv/fieldtrack/reports
+# No local reports/visit_photos directories needed — both are stored in
+# S3-compatible object storage (see app/core/storage.py), configured via
+# S3_* env vars. The container's filesystem never needs write access outside
+# what the OS itself manages.
 
 USER fieldtrack
 EXPOSE 8000

@@ -4,24 +4,26 @@ FLOW:
   POST /reports/generate   -> authorize NOW (4xx early), schedule a background
                               job, return 202 {report_id, PROCESSING}
   GET  /reports/{id}/status -> poll until READY|FAILED|EXPIRED
-  GET  /reports/{id}/download -> FileResponse (owner/admin only)
+  GET  /reports/{id}/download -> 307 redirect to a short-lived presigned S3
+                              URL (owner/admin only)
 
 AUTHZ: every endpoint is scoped to the report's OWNER (the user who generated
 it) or an admin. The generate step additionally clamps the data scope to the
 caller's role (employee=self, supervisor=their team) inside ReportService.
 """
-import os
+import asyncio
 from datetime import date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.dependencies import CurrentUser, get_db
 from app.core.exceptions import forbidden, not_found
 from app.core.redis import Keys
+from app.core.storage import get_storage
 from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.report import (
@@ -95,12 +97,12 @@ async def report_status(
     """Poll target. READY with a missing file degrades to EXPIRED so the client
     re-generates instead of hitting a dead download."""
     data = await _load_owned(report_id, user)
+    store = ReportStore()
 
     status = ReportStatus(data["status"])
     download_url = data.get("download_url")
     if status is ReportStatus.READY:
-        path = data.get("path")
-        if not path or not os.path.isfile(path):
+        if not await store.object_exists(data.get("object_key")):
             status = ReportStatus.EXPIRED
             download_url = None
 
@@ -120,25 +122,32 @@ async def report_status(
 async def download_report(
     report_id: str,
     user: CurrentUser,
-) -> FileResponse:
-    """Stream the generated file. 404 until READY; 410-style EXPIRED if the
-    file has been pruned."""
+) -> RedirectResponse:
+    """307-redirect to a short-lived presigned S3 URL. 404 until READY;
+    410-style EXPIRED if the object has been pruned. The redirect keeps the
+    client contract identical to the old FileResponse (axios/blob-typed GETs
+    transparently follow redirects), while offloading the actual bytes to S3
+    instead of proxying them through this server."""
     data = await _load_owned(report_id, user)
     if data["status"] != ReportStatus.READY.value:
         raise not_found("Report is not ready")
 
-    path = data.get("path")
-    if not path or not os.path.isfile(path):
+    object_key = data.get("object_key")
+    storage = get_storage()
+    if not object_key or not await asyncio.to_thread(storage.exists, object_key):
         raise not_found("Report file has expired; please regenerate")
 
     fmt = ReportFormat(data["format"])
     filename = data.get("filename") or f"report.{fmt.extension}"
-    return FileResponse(
-        path,
-        media_type=fmt.media_type,
+    settings = get_settings()
+    url = await asyncio.to_thread(
+        storage.presigned_url,
+        object_key,
+        expires_in=settings.report_download_url_ttl_seconds,
         filename=filename,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        content_type=fmt.media_type,
     )
+    return RedirectResponse(url, status_code=307)
 
 
 @router.get("/{report_id}/debug")
@@ -147,8 +156,8 @@ async def report_debug(
     user: CurrentUser,
 ) -> dict:
     """DEV-ONLY inspection of the raw job state. Returns exactly what's stored in
-    Redis plus on-disk file presence, so a stuck "PROCESSING" can be diagnosed
-    (did the background task ever write READY/FAILED? is the file actually
+    Redis plus S3 object presence, so a stuck "PROCESSING" can be diagnosed
+    (did the background task ever write READY/FAILED? is the object actually
     there?). Disabled (404) in production, and still owner/admin scoped."""
     if get_settings().is_production:
         raise not_found("Not found")
@@ -169,17 +178,15 @@ async def report_debug(
     if owner_id != user.id and user.role != UserRole.ADMIN:
         raise forbidden("This report belongs to another user")
 
-    path = raw.get("path")
+    object_key = raw.get("object_key")
+    object_exists = await store.object_exists(object_key)
     return {
         "report_id": report_id,
         "redis_key": Keys.report(report_id),
         "exists": True,
         "raw": raw,
-        "file_path": path,
-        "file_exists": bool(path) and os.path.isfile(path),
-        "file_size_bytes": (
-            os.path.getsize(path) if path and os.path.isfile(path) else None
-        ),
+        "object_key": object_key,
+        "object_exists": object_exists,
     }
 
 
