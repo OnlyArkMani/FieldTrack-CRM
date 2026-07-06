@@ -71,6 +71,8 @@ class Customer(Base, TimestampMixin):
     village: Mapped[str | None] = mapped_column(String(200))
     district: Mapped[str | None] = mapped_column(String(200))
     address: Mapped[str | None] = mapped_column(Text)
+    pincode: Mapped[str | None] = mapped_column(String(10))  # added migration 0013
+    landmark: Mapped[str | None] = mapped_column(String(200))  # added migration 0013
     lat: Mapped[float | None] = mapped_column(Float)  # set on first visit
     lng: Mapped[float | None] = mapped_column(Float)
     total_cattle: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
@@ -179,6 +181,14 @@ class Visit(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="CHECKED_IN", server_default=text("'CHECKED_IN'")
     )  # CHECKED_IN / COMPLETED / ABANDONED
+    # Vet requirement captured during the meeting (migration 0014). Powers the
+    # Vet dashboard. vet_status: REQUESTED / SCHEDULED / DONE (null if not needed).
+    vet_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    vet_cattle_count: Mapped[int | None] = mapped_column(Integer)
+    vet_notes: Mapped[str | None] = mapped_column(Text)
+    vet_status: Mapped[str | None] = mapped_column(String(20))
 
     farmer: Mapped["Customer | None"] = relationship(back_populates="visits")
     notes: Mapped[list["VisitNote"]] = relationship(

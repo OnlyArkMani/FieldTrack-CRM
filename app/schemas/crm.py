@@ -48,6 +48,8 @@ class FarmerCreate(BaseModel):
     village: str | None = Field(default=None, max_length=200)
     district: str | None = Field(default=None, max_length=200)
     address: str | None = None
+    pincode: str | None = Field(default=None, max_length=10)
+    landmark: str | None = Field(default=None, max_length=200)
     team_id: int | None = None
     lat: float | None = None
     lng: float | None = None
@@ -68,6 +70,8 @@ class FarmerUpdate(BaseModel):
     village: str | None = Field(default=None, max_length=200)
     district: str | None = Field(default=None, max_length=200)
     address: str | None = None
+    pincode: str | None = Field(default=None, max_length=10)
+    landmark: str | None = Field(default=None, max_length=200)
     team_id: int | None = None
     lat: float | None = None
     lng: float | None = None
@@ -92,6 +96,8 @@ class FarmerResponse(BaseModel):
     village: str | None
     district: str | None
     address: str | None
+    pincode: str | None = None
+    landmark: str | None = None
     lat: float | None
     lng: float | None
     total_cattle: int
@@ -190,8 +196,23 @@ class VisitResponse(BaseModel):
     location_warning_remark: str | None
     purpose: str | None
     status: str
+    vet_required: bool = False
+    vet_cattle_count: int | None = None
+    vet_notes: str | None = None
+    vet_status: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class VetRequestUpsert(BaseModel):
+    """Set (or clear) the veterinary requirement captured during a visit.
+
+    When ``vet_required`` is true the service defaults ``vet_status`` to
+    'REQUESTED'. When false, the count/notes/status are cleared."""
+
+    vet_required: bool = False
+    vet_cattle_count: int | None = Field(default=None, ge=0)
+    vet_notes: str | None = Field(default=None, max_length=2000)
 
 
 # ── Leads (Module 4) ─────────────────────────────────────────────────────
@@ -387,6 +408,8 @@ class FarmerDetailResponse(BaseModel):
     village: str | None
     district: str | None
     address: str | None
+    pincode: str | None = None
+    landmark: str | None = None
     lat: float | None
     lng: float | None
     total_cattle: int
@@ -438,6 +461,18 @@ class PlanItemView(BaseModel):
     status: str = "PLANNED"  # PLANNED/COMPLETED/SKIPPED (PENDING for follow-ups)
     is_follow_up: bool = False
     follow_up_id: int | None = None
+    # A PLANNED stop carried over from an earlier day's plan (never visited).
+    is_carry_over: bool = False
+    original_date: date | None = None
+
+
+class CarryOverRequest(BaseModel):
+    """Reschedule a missed (carried-over) plan item onto a new date/time. The
+    source item is marked SKIPPED and a fresh PLANNED item is created on
+    target_date."""
+
+    target_date: date
+    time_slot: time | None = None
 
 
 class MyPlanResponse(BaseModel):
@@ -590,6 +625,32 @@ class OrderReviewRequest(BaseModel):
     rejection_reason: str | None = None
 
 
+VetStatus = Literal["REQUESTED", "SCHEDULED", "DONE"]
+
+
+class VetRequestItem(BaseModel):
+    """One row on the Vet dashboard — a visit where a vet was requested, joined
+    to its customer + capturing employee (built in the service)."""
+
+    visit_id: int
+    farmer_id: int | None = None
+    farmer_name: str
+    customer_type: CustomerType = "FARMER"
+    village: str | None = None
+    phone: str | None = None
+    employee_id: int | None = None
+    employee_name: str | None = None
+    team_name: str | None = None
+    visit_date: datetime | None = None
+    vet_cattle_count: int | None = None
+    vet_notes: str | None = None
+    vet_status: str = "REQUESTED"
+
+
+class VetStatusUpdate(BaseModel):
+    vet_status: VetStatus
+
+
 class OrgAnswersUpsert(BaseModel):
     """The shared 5-question form for FPO / VLCC visits.
 
@@ -671,6 +732,10 @@ class VisitDetailResponse(BaseModel):
     location_warning_remark: str | None
     purpose: str | None
     status: str
+    vet_required: bool = False
+    vet_cattle_count: int | None = None
+    vet_notes: str | None = None
+    vet_status: str | None = None
     created_at: datetime
     updated_at: datetime
     # step data (populated by the service)
