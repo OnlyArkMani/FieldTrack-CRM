@@ -13,8 +13,8 @@ WHAT CHANGES
 - New table ``visit_org_answers`` holds the 5-question form answered on FPO and
   VLCC visits.
 
-Revision: 0008
-Prev: 0007_visit_photos
+Revision: 0012
+Prev: 0011_dsr_checkout_location
 """
 from typing import Sequence, Union
 
@@ -22,8 +22,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0008"
-down_revision: Union[str, None] = "0007"
+revision: str = "0012"
+down_revision: Union[str, None] = "0011"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
