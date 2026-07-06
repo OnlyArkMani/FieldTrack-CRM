@@ -469,13 +469,29 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
   // ── build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Field visit',
-            maxLines: 1, overflow: TextOverflow.ellipsis),
-      ),
-      body: SafeArea(
-        child: _step == 0 ? _checkInStep() : _guidedStep(),
+    return PopScope(
+      canPop: _step <= 1,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _enterStep(_step - 1);
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Field visit',
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          leading: BackButton(
+            onPressed: () {
+              if (_step <= 1) {
+                Navigator.of(context).maybePop();
+              } else {
+                _enterStep(_step - 1);
+              }
+            },
+          ),
+        ),
+        body: SafeArea(
+          child: _step == 0 ? _checkInStep() : _guidedStep(),
+        ),
       ),
     );
   }
@@ -971,6 +987,8 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
 
   Widget _counterField(TextEditingController c, String label, String hint,
       {int maxLen = 500}) {
+    final colors = context.appColors;
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: AppDimens.grid * 1.5),
       child: Column(
@@ -978,14 +996,27 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
         children: [
           TextField(
             controller: c,
-            minLines: 2,
-            maxLines: 4,
             maxLength: maxLen,
             textCapitalization: TextCapitalization.sentences,
             onChanged: (_) => setState(() {}),
             style: AppTextStyles.body
-                .copyWith(color: Theme.of(context).colorScheme.onSurface),
-            decoration: InputDecoration(labelText: label, hintText: hint),
+                .copyWith(color: theme.colorScheme.onSurface),
+            decoration: InputDecoration(
+              labelText: label,
+              hintText: hint,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+                borderSide: BorderSide(color: colors.textSecondary.withValues(alpha: 0.25)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+                borderSide: BorderSide(color: colors.textSecondary.withValues(alpha: 0.25)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+                borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
+              ),
+            ),
           ),
         ],
       ),
@@ -1168,12 +1199,22 @@ class _WarningCard extends StatelessWidget {
           const SizedBox(height: AppDimens.grid * 1.5),
           TextField(
             controller: remark,
-            minLines: 2,
-            maxLines: 3,
             textCapitalization: TextCapitalization.sentences,
             style: AppTextStyles.body.copyWith(color: scheme.onSurface),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Add a remark to explain (required)',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+                borderSide: BorderSide(color: context.appColors.textSecondary.withValues(alpha: 0.25)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+                borderSide: BorderSide(color: context.appColors.textSecondary.withValues(alpha: 0.25)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+                borderSide: BorderSide(color: scheme.primary, width: 1.5),
+              ),
             ),
           ),
         ],

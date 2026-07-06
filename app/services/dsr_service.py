@@ -1,7 +1,11 @@
 """Daily Sales Report (DSR) service — Module 5.
 
-generate_dsr  → called as a background task on attendance END.
-submit_dsr    → called explicitly by the employee after reviewing the draft.
+generate_dsr           → called as a background task on a manual attendance END
+                         (leaves the report in DRAFT for the employee to review).
+generate_and_submit_dsr → called as a background task when END is the
+                         auto-clock-out fired by mobile logout (checklist #52).
+submit_dsr             → called explicitly by the employee after reviewing the
+                         draft, or internally by generate_and_submit_dsr.
 
 DESIGN:
 - generate_dsr is idempotent: INSERT … ON CONFLICT (employee_id, report_date)
@@ -93,6 +97,23 @@ async def generate_dsr(
     """
     async with async_session_factory() as db:
         return await _generate_in_session(db, employee_id, attendance_id, report_date)
+
+
+async def generate_and_submit_dsr(
+    employee_id: int,
+    attendance_id: int,
+    report_date: date_type,
+) -> DailyReport:
+    """Generate the DSR and immediately submit it (checklist #52 — auto-submit
+    on logout, as opposed to the manual "Submit DSR" tap used for a plain
+    /attendance/end without logging out). Runs generate + submit in the same
+    session so there's no gap where a client could observe a DRAFT that
+    never gets submitted."""
+    async with async_session_factory() as db:
+        report = await _generate_in_session(db, employee_id, attendance_id, report_date)
+        return await submit_dsr(
+            db, report_id=report.id, employee_id=employee_id, end_of_day_note=None,
+        )
 
 
 def _checkpoints_from_sessions(sessions) -> dict:

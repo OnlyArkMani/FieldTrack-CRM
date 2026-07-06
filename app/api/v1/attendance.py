@@ -29,7 +29,7 @@ from app.schemas.attendance import (
 )
 from app.schemas.common import CursorPage, decode_cursor, encode_cursor
 from app.services.attendance_service import AttendanceService
-from app.services.dsr_service import generate_dsr
+from app.services.dsr_service import generate_and_submit_dsr, generate_dsr
 
 router = APIRouter(prefix="/attendance", tags=["attendance"])
 
@@ -95,8 +95,16 @@ async def end(
         work_summary=body.work_summary, ip=_client_ip(request),
     )
     # Generate DSR in the background — does not block the END response.
+    # No work_summary means this is mobile's auto-clock-out-on-logout (the
+    # manual "End" tap always sends one) — auto-submit the DSR too so the
+    # manager sees it without the employee needing to open the DSR screen
+    # separately (checklist #52). A manual End keeps the DSR in DRAFT so the
+    # employee can add a note before submitting.
     today = datetime.now(timezone.utc).date()
-    background_tasks.add_task(generate_dsr, user.id, result.id, today)
+    if body.work_summary is None:
+        background_tasks.add_task(generate_and_submit_dsr, user.id, result.id, today)
+    else:
+        background_tasks.add_task(generate_dsr, user.id, result.id, today)
     return result
 
 
