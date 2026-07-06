@@ -237,6 +237,7 @@ function RangeView({ isAdmin, teams }) {
   const [end, setEnd] = useState(dayjs().format('YYYY-MM-DD'));
   const [teamId, setTeamId] = useState('');
   const [search, setSearch] = useState('');
+  const [executiveName, setExecutiveName] = useState('');
 
   const rangeTooLong = dayjs(end).diff(dayjs(start), 'day') > MAX_RANGE_DAYS;
 
@@ -246,6 +247,7 @@ function RangeView({ isAdmin, teams }) {
     date_to: end,
     ...(isAdmin && teamId ? { team_id: teamId } : {}),
     ...(search.trim() ? { search: search.trim() } : {}),
+    ...(executiveName.trim() ? { executive_name: executiveName.trim() } : {}),
   });
   const items = data?.items ?? [];
 
@@ -289,6 +291,14 @@ function RangeView({ isAdmin, teams }) {
             placeholder="Search by name…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="w-56">
+          <Input
+            label="Executive"
+            placeholder="Search by name…"
+            value={executiveName}
+            onChange={(e) => setExecutiveName(e.target.value)}
           />
         </div>
       </div>

@@ -37,6 +37,7 @@ class NotificationType(str, Enum):
     ORDER_CAPTURED = "ORDER_CAPTURED"        # employee -> their supervisor(s)
     ORDER_APPROVED = "ORDER_APPROVED"        # manager decision -> the employee
     ORDER_REJECTED = "ORDER_REJECTED"        # manager decision -> the employee
+    DSR_LATE_EMPLOYEE = "DSR_LATE_EMPLOYEE"  # 19:30 per-employee late flag -> their supervisor(s)
 
 
 class NotificationOut(BaseModel):
