@@ -24,6 +24,7 @@ from __future__ import annotations
 import logging
 from datetime import date as date_type
 from datetime import datetime, time, timezone
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select, text
@@ -39,14 +40,15 @@ from app.models.crm import (
     Farmer,
     FollowUp,
     Lead,
+    LivestockProfile,
     Visit,
     VisitNote,
     VisitOrder,
     VisitPlan,
     VisitPlanItem,
 )
-from app.models.enums import SessionType
-from app.models.user import User
+from app.models.enums import SessionType, UserRole
+from app.models.user import Team, User
 from app.services.notification_service import NotificationService
 
 logger = logging.getLogger("fieldtrack.dsr")
@@ -542,6 +544,7 @@ async def get_dsr_with_details(
             Farmer.customer_type.label("customer_type"),
             VisitNote.meeting_highlights.label("meeting_highlights"),
             VisitNote.farmer_concerns.label("farmer_concerns"),
+            VisitNote.product_interest.label("product_interest"),
         )
         .join(Farmer, Visit.farmer_id == Farmer.id, isouter=True)
         .outerjoin(VisitNote, VisitNote.visit_id == Visit.id)
@@ -554,6 +557,29 @@ async def get_dsr_with_details(
         .order_by(Visit.check_in_at)
     )
     visits_rows = visits_q.all()
+
+    # Per-visit order roll-up (bags + value) and latest livestock snapshot, so
+    # each DSR visit row can expand to full detail (DSR drill-down).
+    visit_ids = [r.Visit.id for r in visits_rows]
+    orders_by_visit: dict[int, tuple[int, Decimal | None]] = {}
+    livestock_by_visit: dict[int, LivestockProfile] = {}
+    if visit_ids:
+        ovr = await db.execute(
+            select(VisitOrder).where(VisitOrder.visit_id.in_(visit_ids))
+        )
+        for o in ovr.scalars().all():
+            bags, val = orders_by_visit.get(o.visit_id, (0, None))
+            bags += o.bags_count or 0
+            if o.price_per_bag is not None:
+                val = (val or Decimal(0)) + o.price_per_bag * (o.bags_count or 0)
+            orders_by_visit[o.visit_id] = (bags, val)
+        lsr = await db.execute(
+            select(LivestockProfile)
+            .where(LivestockProfile.visit_id.in_(visit_ids))
+            .order_by(LivestockProfile.id.desc())
+        )
+        for ls in lsr.scalars().all():
+            livestock_by_visit.setdefault(ls.visit_id, ls)
 
     # Latest lead status per farmer (for the visit chip)
     lead_status_map: dict[int, str] = {}
@@ -608,6 +634,7 @@ async def get_dsr_with_details(
         "visits": [
             {
                 "id": r.Visit.id,
+                "farmer_id": r.Visit.farmer_id,
                 "farmer_name": r.farmer_name or "Unknown Farmer",
                 "village": r.village,
                 "district": r.district,
@@ -618,6 +645,31 @@ async def get_dsr_with_details(
                 "lead_status": lead_status_map.get(r.Visit.farmer_id),
                 "meeting_highlights": r.meeting_highlights,
                 "farmer_concerns": r.farmer_concerns,
+                "product_interest": r.product_interest,
+                "vet_required": bool(r.Visit.vet_required),
+                "vet_cattle_count": r.Visit.vet_cattle_count,
+                "order_bags": orders_by_visit.get(r.Visit.id, (0, None))[0] or None,
+                "order_value": orders_by_visit.get(r.Visit.id, (0, None))[1],
+                "breed": (
+                    livestock_by_visit[r.Visit.id].breed
+                    if r.Visit.id in livestock_by_visit
+                    else None
+                ),
+                "current_brand": (
+                    livestock_by_visit[r.Visit.id].current_brand
+                    if r.Visit.id in livestock_by_visit
+                    else None
+                ),
+                "livestock_cattle": (
+                    livestock_by_visit[r.Visit.id].total_cattle
+                    if r.Visit.id in livestock_by_visit
+                    else None
+                ),
+                "price_per_bag": (
+                    livestock_by_visit[r.Visit.id].current_price_per_bag
+                    if r.Visit.id in livestock_by_visit
+                    else None
+                ),
             }
             for r in visits_rows
         ],
@@ -649,3 +701,119 @@ async def get_dsr_with_details(
             for r in fu_rows
         ],
     }
+
+
+async def visits_export_rows(
+    db: AsyncSession,
+    *,
+    user: User,
+    date_from: date_type,
+    date_to: date_type,
+    team_id: int | None = None,
+    employee_id: int | None = None,
+) -> list[dict]:
+    """One dict per COMPLETED visit across the caller's scope in [date_from,
+    date_to] — powers the granular per-visit Excel export (checklist: each
+    employee's each visit detail). ADMIN sees all (optional team/employee
+    filter); SUPERVISOR is pinned to their own team; EMPLOYEE forbidden."""
+    if user.role not in (UserRole.ADMIN, UserRole.SUPERVISOR):
+        raise bad_request("Not permitted")
+
+    start, _ = _day_bounds_utc(date_from)
+    _, end = _day_bounds_utc(date_to)
+
+    filters = [
+        Visit.status == "COMPLETED",
+        Visit.check_in_at >= start,
+        Visit.check_in_at <= end,
+    ]
+    if user.role == UserRole.SUPERVISOR:
+        if not user.team_id:
+            return []
+        filters.append(User.team_id == user.team_id)
+    elif team_id is not None:
+        filters.append(User.team_id == team_id)
+    if employee_id is not None:
+        filters.append(Visit.employee_id == employee_id)
+
+    q = (
+        select(
+            Visit,
+            Farmer.name.label("farmer_name"),
+            Farmer.customer_type.label("customer_type"),
+            Farmer.village.label("village"),
+            Farmer.district.label("district"),
+            User.name.label("employee_name"),
+            Team.name.label("team_name"),
+            VisitNote.meeting_highlights.label("meeting_highlights"),
+            VisitNote.farmer_concerns.label("farmer_concerns"),
+            VisitNote.product_interest.label("product_interest"),
+            Lead.status.label("lead_status"),
+        )
+        .join(Farmer, Visit.farmer_id == Farmer.id, isouter=True)
+        .join(User, Visit.employee_id == User.id, isouter=True)
+        .join(Team, User.team_id == Team.id, isouter=True)
+        .outerjoin(VisitNote, VisitNote.visit_id == Visit.id)
+        .outerjoin(Lead, Lead.visit_id == Visit.id)
+        .where(*filters)
+        .order_by(Visit.check_in_at)
+    )
+    rows = (await db.execute(q)).all()
+    visit_ids = [r.Visit.id for r in rows]
+
+    orders_by_visit: dict[int, tuple[int, Decimal | None]] = {}
+    livestock_by_visit: dict[int, LivestockProfile] = {}
+    if visit_ids:
+        ovr = await db.execute(
+            select(VisitOrder).where(VisitOrder.visit_id.in_(visit_ids))
+        )
+        for o in ovr.scalars().all():
+            bags, val = orders_by_visit.get(o.visit_id, (0, None))
+            bags += o.bags_count or 0
+            if o.price_per_bag is not None:
+                val = (val or Decimal(0)) + o.price_per_bag * (o.bags_count or 0)
+            orders_by_visit[o.visit_id] = (bags, val)
+        lsr = await db.execute(
+            select(LivestockProfile)
+            .where(LivestockProfile.visit_id.in_(visit_ids))
+            .order_by(LivestockProfile.id.desc())
+        )
+        for ls in lsr.scalars().all():
+            livestock_by_visit.setdefault(ls.visit_id, ls)
+
+    out: list[dict] = []
+    for r in rows:
+        v = r.Visit
+        ls = livestock_by_visit.get(v.id)
+        bags, val = orders_by_visit.get(v.id, (0, None))
+        duration = None
+        if v.check_in_at and v.check_out_at:
+            duration = round((v.check_out_at - v.check_in_at).total_seconds() / 60)
+        out.append(
+            {
+                "date": v.check_in_at.date() if v.check_in_at else None,
+                "employee": r.employee_name or "",
+                "team": r.team_name or "",
+                "customer": r.farmer_name or "",
+                "type": r.customer_type or "FARMER",
+                "village": r.village or "",
+                "district": r.district or "",
+                "check_in": v.check_in_at,
+                "check_out": v.check_out_at,
+                "duration_min": duration,
+                "location_warning": "Yes" if v.location_warning else "",
+                "lead": r.lead_status or "",
+                "order_bags": bags or "",
+                "order_value": val,
+                "vet_needed": "Yes" if v.vet_required else "",
+                "vet_cattle": v.vet_cattle_count,
+                "breed": (ls.breed if ls else "") or "",
+                "current_brand": (ls.current_brand if ls else "") or "",
+                "cattle": ls.total_cattle if ls else None,
+                "price_per_bag": ls.current_price_per_bag if ls else None,
+                "highlights": r.meeting_highlights or "",
+                "concerns": r.farmer_concerns or "",
+                "product_interest": r.product_interest or "",
+            }
+        )
+    return out

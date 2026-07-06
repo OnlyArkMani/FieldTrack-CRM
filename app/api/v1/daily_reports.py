@@ -30,8 +30,10 @@ from app.schemas.common import CursorPage, decode_cursor, encode_cursor
 from app.schemas.crm import DailyReportResponse
 from app.services.dsr_service import (
     add_manager_comment,
+    generate_dsr,
     get_dsr_with_details,
     submit_dsr,
+    visits_export_rows,
 )
 
 router = APIRouter(prefix="/daily-reports", tags=["daily-reports"])
@@ -55,6 +57,7 @@ class ManagerCommentRequest(BaseModel):
 
 class VisitSummaryItem(BaseModel):
     id: int
+    farmer_id: int | None = None
     farmer_name: str
     village: str | None = None
     district: str | None = None
@@ -65,6 +68,15 @@ class VisitSummaryItem(BaseModel):
     lead_status: str | None
     meeting_highlights: str | None = None
     farmer_concerns: str | None = None
+    product_interest: str | None = None
+    vet_required: bool = False
+    vet_cattle_count: int | None = None
+    order_bags: int | None = None
+    order_value: Decimal | None = None
+    breed: str | None = None
+    current_brand: str | None = None
+    livestock_cattle: int | None = None
+    price_per_bag: Decimal | None = None
 
 
 class OrderSummaryItem(BaseModel):
@@ -160,6 +172,28 @@ async def my_dsr_for_date(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DsrDetailResponse:
     detail = await get_dsr_with_details(db, employee_id=user.id, report_date=report_date)
+    if detail is None:
+        # No DSR row yet — the report is normally created on attendance END, but
+        # the employee may open "Today's Summary" before that (or on a day they
+        # haven't ended yet). Generate it on-read so the screen always shows the
+        # day's visits/orders/leads that WILL be submitted, and yields a
+        # submittable DRAFT row. Idempotent (ON CONFLICT DO UPDATE).
+        from app.models.attendance import Attendance
+
+        att_id = (
+            await db.execute(
+                select(Attendance.id).where(
+                    Attendance.user_id == user.id,
+                    Attendance.date == report_date,
+                )
+            )
+        ).scalar_one_or_none()
+        await generate_dsr(
+            employee_id=user.id, attendance_id=att_id, report_date=report_date
+        )
+        detail = await get_dsr_with_details(
+            db, employee_id=user.id, report_date=report_date
+        )
     if detail is None:
         raise HTTPException(
             status_code=404,
@@ -458,6 +492,83 @@ async def archive(
     ]
     return CursorPage[ArchiveDsrItem](
         items=items, next_cursor=next_cursor, total=total, has_more=has_more
+    )
+
+
+# -- Granular per-visit Excel export (checklist: each visit detail) -----------
+
+@router.get("/visits-export")
+async def visits_export(
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_from: date = Query(default_factory=date.today),
+    date_to: date = Query(default_factory=date.today),
+    team_id: int | None = Query(default=None),
+    employee_id: int | None = Query(default=None),
+) -> StreamingResponse:
+    """One row per completed visit across the caller's scope, as .xlsx. ADMIN:
+    all (optional team/employee filter); SUPERVISOR: own team. Includes meeting,
+    order, vet and livestock detail so managers get every visit's full picture."""
+    rows = await visits_export_rows(
+        db,
+        user=user,
+        date_from=date_from,
+        date_to=date_to,
+        team_id=team_id,
+        employee_id=employee_id,
+    )
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Visits"
+    headers = [
+        "Date", "Employee", "Team", "Customer", "Type", "Village", "District",
+        "Check-in", "Check-out", "Duration (min)", "Loc. warning", "Lead",
+        "Order bags", "Order value", "Vet needed", "Vet cattle", "Breed",
+        "Current brand", "Cattle", "Price/bag", "Highlights", "Concerns",
+        "Product interest",
+    ]
+    ws.append(headers)
+    head_fill = PatternFill("solid", fgColor="F5A623")
+    for c in ws[1]:
+        c.font = Font(bold=True, color="1A1A2E")
+        c.fill = head_fill
+
+    def _t(dt):
+        return dt.strftime("%Y-%m-%d %H:%M") if dt else ""
+
+    for r in rows:
+        ws.append([
+            r["date"].isoformat() if r["date"] else "",
+            r["employee"], r["team"], r["customer"], r["type"], r["village"],
+            r["district"], _t(r["check_in"]), _t(r["check_out"]),
+            r["duration_min"] if r["duration_min"] is not None else "",
+            r["location_warning"], r["lead"], r["order_bags"],
+            float(r["order_value"]) if r["order_value"] is not None else "",
+            r["vet_needed"],
+            r["vet_cattle"] if r["vet_cattle"] is not None else "",
+            r["breed"], r["current_brand"],
+            r["cattle"] if r["cattle"] is not None else "",
+            float(r["price_per_bag"]) if r["price_per_bag"] is not None else "",
+            r["highlights"], r["concerns"], r["product_interest"],
+        ])
+
+    for i, _h in enumerate(headers, start=1):
+        ws.column_dimensions[chr(64 + i) if i <= 26 else "A"].width = 16
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    fname = f"visits_{date_from.isoformat()}_{date_to.isoformat()}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={"Content-Disposition": f"attachment; filename={fname}"},
     )
 
 
