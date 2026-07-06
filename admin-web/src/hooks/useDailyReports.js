@@ -69,6 +69,27 @@ export async function downloadTeamDsr(employeeId, date, employeeName = 'employee
   window.URL.revokeObjectURL(url);
 }
 
+/** Download the granular per-visit Excel export for a date range (admin: all
+ *  or filtered by team; supervisor: own team). One row per completed visit. */
+export async function downloadVisitsExport({ dateFrom, dateTo, teamId } = {}) {
+  const { data } = await api.get('/daily-reports/visits-export', {
+    params: {
+      date_from: dateFrom,
+      date_to: dateTo,
+      ...(teamId ? { team_id: teamId } : {}),
+    },
+    responseType: 'blob',
+  });
+  const url = window.URL.createObjectURL(data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `visits_${dateFrom}_${dateTo}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 /** POST manager comment. */
 export function useAddManagerComment() {
   const qc = useQueryClient();

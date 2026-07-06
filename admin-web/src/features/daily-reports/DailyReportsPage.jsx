@@ -8,6 +8,7 @@ import {
   useAddManagerComment,
   useDsrArchive,
   downloadTeamDsr,
+  downloadVisitsExport,
 } from '@/hooks/useDailyReports';
 import { useTeams } from '@/hooks/useTeams';
 import { useAuthStore } from '@/store/authStore';
@@ -301,8 +302,24 @@ function RangeView({ isAdmin, teams }) {
             onChange={(e) => setExecutiveName(e.target.value)}
           />
         </div>
+        <Button
+          variant="secondary"
+          icon={Download}
+          onClick={() =>
+            downloadVisitsExport({
+              dateFrom: start,
+              dateTo: end,
+              teamId: isAdmin ? teamId : undefined,
+            })
+          }
+        >
+          Visits Excel
+        </Button>
       </div>
-      <p className="mb-3 text-xs italic text-text-secondary">Max 24 months per range.</p>
+      <p className="mb-3 text-xs italic text-text-secondary">
+        Max 24 months per range. “Visits Excel” downloads one row per visit with
+        full meeting, order, vet &amp; livestock detail.
+      </p>
 
       {rangeTooLong ? (
         <p className="py-8 text-center text-sm text-danger">Please select a range of 24 months or less.</p>
