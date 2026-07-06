@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   X,
   PackageCheck,
+  Stethoscope,
 } from 'lucide-react';
 
 import { useUiStore } from '@/store/uiStore';
@@ -37,6 +38,7 @@ const NAV = [
   { to: '/leads', label: 'Lead Pipeline', icon: TrendingUp },
   { to: '/orders', label: 'Orders', icon: PackageCheck },
   { to: '/follow-ups', label: 'Follow-ups', icon: BellRing },
+  { to: '/vet-requests', label: 'Vet Requests', icon: Stethoscope },
   { to: '/daily-reports', label: 'DSR', icon: ClipboardList },
   { to: '/settings', label: 'Settings', icon: Settings },
   { to: '/settings/gps', label: 'GPS Tracking', icon: Radio },
