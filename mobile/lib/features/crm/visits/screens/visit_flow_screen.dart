@@ -335,6 +335,11 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
     if (_deliveryDate == null) {
       throw const ValidationException('Pick a delivery date.');
     }
+    // Order value = bags * price. There's no separate price-per-bag field on
+    // this step — reuse the farmer's stated "willing to pay (max)" from the
+    // Livestock step as the order's price, so the DSR can show a value
+    // without asking the same number twice. Left null for FPO/VLCC visits
+    // (org-answers step has no equivalent price field).
     await _repo.createOrder(
       _visitId!,
       bagsCount: bags,
@@ -342,6 +347,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       deliveryAddress: _deliveryAddress.text.trim(),
       paymentMode: _payMode,
       specialNotes: _orderNotes.text.trim(),
+      pricePerBag: double.tryParse(_payMax.text.trim()),
     );
   }
 
@@ -673,7 +679,6 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
         _sectionTitle('Livestock profile'),
         _numField(_cattle, 'Total cattle'),
         _dropdown('Breed', _breeds, _breed, (v) => setState(() => _breed = v)),
-        const SizedBox(height: AppDimens.grid * 1.5),
         _chipsField('Age group', _ageGroups, _ageGroup,
             (v) => setState(() => _ageGroup = v)),
         _textField(_brand, 'Current brand'),
@@ -1010,18 +1015,34 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
 
   Widget _dropdown(String label, List<String> options, String? value,
       ValueChanged<String?> onChanged) {
-    return InputDecorator(
-      decoration: InputDecoration(labelText: label),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isExpanded: true,
-          hint: const Text('Select'),
-          items: [
-            for (final o in options)
-              DropdownMenuItem(value: o, child: Text(o)),
-          ],
-          onChanged: onChanged,
+    final colors = context.appColors;
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppDimens.grid * 1.5),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.grid * 2,
+            vertical: AppDimens.grid * 0.75,
+          ),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: value,
+            isDense: true,
+            isExpanded: true,
+            style: AppTextStyles.body.copyWith(color: theme.colorScheme.onSurface),
+            hint: Text(
+              'Select',
+              style: AppTextStyles.body.copyWith(color: colors.textSecondary),
+            ),
+            items: [
+              for (final o in options)
+                DropdownMenuItem(value: o, child: Text(o)),
+            ],
+            onChanged: onChanged,
+          ),
         ),
       ),
     );

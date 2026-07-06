@@ -70,6 +70,7 @@ class VisitRepository {
     String? deliveryAddress,
     String? paymentMode,
     String? specialNotes,
+    double? pricePerBag,
   }) async {
     final data = await _api.post('/visits/$visitId/orders', body: {
       'bags_count': bagsCount,
@@ -79,6 +80,7 @@ class VisitRepository {
       if (paymentMode != null) 'payment_mode': paymentMode,
       if (specialNotes != null && specialNotes.isNotEmpty)
         'special_notes': specialNotes,
+      if (pricePerBag != null) 'price_per_bag': pricePerBag,
     });
     return VisitOrder.fromJson(data);
   }
