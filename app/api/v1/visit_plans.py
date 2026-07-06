@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import CurrentUser, get_current_supervisor, get_db
 from app.models.user import User
 from app.schemas.crm import (
+    CarryOverRequest,
     MyPlanResponse,
     PendingSubmissionView,
     PlanItemStatusUpdate,
@@ -88,3 +89,29 @@ async def update_item_status(
     return await VisitPlanService(db).update_item_status(
         user, plan_id, item_id, body
     )
+
+
+@router.post("/items/{item_id}/carry-over", response_model=MyPlanResponse)
+async def carry_over_item(
+    item_id: int,
+    body: CarryOverRequest,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MyPlanResponse:
+    """Reschedule a missed (carried-over) plan item onto a new date/time. The
+    source item is marked SKIPPED and a fresh PLANNED item is created on
+    body.target_date. Returns the target date's updated plan."""
+    return await VisitPlanService(db).carry_over_item(
+        user, item_id, body.target_date, body.time_slot
+    )
+
+
+@router.post("/items/{item_id}/skip", response_model=MyPlanResponse)
+async def skip_missed_item(
+    item_id: int,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MyPlanResponse:
+    """Drop a carried-over (missed) plan item — marks it SKIPPED. Returns the
+    caller's plan for today."""
+    return await VisitPlanService(db).skip_missed_item(user, item_id)

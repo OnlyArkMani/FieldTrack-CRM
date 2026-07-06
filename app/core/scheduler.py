@@ -210,6 +210,48 @@ async def check_unsubmitted_plans() -> None:
             )
 
 
+async def missed_visits_reminder_job() -> None:
+    """18:30 — nudge employees who still have PLANNED (unvisited) stops on
+    today's plan, and alert their supervisor. Those stops auto-carry-over onto
+    the next day's plan where the employee can reschedule or drop them."""
+    today = _today_utc()
+    if not await _claim(f"missed_visits:{today}"):
+        return
+    async with async_session_factory() as db:
+        repo = VisitPlanRepository(db)
+        rows = await repo.employees_with_missed_items(today)
+        if not rows:
+            return
+        service = NotificationService(db)
+        notified = 0
+        for emp_id, emp_name, supervisor_id, missed in rows:
+            if not missed:
+                continue
+            plural = "visit" if missed == 1 else "visits"
+            await service.send_fcm(
+                emp_id,
+                title="Unvisited stops today",
+                body=f"You have {missed} planned {plural} left. They'll carry "
+                "over to tomorrow — reschedule or drop them.",
+                type="MISSED_VISITS",
+                data={"screen": "planning"},
+                commit=False,
+            )
+            if supervisor_id and supervisor_id != emp_id:
+                await service.send_fcm(
+                    supervisor_id,
+                    title="Missed visits",
+                    body=f"{emp_name} has {missed} unvisited planned {plural} today.",
+                    type="MISSED_VISITS_SUPERVISOR",
+                    data={"screen": "planning", "employee_id": str(emp_id)},
+                    commit=False,
+                )
+            notified += 1
+        await db.commit()
+        if notified:
+            logger.info("MISSED_VISITS reminders sent for %d employee(s)", notified)
+
+
 def _fu_data(farmer_id: int | None) -> dict[str, str]:
     """Deep-link payload: a follow-up reminder opens the farmer's detail."""
     data = {"screen": "farmer"}
@@ -606,6 +648,14 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
         end_work_reminder_job,
         CronTrigger(hour=18, minute=0),
         id="end_work_reminder",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=3600,
+    )
+    scheduler.add_job(
+        missed_visits_reminder_job,
+        CronTrigger(hour=18, minute=30),
+        id="missed_visits_reminder",
         max_instances=1,
         coalesce=True,
         misfire_grace_time=3600,

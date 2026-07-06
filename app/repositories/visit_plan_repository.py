@@ -122,6 +122,64 @@ class VisitPlanRepository:
     async def get_item(self, item_id: int) -> VisitPlanItem | None:
         return await self.db.get(VisitPlanItem, item_id)
 
+    async def missed_plan_items_joined(
+        self, employee_id: int, before_date: date_type
+    ) -> list:
+        """PLANNED items from the employee's plans dated BEFORE `before_date`
+        that were never completed/skipped — i.e. missed visits to carry over.
+        Enriched like plan_items_joined, plus the origin plan_date (last col)."""
+        stmt = (
+            select(
+                VisitPlanItem,
+                Farmer.name,
+                Farmer.village,
+                Farmer.lat,
+                Farmer.lng,
+                self._lead_sq().label("lead"),
+                self._last_visit_sq().label("last_visit"),
+                self._last_note_sq().label("last_note"),
+                VisitPlan.plan_date.label("plan_date"),
+            )
+            .join(VisitPlan, VisitPlan.id == VisitPlanItem.plan_id)
+            .outerjoin(Farmer, Farmer.id == VisitPlanItem.farmer_id)
+            .where(
+                VisitPlan.employee_id == employee_id,
+                VisitPlan.plan_date < before_date,
+                VisitPlanItem.status == "PLANNED",
+            )
+            .order_by(VisitPlan.plan_date.asc(), VisitPlanItem.id.asc())
+        )
+        return list((await self.db.execute(stmt)).all())
+
+    async def employees_with_missed_items(
+        self, on_date: date_type
+    ) -> list[tuple[int, str, int | None, int]]:
+        """(employee_id, employee_name, supervisor_id, missed_count) for every
+        employee who still has PLANNED items on their plan for `on_date`. Used
+        by the end-of-day missed-visits reminder job."""
+        stmt = (
+            select(
+                User.id,
+                User.name,
+                Team.supervisor_id,
+                func.count(VisitPlanItem.id).label("missed"),
+            )
+            .select_from(VisitPlanItem)
+            .join(VisitPlan, VisitPlan.id == VisitPlanItem.plan_id)
+            .join(User, User.id == VisitPlan.employee_id)
+            .outerjoin(Team, Team.id == User.team_id)
+            .where(
+                VisitPlan.plan_date == on_date,
+                VisitPlanItem.status == "PLANNED",
+                User.is_active.is_(True),
+            )
+            .group_by(User.id, User.name, Team.supervisor_id)
+        )
+        return [
+            (row[0], row[1], row[2], row[3])
+            for row in (await self.db.execute(stmt)).all()
+        ]
+
     async def farmer_ids_in_plan(self, plan_id: int) -> set[int]:
         stmt = select(VisitPlanItem.farmer_id).where(
             VisitPlanItem.plan_id == plan_id
