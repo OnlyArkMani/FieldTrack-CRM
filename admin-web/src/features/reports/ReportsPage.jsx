@@ -35,8 +35,6 @@ const ALL_FORMATS = [
   { value: 'PDF', label: 'PDF' },
 ];
 
-// Report types that don't support PDF (tabular-only, server-enforced too).
-const NO_PDF_TYPES = new Set(['DISTANCE_ZONES', 'GEOFENCE_COMPLIANCE']);
 // Report types that REQUIRE a team_id filter.
 const TEAM_REQUIRED_TYPES = new Set(['GEOFENCE_COMPLIANCE']);
 // Multi-sheet consolidations: Excel only + a specific employee (server-enforced).
@@ -240,12 +238,9 @@ export default function ReportsPage() {
   useEffect(() => clearPoll, []);
 
   const excelOnly = EXCEL_ONLY_TYPES.has(type);
-  const noPdf = NO_PDF_TYPES.has(type);
   const formats = excelOnly
     ? ALL_FORMATS.filter((f) => f.value === 'EXCEL')
-    : noPdf
-      ? ALL_FORMATS.filter((f) => f.value !== 'PDF')
-      : ALL_FORMATS;
+    : ALL_FORMATS;
 
   // For GEOFENCE_COMPLIANCE, force scope to 'team'.
   const forceTeam = TEAM_REQUIRED_TYPES.has(type);
@@ -286,7 +281,6 @@ export default function ReportsPage() {
   const onTypeChange = (value) => {
     setType(value);
     if (EXCEL_ONLY_TYPES.has(value)) setFormat('EXCEL');
-    else if (NO_PDF_TYPES.has(value) && format === 'PDF') setFormat('EXCEL');
     // GEOFENCE_COMPLIANCE forces team scope — reset to team if needed.
     if (TEAM_REQUIRED_TYPES.has(value) && scope !== 'team') setScope('team');
     // EMPLOYEE_CONSOLIDATED forces employee scope.
@@ -516,7 +510,7 @@ export default function ReportsPage() {
         {isCompliance && (
           <p className="mt-1 text-xs text-text-secondary">
             Shows whether employees visited their assigned zones, with time spent per zone.
-            Requires a team. Available in Excel and CSV only.
+            Requires a team.
           </p>
         )}
         {forceEmployee && (
@@ -526,10 +520,9 @@ export default function ReportsPage() {
             date range (max 31 days).
           </p>
         )}
-        {!isCompliance && !excelOnly && noPdf && (
+        {!isCompliance && !excelOnly && type === 'DISTANCE_ZONES' && (
           <p className="mt-1 text-xs text-text-secondary">
             Shows distance traveled and time spent in each geofence zone per employee per day.
-            Available in Excel and CSV only.
           </p>
         )}
 
