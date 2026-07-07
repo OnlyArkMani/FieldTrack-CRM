@@ -448,6 +448,7 @@ class PlanItemView(BaseModel):
     id: int  # plan_item id, or the follow_up id when is_follow_up
     farmer_id: int
     farmer_name: str
+    customer_type: CustomerType = "FARMER"
     village: str | None = None
     lat: float | None = None
     lng: float | None = None

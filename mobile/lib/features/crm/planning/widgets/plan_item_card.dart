@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../farmers/widgets/customer_type_chip.dart';
 import '../../farmers/widgets/lead_status_badge.dart';
 import '../models/visit_plan.dart';
 
@@ -106,6 +107,8 @@ class PlanItemCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(width: AppDimens.grid),
+                    CustomerTypeChip(type: item.customerType),
                     if (item.isFollowUp) ...[
                       const SizedBox(width: AppDimens.grid * 0.5),
                       Icon(Icons.notifications_active_rounded,

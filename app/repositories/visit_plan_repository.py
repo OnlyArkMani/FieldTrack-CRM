@@ -87,6 +87,7 @@ class VisitPlanRepository:
                 self._lead_sq().label("lead"),
                 self._last_visit_sq().label("last_visit"),
                 self._last_note_sq().label("last_note"),
+                Farmer.customer_type,
             )
             .outerjoin(Farmer, Farmer.id == VisitPlanItem.farmer_id)
             .where(VisitPlanItem.plan_id == plan_id)
@@ -108,6 +109,7 @@ class VisitPlanRepository:
                 self._lead_sq().label("lead"),
                 self._last_visit_sq().label("last_visit"),
                 self._last_note_sq().label("last_note"),
+                Farmer.customer_type,
             )
             .outerjoin(Farmer, Farmer.id == FollowUp.farmer_id)
             .where(
@@ -139,6 +141,7 @@ class VisitPlanRepository:
                 self._last_visit_sq().label("last_visit"),
                 self._last_note_sq().label("last_note"),
                 VisitPlan.plan_date.label("plan_date"),
+                Farmer.customer_type,
             )
             .join(VisitPlan, VisitPlan.id == VisitPlanItem.plan_id)
             .outerjoin(Farmer, Farmer.id == VisitPlanItem.farmer_id)

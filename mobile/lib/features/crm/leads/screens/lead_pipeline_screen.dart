@@ -9,6 +9,7 @@ import '../../../../core/widgets/shimmer_card.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../farmers/models/farmer.dart' show CustomerType, LeadStatus;
 import '../../farmers/utils.dart';
+import '../../farmers/widgets/customer_type_chip.dart';
 import '../../farmers/widgets/lead_status_badge.dart';
 import '../data/lead_repository.dart';
 import '../models/lead.dart';
@@ -272,21 +273,8 @@ class _LeadCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
               ),
-              if (lead.customerType != CustomerType.farmer) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: scheme.primary.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(lead.customerType.label,
-                      style: AppTextStyles.caption.copyWith(
-                          color: scheme.primary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 10)),
-                ),
-                const SizedBox(width: AppDimens.grid),
-              ],
+              CustomerTypeChip(type: lead.customerType),
+              const SizedBox(width: AppDimens.grid),
               LeadStatusBadge(status: lead.status),
             ],
           ),

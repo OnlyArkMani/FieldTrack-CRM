@@ -2,7 +2,7 @@
 /// PlanItemView). Reuses the farmers feature's LeadStatus for the lead pill.
 library;
 
-import '../../farmers/models/farmer.dart' show LeadStatus;
+import '../../farmers/models/farmer.dart' show CustomerType, LeadStatus;
 
 DateTime? _dt(dynamic v) =>
     v == null ? null : DateTime.tryParse(v as String)?.toLocal();
@@ -14,6 +14,7 @@ class PlanItem {
     required this.id,
     required this.farmerId,
     required this.farmerName,
+    this.customerType = CustomerType.farmer,
     this.village,
     this.lat,
     this.lng,
@@ -34,6 +35,7 @@ class PlanItem {
   final int id;
   final int farmerId;
   final String farmerName;
+  final CustomerType customerType;
   final String? village;
   final double? lat;
   final double? lng;
@@ -74,6 +76,7 @@ class PlanItem {
         id: id,
         farmerId: farmerId,
         farmerName: farmerName,
+        customerType: customerType,
         village: village,
         lat: lat,
         lng: lng,
@@ -95,6 +98,7 @@ class PlanItem {
         id: json['id'] as int,
         farmerId: json['farmer_id'] as int,
         farmerName: (json['farmer_name'] as String?) ?? 'Unknown',
+        customerType: CustomerType.fromWire(json['customer_type'] as String?),
         village: json['village'] as String?,
         lat: (json['lat'] as num?)?.toDouble(),
         lng: (json['lng'] as num?)?.toDouble(),

@@ -13,6 +13,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../farmers/data/farmer_repository.dart';
 import '../../farmers/models/farmer.dart';
 import '../../farmers/utils.dart';
+import '../../farmers/widgets/customer_type_chip.dart';
 import '../../farmers/widgets/lead_status_badge.dart';
 import '../models/visit_plan.dart';
 import '../providers/visit_plan_provider.dart';
@@ -321,6 +322,9 @@ class _FarmerResultCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
               ),
+              const SizedBox(width: AppDimens.grid),
+              CustomerTypeChip(type: farmer.customerType),
+              const SizedBox(width: AppDimens.grid),
               LeadStatusBadge(status: farmer.leadStatus),
             ],
           ),

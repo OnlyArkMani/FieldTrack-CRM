@@ -48,11 +48,12 @@ class VisitPlanService:
     # ── row -> PlanItemView ──────────────────────────────────────────────
     @staticmethod
     def _item_view(row) -> PlanItemView:
-        item, name, village, lat, lng, lead, last_visit, last_note = row
+        item, name, village, lat, lng, lead, last_visit, last_note, customer_type = row
         return PlanItemView(
             id=item.id,
             farmer_id=item.farmer_id,
             farmer_name=name or "Unknown",
+            customer_type=customer_type.value if hasattr(customer_type, 'value') else (customer_type or "FARMER"),
             village=village,
             lat=lat,
             lng=lng,
@@ -69,11 +70,12 @@ class VisitPlanService:
 
     @staticmethod
     def _missed_item_view(row) -> PlanItemView:
-        item, name, village, lat, lng, lead, last_visit, last_note, origin = row
+        item, name, village, lat, lng, lead, last_visit, last_note, origin, customer_type = row
         return PlanItemView(
             id=item.id,
             farmer_id=item.farmer_id,
             farmer_name=name or "Unknown",
+            customer_type=customer_type.value if hasattr(customer_type, 'value') else (customer_type or "FARMER"),
             village=village,
             lat=lat,
             lng=lng,
@@ -92,11 +94,12 @@ class VisitPlanService:
 
     @staticmethod
     def _follow_up_view(row) -> PlanItemView:
-        fu, name, village, lat, lng, lead, last_visit, last_note = row
+        fu, name, village, lat, lng, lead, last_visit, last_note, customer_type = row
         return PlanItemView(
             id=fu.id,
             farmer_id=fu.farmer_id,
             farmer_name=name or "Unknown",
+            customer_type=customer_type.value if hasattr(customer_type, 'value') else (customer_type or "FARMER"),
             village=village,
             lat=lat,
             lng=lng,

@@ -10,6 +10,7 @@ import '../../../../core/widgets/state_views.dart';
 import '../models/farmer.dart';
 import '../providers/farmer_provider.dart';
 import '../utils.dart';
+import '../widgets/customer_type_chip.dart';
 import '../widgets/lead_status_badge.dart';
 
 /// Farmer directory. Field-facing (employees + supervisors).
@@ -297,35 +298,6 @@ class _FilterChips extends StatelessWidget {
   }
 }
 
-class _CustomerTypeChip extends StatelessWidget {
-  const _CustomerTypeChip({required this.type});
-  final CustomerType type;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final color =
-        type == CustomerType.vlcc ? scheme.tertiary : scheme.primary;
-    return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        type.label,
-        style: AppTextStyles.caption.copyWith(
-          color: color,
-          fontWeight: FontWeight.w700,
-          fontSize: 10,
-        ),
-      ),
-    );
-  }
-}
-
 class _FarmerTile extends StatelessWidget {
   const _FarmerTile({required this.farmer, required this.onTap});
 
@@ -362,10 +334,8 @@ class _FarmerTile extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (farmer.customerType != CustomerType.farmer) ...[
-                  const SizedBox(width: AppDimens.grid),
-                  _CustomerTypeChip(type: farmer.customerType),
-                ],
+                const SizedBox(width: AppDimens.grid),
+                CustomerTypeChip(type: farmer.customerType),
                 const SizedBox(width: AppDimens.grid),
                 LeadStatusBadge(status: farmer.leadStatus),
               ],
