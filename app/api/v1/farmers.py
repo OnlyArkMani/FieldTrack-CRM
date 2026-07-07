@@ -64,7 +64,7 @@ async def list_farmers(
     limit: int = Query(default=20, ge=1, le=100),
     team_id: int | None = Query(default=None, description="Admin-only team filter"),
     customer_type: str | None = Query(
-        default=None, description="Filter by type: FARMER | FPO | VLCC"
+        default=None, description="Filter by type: FARMER | FPO | VLCC | RETAILER"
     ),
     lead_status: str | None = Query(
         default=None, description="Filter by current lead status: HOT | WARM | COLD"
@@ -77,8 +77,8 @@ async def list_farmers(
     Supervisor/employee see only their team's customers; admin sees all.
     Optional customer_type filter powers the [All][Farmers][FPOs][VLCCs] tabs."""
     ct = customer_type.strip().upper() if customer_type else None
-    if ct and ct not in ("FARMER", "FPO", "VLCC"):
-        raise bad_request("customer_type must be FARMER, FPO or VLCC")
+    if ct and ct not in ("FARMER", "FPO", "VLCC", "RETAILER"):
+        raise bad_request("customer_type must be FARMER, FPO, VLCC or RETAILER")
     return await FarmerService(db).list_farmers(
         user=user,
         cursor=cursor,

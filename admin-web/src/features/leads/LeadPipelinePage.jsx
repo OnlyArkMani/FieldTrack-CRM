@@ -203,6 +203,7 @@ export default function LeadPipelinePage() {
               <option value="FARMER">Farmers</option>
               <option value="FPO">FPOs</option>
               <option value="VLCC">VLCCs</option>
+              <option value="RETAILER">Retailers</option>
             </Select>
           </div>
         </div>

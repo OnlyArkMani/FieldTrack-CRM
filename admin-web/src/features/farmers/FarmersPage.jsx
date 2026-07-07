@@ -21,12 +21,13 @@ import Button from '@/components/ui/Button';
 import { Select } from '@/components/ui/Input';
 import FarmerDetailPanel, { LeadBadge, CustomerTypeBadge } from './FarmerDetailPanel';
 
-// [All] [Farmers] [FPOs] [VLCCs] — value '' means no customer_type filter.
+// [All] [Farmers] [FPOs] [VLCCs] [Retailers] — value '' means no customer_type filter.
 const TYPE_TABS = [
   { value: '', label: 'All' },
   { value: 'FARMER', label: 'Farmers' },
   { value: 'FPO', label: 'FPOs' },
   { value: 'VLCC', label: 'VLCCs' },
+  { value: 'RETAILER', label: 'Retailers' },
 ];
 
 export default function FarmersPage() {

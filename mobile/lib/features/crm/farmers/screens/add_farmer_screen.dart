@@ -124,7 +124,7 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
             AppTextField(
               label: 'Name *',
               controller: _name,
-              hint: 'Customer, FPO or VLCC name',
+              hint: 'Customer, FPO, VLCC or Retailer name',
               errorText: _nameError,
               textInputAction: TextInputAction.next,
               prefixIcon: Icons.person_rounded,

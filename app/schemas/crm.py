@@ -30,7 +30,7 @@ def _validate_phone(v: str | None) -> str | None:
 
 
 # Shared literal vocabularies (kept here so clients share one source of truth).
-CustomerType = Literal["FARMER", "FPO", "VLCC"]
+CustomerType = Literal["FARMER", "FPO", "VLCC", "RETAILER"]
 LeadStatus = Literal["HOT", "WARM", "COLD"]
 VisitStatus = Literal["CHECKED_IN", "COMPLETED", "ABANDONED"]
 VisitPurpose = Literal["FIRST_VISIT", "FOLLOW_UP", "ORDER_COLLECTION", "RELATIONSHIP_VISIT"]

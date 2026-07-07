@@ -36,11 +36,12 @@ function OrderStatusBadge({ status }) {
   return <Badge color={m.color}>{m.label}</Badge>;
 }
 
-// Customer type discriminator (FARMER / FPO / VLCC).
+// Customer type discriminator (FARMER / FPO / VLCC / RETAILER).
 export const CUSTOMER_TYPE_META = {
   FARMER: { color: 'var(--ft-secondary)', label: 'Farmer' },
   FPO: { color: 'var(--ft-primary)', label: 'FPO' },
   VLCC: { color: 'var(--ft-status-active, #2E9E6B)', label: 'VLCC' },
+  RETAILER: { color: 'var(--ft-status-battery, #D4A72C)', label: 'Retailer' },
 };
 
 export function CustomerTypeBadge({ type }) {

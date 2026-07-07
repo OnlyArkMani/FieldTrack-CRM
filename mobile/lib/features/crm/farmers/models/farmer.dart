@@ -29,11 +29,13 @@ enum LeadStatus {
 }
 
 /// Customer discriminator (mirrors backend CustomerType). Farmers use the
-/// guided livestock flow; FPO and VLCC share the 5-question org form.
+/// guided livestock flow; FPO, VLCC and Retailer share the 5-question org
+/// form (Retailer reuses the FPO/VLCC form as-is — no dedicated fields).
 enum CustomerType {
   farmer('FARMER'),
   fpo('FPO'),
-  vlcc('VLCC');
+  vlcc('VLCC'),
+  retailer('RETAILER');
 
   const CustomerType(this.wire);
   final String wire;
@@ -49,9 +51,11 @@ enum CustomerType {
         CustomerType.farmer => 'Farmer',
         CustomerType.fpo => 'FPO',
         CustomerType.vlcc => 'VLCC',
+        CustomerType.retailer => 'Retailer',
       };
 
-  /// FPO and VLCC answer the shared organisation form instead of livestock.
+  /// FPO, VLCC and Retailer answer the shared organisation form instead of
+  /// livestock.
   bool get isOrg => this != CustomerType.farmer;
 }
 

@@ -276,9 +276,9 @@ class FarmerService:
         rows are inserted in a single transaction (all-or-nothing)."""
         from app.schemas.crm import CustomerImportError, CustomerImportResult
 
-        valid_types = {"FARMER", "FPO", "VLCC"}
+        valid_types = {"FARMER", "FPO", "VLCC", "RETAILER"}
         errors: list[CustomerImportError] = []
-        by_type: dict[str, int] = {"FARMER": 0, "FPO": 0, "VLCC": 0}
+        by_type: dict[str, int] = {"FARMER": 0, "FPO": 0, "VLCC": 0, "RETAILER": 0}
         staged: list[Farmer] = []
         team_cache: dict[int, bool] = {}
 
