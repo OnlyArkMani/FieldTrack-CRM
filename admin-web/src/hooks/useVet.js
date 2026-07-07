@@ -3,13 +3,17 @@ import { api } from '@/services/api/client';
 
 const KEY = 'vet-requests';
 
-/** Vet requests visible to the caller (admin sees all; team filter optional). */
-export function useVetRequests({ status, teamId } = {}) {
+/** Vet requests visible to the caller (admin sees all; team/employee filters optional). */
+export function useVetRequests({ status, teamId, employeeId } = {}) {
   return useQuery({
-    queryKey: [KEY, status, teamId],
+    queryKey: [KEY, status, teamId, employeeId],
     queryFn: async () => {
       const { data } = await api.get('/vet-requests', {
-        params: { status: status || undefined, team_id: teamId || undefined },
+        params: {
+          status: status || undefined,
+          team_id: teamId || undefined,
+          employee_id: employeeId || undefined,
+        },
       });
       return data;
     },

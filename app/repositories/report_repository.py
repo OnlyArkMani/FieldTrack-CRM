@@ -279,6 +279,27 @@ class ReportRepository:
         result = await self.db.execute(stmt)
         return result.scalar_one() or 0
 
+    async def employee_vet_requests_by_status_in_range(
+        self, *, user_id: int, start: date, end: date
+    ) -> dict[str, int]:
+        """Vet requests raised by this employee in [start, end] (by
+        check_in_at), grouped by vet_status (checklist A8). Not gated on
+        check_out_at — vet_required is set during the visit, independent of
+        completion."""
+        lo, hi = self._utc_bounds(start, end)
+        stmt = (
+            select(Visit.vet_status, func.count(Visit.id))
+            .where(
+                Visit.employee_id == user_id,
+                Visit.vet_required.is_(True),
+                Visit.check_in_at >= lo,
+                Visit.check_in_at <= hi,
+            )
+            .group_by(Visit.vet_status)
+        )
+        result = await self.db.execute(stmt)
+        return {(s or "REQUESTED"): c for s, c in result.all()}
+
     async def employee_orders_in_range(
         self, *, user_id: int, start: date, end: date
     ) -> list[tuple[VisitOrder, str | None]]:

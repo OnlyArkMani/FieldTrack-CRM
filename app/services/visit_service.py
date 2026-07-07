@@ -194,6 +194,7 @@ class VisitService:
         visit.location_warning_remark = remark.strip()
         self.repo.add(visit)
         await self.db.commit()
+        await self.db.refresh(visit)
         return await self._build_detail(visit)
 
     # ── notes (upsert) ───────────────────────────────────────────────────
@@ -232,6 +233,7 @@ class VisitService:
             visit.vet_status = None
         self.repo.add(visit)
         await self.db.commit()
+        await self.db.refresh(visit)
         return await self._build_detail(visit)
 
     # ── livestock (append new row + denormalize farmer) ──────────────────

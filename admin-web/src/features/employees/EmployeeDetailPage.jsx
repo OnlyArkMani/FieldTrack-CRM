@@ -750,6 +750,11 @@ function CrmScorecard({ employeeId }) {
                 color={TYPE_COLORS[type] || 'var(--ft-status-battery)'}
               />
             ))}
+          <Mini
+            label="Vet requests"
+            value={data.vet_requests_raised}
+            color="var(--ft-status-danger)"
+          />
           <div className="col-span-2 rounded-btn border border-border p-3">
             <div className="mb-2 text-xs text-text-secondary">Leads</div>
             <div className="flex gap-4">

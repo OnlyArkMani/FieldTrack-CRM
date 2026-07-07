@@ -996,6 +996,9 @@ class ReportService:
         visits = await self.repo.employee_visits_in_range(
             user_id=uid, start=n.start, end=n.end
         )
+        vet_by_status = await self.repo.employee_vet_requests_by_status_in_range(
+            user_id=uid, start=n.start, end=n.end
+        )
         visit_rows: list[list[Any]] = []
         completed_visits = 0
         completed_by_type: dict[str, int] = {}
@@ -1082,6 +1085,16 @@ class ReportService:
                 ", ".join(
                     f"{k}: {v}" for k, v in sorted(completed_by_type.items())
                 ) or "—",
+            ),
+            (
+                "Vet requests raised",
+                (
+                    f"{sum(vet_by_status.values())} ("
+                    + ", ".join(f"{k}: {v}" for k, v in sorted(vet_by_status.items()))
+                    + ")"
+                    if vet_by_status
+                    else "0"
+                ),
             ),
             ("Orders captured", str(len(order_rows))),
             ("Bags ordered", str(total_bags)),

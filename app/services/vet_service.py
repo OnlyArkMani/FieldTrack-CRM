@@ -30,6 +30,7 @@ class VetService:
         *,
         status: str | None = None,
         team_id: int | None = None,
+        employee_id: int | None = None,
     ) -> list[VetRequestItem]:
         q = (
             select(
@@ -59,6 +60,12 @@ class VetService:
                 q = q.where(User.team_id == team_id)
         else:
             raise forbidden("Not permitted")
+
+        if employee_id is not None:
+            # Composes safely with the role scoping above (AND'ed): a
+            # supervisor passing another team's employee_id just gets an
+            # empty result, not a cross-team leak.
+            q = q.where(Visit.employee_id == employee_id)
 
         if status:
             q = q.where(Visit.vet_status == status.upper())

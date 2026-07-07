@@ -165,6 +165,10 @@ class CrmPerformanceOut(_BaseModel):
     # (FARMER / FPO / VLCC today; any future customer_type value, e.g.
     # Retailer, appears automatically once it exists).
     visits_completed_by_type: dict[str, int]
+    # Checklist A8 — vet requests raised by this employee in range, broken
+    # down by status (REQUESTED / SCHEDULED / DONE).
+    vet_requests_raised: int
+    vet_requests_by_status: dict[str, int]
     orders_captured: int
     hot_leads: int
     warm_leads: int
@@ -246,6 +250,25 @@ async def crm_performance(
     visits_completed_by_type = {
         (t.value if hasattr(t, "value") else str(t)): c for t, c in by_type_rows
     }
+
+    # Vet requests raised in range (checklist A8) — not gated on check_out_at
+    # since vet_required is set during the visit, independent of completion.
+    vet_by_status_rows = (
+        await db.execute(
+            select(Visit.vet_status, func.count(Visit.id))
+            .where(
+                Visit.employee_id == employee_id,
+                Visit.vet_required.is_(True),
+                func.date(Visit.check_in_at) >= start_date,
+                func.date(Visit.check_in_at) <= end_date,
+            )
+            .group_by(Visit.vet_status)
+        )
+    ).all()
+    vet_requests_by_status = {
+        (s or "REQUESTED"): c for s, c in vet_by_status_rows
+    }
+    vet_requests_raised = sum(vet_requests_by_status.values())
 
     # Unique farmers visited
     unique_farmers = (
@@ -333,6 +356,8 @@ async def crm_performance(
         visits_planned=visits_planned,
         visits_completed=visits_completed,
         visits_completed_by_type=visits_completed_by_type,
+        vet_requests_raised=vet_requests_raised,
+        vet_requests_by_status=vet_requests_by_status,
         orders_captured=orders_captured,
         hot_leads=hot_leads,
         warm_leads=warm_leads,

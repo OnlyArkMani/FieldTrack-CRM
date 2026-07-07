@@ -23,10 +23,16 @@ async def list_vet_requests(
         default=None, description="Filter: REQUESTED / SCHEDULED / DONE"
     ),
     team_id: int | None = Query(default=None, description="Admin-only team filter"),
+    employee_id: int | None = Query(
+        default=None,
+        description="Supervisor/admin filter — a single employee's vet requests",
+    ),
 ) -> list[VetRequestItem]:
     """Customers who requested a vet, newest first. Employee sees their own,
     supervisor their team, admin everything."""
-    return await VetService(db).list_requests(user, status=status, team_id=team_id)
+    return await VetService(db).list_requests(
+        user, status=status, team_id=team_id, employee_id=employee_id
+    )
 
 
 @router.patch("/{visit_id}/status", response_model=VetRequestItem)

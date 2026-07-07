@@ -3,6 +3,7 @@ import dayjs from 'dayjs';
 
 import { useVetRequests, useUpdateVetStatus } from '@/hooks/useVet';
 import { useTeams } from '@/hooks/useTeams';
+import { useEmployees } from '@/hooks/useEmployees';
 import PageHeader from '@/components/ui/PageHeader';
 import Card from '@/components/ui/Card';
 import Table from '@/components/ui/Table';
@@ -27,9 +28,12 @@ function pretty(s) {
 export default function VetRequestsPage() {
   const [status, setStatus] = useState('');
   const [teamId, setTeamId] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
 
   const { data: teams = [] } = useTeams();
-  const { data: rows = [], isLoading } = useVetRequests({ status, teamId });
+  const { data: employeesData } = useEmployees({ teamId: teamId || undefined });
+  const employees = employeesData?.items || [];
+  const { data: rows = [], isLoading } = useVetRequests({ status, teamId, employeeId });
   const update = useUpdateVetStatus();
 
   const columns = [
@@ -106,11 +110,32 @@ export default function VetRequestsPage() {
           </Select>
         </div>
         <div className="w-56">
-          <Select label="Team" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+          <Select
+            label="Team"
+            value={teamId}
+            onChange={(e) => {
+              setTeamId(e.target.value);
+              setEmployeeId(''); // narrow the employee list; drop a now-stale pick
+            }}
+          >
             <option value="">All teams</option>
             {teams.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div className="w-56">
+          <Select
+            label="Employee"
+            value={employeeId}
+            onChange={(e) => setEmployeeId(e.target.value)}
+          >
+            <option value="">All employees</option>
+            {employees.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
               </option>
             ))}
           </Select>
