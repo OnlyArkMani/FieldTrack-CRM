@@ -35,6 +35,11 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
   CustomerType _type = CustomerType.farmer;
   bool _submitting = false;
   String? _nameError;
+  String? _phoneError;
+  String? _villageError;
+  String? _districtError;
+  String? _addressError;
+  String? _pincodeError;
   String? _formError;
 
   @override
@@ -52,23 +57,42 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
 
   Future<void> _submit() async {
     final name = _name.text.trim();
+    final phone = _phone.text.trim();
+    final village = _village.text.trim();
+    final district = _district.text.trim();
+    final address = _address.text.trim();
+    final pincode = _pincode.text.trim();
+
     setState(() {
       _nameError = name.isEmpty ? 'Name is required' : null;
+      _phoneError = phone.isEmpty ? 'Phone is required' : null;
+      _villageError = village.isEmpty ? 'Village is required' : null;
+      _districtError = district.isEmpty ? 'District is required' : null;
+      _addressError = address.isEmpty ? 'Address is required' : null;
+      _pincodeError = pincode.isEmpty ? 'PIN code is required' : null;
       _formError = null;
     });
-    if (name.isEmpty) return;
+
+    if (name.isEmpty ||
+        phone.isEmpty ||
+        village.isEmpty ||
+        district.isEmpty ||
+        address.isEmpty ||
+        pincode.isEmpty) {
+      return;
+    }
 
     setState(() => _submitting = true);
     try {
       final farmer = await ref.read(farmerRepositoryProvider).create(
             name: name,
             customerType: _type,
-            phone: _phone.text.trim(),
-            village: _village.text.trim(),
-            district: _district.text.trim(),
-            address: _address.text.trim(),
+            phone: phone,
+            village: village,
+            district: district,
+            address: address,
             landmark: _landmark.text.trim(),
-            pincode: _pincode.text.trim(),
+            pincode: pincode,
             notes: _notes.text.trim(),
           );
       if (!mounted) return;
@@ -131,34 +155,38 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
             ),
             const SizedBox(height: AppDimens.grid * 2),
             AppTextField(
-              label: 'Phone',
+              label: 'Phone *',
               controller: _phone,
               hint: 'Mobile number',
+              errorText: _phoneError,
               keyboardType: TextInputType.phone,
               textInputAction: TextInputAction.next,
               prefixIcon: Icons.phone_rounded,
             ),
             const SizedBox(height: AppDimens.grid * 2),
             AppTextField(
-              label: 'Village',
+              label: 'Address *',
+              controller: _address,
+              hint: 'House / building',
+              errorText: _addressError,
+              textInputAction: TextInputAction.next,
+              prefixIcon: Icons.location_on_rounded,
+            ),
+            const SizedBox(height: AppDimens.grid * 2),
+            AppTextField(
+              label: 'Village *',
               controller: _village,
+              errorText: _villageError,
               textInputAction: TextInputAction.next,
               prefixIcon: Icons.home_work_rounded,
             ),
             const SizedBox(height: AppDimens.grid * 2),
             AppTextField(
-              label: 'District',
+              label: 'District *',
               controller: _district,
+              errorText: _districtError,
               textInputAction: TextInputAction.next,
               prefixIcon: Icons.map_rounded,
-            ),
-            const SizedBox(height: AppDimens.grid * 2),
-            AppTextField(
-              label: 'Address',
-              controller: _address,
-              hint: 'House / building',
-              textInputAction: TextInputAction.next,
-              prefixIcon: Icons.location_on_rounded,
             ),
             const SizedBox(height: AppDimens.grid * 2),
             AppTextField(
@@ -170,9 +198,10 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
             ),
             const SizedBox(height: AppDimens.grid * 2),
             AppTextField(
-              label: 'PIN code',
+              label: 'PIN code *',
               controller: _pincode,
               hint: '6-digit postal code',
+              errorText: _pincodeError,
               keyboardType: TextInputType.number,
               textInputAction: TextInputAction.next,
               prefixIcon: Icons.markunread_mailbox_rounded,
