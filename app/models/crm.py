@@ -43,7 +43,7 @@ class Customer(Base, TimestampMixin):
     """Customer master record (the CRM's central entity).
 
     Renamed from ``farmers`` in migration 0008 and given a ``customer_type``
-    discriminator (FARMER / FPO / VLCC). Child tables still carry a
+    discriminator (FARMER / FPO / VLCC / RETAILER). Child tables still carry a
     ``farmer_id`` FK column that now references ``customers.id`` — the column
     name is kept for wire/DB compatibility; ``Farmer`` remains an alias of this
     class at the bottom of the module."""
@@ -51,13 +51,14 @@ class Customer(Base, TimestampMixin):
     __tablename__ = "customers"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    # Native PG enum ``customertype`` (created in migration 0008). Mapped with
-    # plain string members (not the Python enum class) so reads return
-    # "FARMER"/"FPO"/"VLCC" strings — matching the rest of the CRM's string
-    # discriminators and the Pydantic Literal wire types. create_type=False:
-    # Alembic owns the type's lifecycle, never metadata.create_all.
+    # Native PG enum ``customertype`` (created in migration 0008, RETAILER
+    # added in migration 0016). Mapped with plain string members (not the
+    # Python enum class) so reads return "FARMER"/"FPO"/"VLCC"/"RETAILER"
+    # strings — matching the rest of the CRM's string discriminators and the
+    # Pydantic Literal wire types. create_type=False: Alembic owns the type's
+    # lifecycle, never metadata.create_all.
     customer_type: Mapped[str] = mapped_column(
-        SAEnum("FARMER", "FPO", "VLCC", name="customertype"),
+        SAEnum("FARMER", "FPO", "VLCC", "RETAILER", name="customertype"),
         nullable=False,
         default="FARMER",
         server_default=text("'FARMER'"),
