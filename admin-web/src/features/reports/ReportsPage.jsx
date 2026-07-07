@@ -494,15 +494,6 @@ export default function ReportsPage() {
           >
             Generate
           </Button>
-          <Button
-            variant="outline"
-            icon={Download}
-            onClick={downloadFile}
-            loading={downloading}
-            disabled={phase !== 'ready'}
-          >
-            Download
-          </Button>
         </div>
 
         <p className="mt-2 text-xs italic text-text-secondary">Max 31 days per report.</p>
