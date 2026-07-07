@@ -244,12 +244,12 @@ class ReportRepository:
 
     async def employee_visits_in_range(
         self, *, user_id: int, start: date, end: date
-    ) -> list[tuple[Visit, str | None]]:
+    ) -> list[tuple[Visit, str | None, str | None]]:
         """This employee's visits in [start, end] (by check-in), each paired with
-        the FPO/farmer name. Ordered oldest-first."""
+        the FPO/farmer name and customer_type (checklist A7). Ordered oldest-first."""
         lo, hi = self._utc_bounds(start, end)
         stmt = (
-            select(Visit, Farmer.name)
+            select(Visit, Farmer.name, Farmer.customer_type)
             .join(Farmer, Farmer.id == Visit.farmer_id, isouter=True)
             .where(
                 Visit.employee_id == user_id,
@@ -259,7 +259,7 @@ class ReportRepository:
             .order_by(Visit.check_in_at.asc())
         )
         result = await self.db.execute(stmt)
-        return [(r[0], r[1]) for r in result.all()]
+        return [(r[0], r[1], r[2]) for r in result.all()]
 
     async def employee_visits_planned_count_in_range(
         self, *, user_id: int, start: date, end: date

@@ -674,6 +674,12 @@ function Row({ label, value }) {
   );
 }
 
+const TYPE_COLORS = {
+  FARMER: 'var(--ft-status-active)',
+  FPO: 'var(--ft-primary)',
+  VLCC: 'var(--ft-secondary)',
+};
+
 function Mini({ label, value, color }) {
   return (
     <div className="rounded-btn border border-border p-3 text-center">
@@ -721,7 +727,7 @@ function CrmScorecard({ employeeId }) {
             color="var(--ft-primary)"
           />
           <Mini
-            label="FPOs"
+            label="Unique visits"
             value={data.unique_farmers_visited}
             color="var(--ft-secondary)"
           />
@@ -734,6 +740,16 @@ function CrmScorecard({ employeeId }) {
                 : 'var(--ft-status-battery)'
             }
           />
+          {Object.entries(data.visits_completed_by_type || {})
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([type, count]) => (
+              <Mini
+                key={type}
+                label={`${type} visits`}
+                value={count}
+                color={TYPE_COLORS[type] || 'var(--ft-status-battery)'}
+              />
+            ))}
           <div className="col-span-2 rounded-btn border border-border p-3">
             <div className="mb-2 text-xs text-text-secondary">Leads</div>
             <div className="flex gap-4">

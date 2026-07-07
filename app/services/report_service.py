@@ -998,9 +998,16 @@ class ReportService:
         )
         visit_rows: list[list[Any]] = []
         completed_visits = 0
-        for v, farmer_name in visits:
+        completed_by_type: dict[str, int] = {}
+        for v, farmer_name, customer_type in visits:
             if v.status == "COMPLETED":
                 completed_visits += 1
+                type_key = (
+                    customer_type.value
+                    if hasattr(customer_type, "value")
+                    else str(customer_type or "UNKNOWN")
+                )
+                completed_by_type[type_key] = completed_by_type.get(type_key, 0) + 1
             dist = (
                 round(v.distance_at_checkin_meters)
                 if v.distance_at_checkin_meters is not None
@@ -1070,6 +1077,12 @@ class ReportService:
             ("Total distance", f"{total_distance_m / 1000:.2f} km"),
             ("Visits planned", str(visits_planned)),
             ("Visits (completed)", f"{len(visit_rows)} ({completed_visits})"),
+            (
+                "Visits by type",
+                ", ".join(
+                    f"{k}: {v}" for k, v in sorted(completed_by_type.items())
+                ) or "—",
+            ),
             ("Orders captured", str(len(order_rows))),
             ("Bags ordered", str(total_bags)),
             ("Conversion rate", f"{conversion:.0f}%"),

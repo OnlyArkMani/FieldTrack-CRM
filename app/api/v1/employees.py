@@ -161,6 +161,10 @@ class CrmPerformanceOut(_BaseModel):
     end_date: date
     visits_planned: int
     visits_completed: int
+    # Checklist A7 — visits completed broken down by counterparty type
+    # (FARMER / FPO / VLCC today; any future customer_type value, e.g.
+    # Retailer, appears automatically once it exists).
+    visits_completed_by_type: dict[str, int]
     orders_captured: int
     hot_leads: int
     warm_leads: int
@@ -190,6 +194,7 @@ async def crm_performance(
     from sqlalchemy import func, select, distinct
     from app.models.crm import (
         Visit, VisitOrder, Lead, FollowUp, DailyReport, VisitPlan, VisitPlanItem,
+        Farmer,
     )
 
     today = _date.today()
@@ -223,6 +228,24 @@ async def crm_performance(
             )
         )
     ).scalar_one() or 0
+
+    # Visits completed broken down by counterparty type (checklist A7)
+    by_type_rows = (
+        await db.execute(
+            select(Farmer.customer_type, func.count(Visit.id))
+            .join(Farmer, Farmer.id == Visit.farmer_id)
+            .where(
+                Visit.employee_id == employee_id,
+                Visit.check_out_at.isnot(None),
+                func.date(Visit.check_in_at) >= start_date,
+                func.date(Visit.check_in_at) <= end_date,
+            )
+            .group_by(Farmer.customer_type)
+        )
+    ).all()
+    visits_completed_by_type = {
+        (t.value if hasattr(t, "value") else str(t)): c for t, c in by_type_rows
+    }
 
     # Unique farmers visited
     unique_farmers = (
@@ -309,6 +332,7 @@ async def crm_performance(
         end_date=end_date,
         visits_planned=visits_planned,
         visits_completed=visits_completed,
+        visits_completed_by_type=visits_completed_by_type,
         orders_captured=orders_captured,
         hot_leads=hot_leads,
         warm_leads=warm_leads,
