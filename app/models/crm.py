@@ -52,7 +52,7 @@ class Customer(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     # Native PG enum ``customertype`` (created in migration 0008, RETAILER
-    # added in migration 0015). Mapped with plain string members (not the
+    # added in migration 0016). Mapped with plain string members (not the
     # Python enum class) so reads return "FARMER"/"FPO"/"VLCC"/"RETAILER"
     # strings — matching the rest of the CRM's string discriminators and the
     # Pydantic Literal wire types. create_type=False: Alembic owns the type's

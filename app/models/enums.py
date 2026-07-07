@@ -13,7 +13,7 @@ class UserRole(str, enum.Enum):
 class CustomerType(str, enum.Enum):
     """Kind of CRM customer. FARMER is the historical default (all pre-0008
     rows). FPO = Farmer Producer Organization, VLCC = Village Level Collection
-    Centre, RETAILER = feed/product retail outlet (added migration 0015).
+    Centre, RETAILER = feed/product retail outlet (added migration 0016).
     Retailer visits reuse the same FPO/VLCC org-answers guided form — no
     dedicated Retailer fields exist. Stored on the ``customers`` table
     (formerly ``farmers``)."""
