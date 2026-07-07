@@ -358,6 +358,7 @@ class VisitService:
         answer.monthly_bags = payload.monthly_bags
         answer.interested_in_supply = payload.interested_in_supply
         answer.interested_bags = payload.interested_bags
+        answer.current_price_per_bag = payload.current_price_per_bag
         answer.notes = payload.notes
         if existing is None:
             self.repo.add(answer)
@@ -386,6 +387,7 @@ class VisitService:
                         bags_count=payload.interested_bags,
                         delivery_date=delivery,
                         payment_mode=payload.payment_mode,
+                        price_per_bag=payload.current_price_per_bag,
                         special_notes="Auto-captured from FPO/VLCC supply interest",
                         status="SUBMITTED",
                     )

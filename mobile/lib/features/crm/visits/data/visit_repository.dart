@@ -95,6 +95,7 @@ class VisitRepository {
     int? monthlyBags,
     bool interestedInSupply = false,
     int? interestedBags,
+    double? currentPricePerBag,
     String? notes,
     String? paymentMode,
   }) async {
@@ -105,6 +106,7 @@ class VisitRepository {
       'monthly_bags': monthlyBags,
       'interested_in_supply': interestedInSupply,
       'interested_bags': interestedBags,
+      if (currentPricePerBag != null) 'current_price_per_bag': currentPricePerBag,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
       if (paymentMode != null) 'payment_mode': paymentMode,
     });

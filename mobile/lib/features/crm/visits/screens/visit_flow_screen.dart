@@ -76,6 +76,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
   final _orgBrand = TextEditingController();
   final _orgMonthlyBags = TextEditingController();
   final _orgInterestedBags = TextEditingController();
+  final _orgPricePerBag = TextEditingController();
   final _orgNotes = TextEditingController();
   bool _orgInterested = false;
 
@@ -116,7 +117,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       _remark, _highlights, _concerns, _interest, _cattle, _brand,
       _bagsPerMonth, _kgPerAnimal, _pricePerBag, _payMin, _payMax, _healthNotes,
       _orgMembers, _orgCattle, _orgBrand, _orgMonthlyBags,
-      _orgInterestedBags, _orgNotes,
+      _orgInterestedBags, _orgPricePerBag, _orgNotes,
       _vetCattle, _vetNotes,
       _bagsCount, _deliveryAddress, _orderNotes, _followUpPurpose,
     ]) {
@@ -317,6 +318,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       monthlyBags: int.tryParse(_orgMonthlyBags.text.trim()),
       interestedInSupply: _orgInterested,
       interestedBags: _orgInterested ? interestedBags : null,
+      currentPricePerBag: double.tryParse(_orgPricePerBag.text.trim()),
       notes: _orgNotes.text.trim().isEmpty ? null : _orgNotes.text.trim(),
     );
   }
@@ -794,6 +796,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
         _numField(_orgCattle, 'Q2 · Total cattle (approx)'),
         _textField(_orgBrand, 'Q3 · Current feed brand / procurement'),
         _numField(_orgMonthlyBags, 'Q4 · Monthly feed requirement (bags)'),
+        _numField(_orgPricePerBag, 'Current price / bag (₹)'),
         const SizedBox(height: AppDimens.grid),
         AppCard(
           child: Row(

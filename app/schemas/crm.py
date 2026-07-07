@@ -653,11 +653,12 @@ class VetStatusUpdate(BaseModel):
 
 
 class OrgAnswersUpsert(BaseModel):
-    """The shared 5-question form for FPO / VLCC visits.
+    """The shared organisation form for FPO / VLCC / Retailer visits.
 
     Q1 member_count, Q2 total_cattle, Q3 current_brand, Q4 monthly_bags,
-    Q5 interested_in_supply (+ interested_bags). When interested with bags > 0
-    the service also creates a real visit_orders row."""
+    Q5 interested_in_supply (+ interested_bags), Q6 current_price_per_bag.
+    When interested with bags > 0 the service also creates a real
+    visit_orders row (priced at current_price_per_bag when supplied)."""
 
     member_count: int | None = Field(default=None, ge=0)
     total_cattle: int | None = Field(default=None, ge=0)
@@ -665,6 +666,7 @@ class OrgAnswersUpsert(BaseModel):
     monthly_bags: int | None = Field(default=None, ge=0)
     interested_in_supply: bool = False
     interested_bags: int | None = Field(default=None, ge=0)
+    current_price_per_bag: Decimal | None = Field(default=None, ge=0)
     notes: str | None = None
     # Optional order details when interested (defaults applied server-side).
     delivery_date: date | None = None
@@ -683,6 +685,7 @@ class OrgAnswerResponse(BaseModel):
     monthly_bags: int | None
     interested_in_supply: bool
     interested_bags: int | None
+    current_price_per_bag: Decimal | None
     notes: str | None
     recorded_at: datetime
 

@@ -496,6 +496,8 @@ class VisitOrgAnswer(Base):
         Boolean, nullable=False, default=False, server_default=text("false")
     )
     interested_bags: Mapped[int | None] = mapped_column(Integer)
+    # Current price per bag they pay (mirrors LivestockProfile for farmers).
+    current_price_per_bag: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     notes: Mapped[str | None] = mapped_column(Text)
     recorded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
