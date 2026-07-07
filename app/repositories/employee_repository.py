@@ -83,6 +83,12 @@ class EmployeeRepository:
             stmt = stmt.where(User.id != exclude_id)
         return bool((await self.db.execute(stmt)).scalar_one())
 
+    async def phone_exists(self, phone: str, *, exclude_id: int | None = None) -> bool:
+        stmt = select(func.count(User.id)).where(User.phone == phone)
+        if exclude_id is not None:
+            stmt = stmt.where(User.id != exclude_id)
+        return bool((await self.db.execute(stmt)).scalar_one())
+
     async def active_team_exists(self, team_id: int) -> bool:
         stmt = select(func.count(Team.id)).where(
             and_(Team.id == team_id, Team.is_active.is_(True))

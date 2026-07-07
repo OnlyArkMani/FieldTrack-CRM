@@ -34,6 +34,11 @@ class User(Base, TimestampMixin):
     profile_photo_url: Mapped[str | None] = mapped_column(String(500))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
+    # Location (checklist A2) — where the employee is based, not a live GPS fix.
+    village: Mapped[str | None] = mapped_column(String(120))
+    district: Mapped[str | None] = mapped_column(String(120))
+    state: Mapped[str | None] = mapped_column(String(120))
+
     team: Mapped["Team | None"] = relationship(
         back_populates="members", foreign_keys=[team_id]
     )

@@ -42,11 +42,17 @@ class _LowercaseEmailMixin(BaseModel):
 class EmployeeCreate(_LowercaseEmailMixin):
     name: str = Field(min_length=2, max_length=120)
     email: EmailStr
-    phone: str | None = Field(default=None, max_length=20)
+    phone: str = Field(min_length=1, max_length=20)
     password: str = Field(min_length=8, max_length=128)
     role: UserRole = UserRole.EMPLOYEE
     team_id: int | None = None
     profile_photo_url: str | None = Field(default=None, max_length=500)
+    # Location (checklist A2) — where the employee is based, not a live GPS
+    # fix. Mandatory at creation time; EmployeeUpdate keeps them optional
+    # since that's a partial-update schema.
+    village: str = Field(min_length=1, max_length=120)
+    district: str = Field(min_length=1, max_length=120)
+    state: str = Field(min_length=1, max_length=120)
 
 
 class EmployeeUpdate(_LowercaseEmailMixin):
@@ -60,6 +66,9 @@ class EmployeeUpdate(_LowercaseEmailMixin):
     role: UserRole | None = None
     team_id: int | None = None
     profile_photo_url: str | None = Field(default=None, max_length=500)
+    village: str | None = Field(default=None, max_length=120)
+    district: str | None = Field(default=None, max_length=120)
+    state: str | None = Field(default=None, max_length=120)
 
 
 class EmployeeStatusUpdate(BaseModel):
@@ -93,6 +102,9 @@ class EmployeeOut(BaseModel):
     profile_photo_url: str | None
     is_active: bool
     created_at: datetime
+    village: str | None = None
+    district: str | None = None
+    state: str | None = None
     live: LiveStatus | None = None
     # True if this employee has ANY mock-GPS-flagged ping today. Surfaces a
     # warning dot on the admin list (anti-gaming). Filled by a single bulk

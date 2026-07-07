@@ -157,6 +157,14 @@ export default function EmployeeDetailPage() {
             <Row label="Phone" value={employee.phone || '—'} />
             <Row label="Team" value={teamName || '—'} />
             <Row
+              label="Location"
+              value={
+                [employee.village, employee.district, employee.state]
+                  .filter(Boolean)
+                  .join(', ') || '—'
+              }
+            />
+            <Row
               label="Account"
               value={employee.is_active ? 'Active' : 'Inactive'}
             />

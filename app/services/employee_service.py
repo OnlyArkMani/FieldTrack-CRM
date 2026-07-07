@@ -230,6 +230,8 @@ class EmployeeService:
         email = payload.email.lower()
         if await self.repo.email_exists(email):
             raise conflict("An account with this email already exists")
+        if await self.repo.phone_exists(payload.phone):
+            raise conflict("An account with this phone number already exists")
         if payload.team_id is not None and not await self.repo.active_team_exists(
             payload.team_id
         ):
@@ -243,6 +245,9 @@ class EmployeeService:
             role=payload.role,
             team_id=payload.team_id,
             profile_photo_url=payload.profile_photo_url,
+            village=payload.village,
+            district=payload.district,
+            state=payload.state,
             is_active=True,
         )
         self.repo.add(user)
@@ -303,12 +308,21 @@ class EmployeeService:
             ):
                 raise conflict("An account with this email already exists")
             user.email = new_email
+        if "phone" in fields and fields["phone"]:
+            new_phone = fields["phone"]
+            if new_phone != user.phone and await self.repo.phone_exists(
+                new_phone, exclude_id=user_id
+            ):
+                raise conflict("An account with this phone number already exists")
         if "team_id" in fields:
             tid = fields["team_id"]
             if tid is not None and not await self.repo.active_team_exists(tid):
                 raise not_found("Team not found")
             user.team_id = tid
-        for key in ("name", "phone", "role", "profile_photo_url"):
+        for key in (
+            "name", "phone", "role", "profile_photo_url",
+            "village", "district", "state",
+        ):
             if key in fields:
                 setattr(user, key, fields[key])
 
