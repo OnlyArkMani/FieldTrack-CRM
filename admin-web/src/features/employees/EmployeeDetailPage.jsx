@@ -732,6 +732,11 @@ function CrmScorecard({ employeeId }) {
             color="var(--ft-secondary)"
           />
           <Mini
+            label="Remarks"
+            value={data.visits_with_remarks}
+            color="var(--ft-primary)"
+          />
+          <Mini
             label="DSRs"
             value={`${data.dsrs_submitted}/${data.dsrs_total}`}
             color={
@@ -766,6 +771,20 @@ function CrmScorecard({ employeeId }) {
               </span>
               <span className="text-sm font-bold" style={{ color: 'var(--ft-secondary)' }}>
                 {data.cold_leads}C
+              </span>
+            </div>
+          </div>
+          <div className="col-span-2 rounded-btn border border-border p-3">
+            <div className="mb-2 text-xs text-text-secondary">Orders by type</div>
+            <div className="flex gap-4">
+              <span className="text-sm font-bold" style={{ color: 'var(--ft-status-active)' }}>
+                {data.orders_by_type?.FARMER ?? 0} Farmer
+              </span>
+              <span className="text-sm font-bold" style={{ color: 'var(--ft-primary)' }}>
+                {data.orders_by_type?.FPO ?? 0} FPO
+              </span>
+              <span className="text-sm font-bold" style={{ color: 'var(--ft-secondary)' }}>
+                {data.orders_by_type?.VLCC ?? 0} VLCC
               </span>
             </div>
           </div>

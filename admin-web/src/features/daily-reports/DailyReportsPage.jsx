@@ -461,6 +461,16 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
                         {[v.village, v.district].filter(Boolean).join(', ')}
                       </div>
                     )}
+                    {v.check_in_lat != null && v.check_in_lng != null && (
+                      <a
+                        href={`https://www.google.com/maps?q=${v.check_in_lat},${v.check_in_lng}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-primary underline"
+                      >
+                        {v.check_in_lat.toFixed(5)}, {v.check_in_lng.toFixed(5)}
+                      </a>
+                    )}
                     {v.meeting_highlights && (
                       <p className="text-xs italic text-text-primary">{v.meeting_highlights}</p>
                     )}

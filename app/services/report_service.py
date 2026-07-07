@@ -1002,7 +1002,7 @@ class ReportService:
         visit_rows: list[list[Any]] = []
         completed_visits = 0
         completed_by_type: dict[str, int] = {}
-        for v, farmer_name, customer_type in visits:
+        for v, farmer_name, customer_type, meeting_highlights, farmer_concerns in visits:
             if v.status == "COMPLETED":
                 completed_visits += 1
                 type_key = (
@@ -1016,6 +1016,12 @@ class ReportService:
                 if v.distance_at_checkin_meters is not None
                 else "—"
             )
+            remarks = " / ".join(
+                filter(None, [
+                    (meeting_highlights or "").strip() or None,
+                    (farmer_concerns or "").strip() or None,
+                ])
+            ) or "—"
             visit_rows.append([
                 self._fmt_datetime(v.check_in_at),
                 farmer_name or "—",
@@ -1024,6 +1030,9 @@ class ReportService:
                 v.status,
                 dist,
                 "Yes" if v.location_warning else "No",
+                remarks,
+                v.check_in_lat if v.check_in_lat is not None else "—",
+                v.check_in_lng if v.check_in_lng is not None else "—",
             ])
 
         # 4) Orders
@@ -1125,9 +1134,10 @@ class ReportService:
                 ReportTable(
                     name="Visits",
                     columns=["Checked In", "FPO", "Checked Out", "Purpose",
-                             "Status", "Distance (m)", "Location Warning"],
+                             "Status", "Distance (m)", "Location Warning",
+                             "Remarks", "Lat", "Lng"],
                     rows=visit_rows,
-                    numeric_cols={5},
+                    numeric_cols={5, 8, 9},
                 ),
                 ReportTable(
                     name="Orders",
