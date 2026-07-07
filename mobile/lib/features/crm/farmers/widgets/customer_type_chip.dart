@@ -16,6 +16,7 @@ class CustomerTypeChip extends StatelessWidget {
       CustomerType.farmer => colors.statusActive,
       CustomerType.fpo => scheme.primary,
       CustomerType.vlcc => scheme.secondary,
+      CustomerType.retailer => colors.statusLowBattery,
     };
 
     return Container(
