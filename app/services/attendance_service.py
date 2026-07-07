@@ -275,6 +275,15 @@ class AttendanceService:
         await self.db.refresh(attendance, attribute_names=["sessions"])
 
     # ── Reads ─────────────────────────────────────────────────────────────
+    async def is_active_today(self, user_id: int) -> bool:
+        """True once the user has started attendance today and hasn't ended
+        it yet (STARTED/ON_BREAK/RESUMED). Used to gate field-work actions
+        (checklist A15) for employees — supervisors/admins are exempt."""
+        day = self._today()
+        attendance = await self.repo.get_for_user_date(user_id, day)
+        state = await self._current_state(user_id, attendance)
+        return state not in ("NULL", "ENDED")
+
     async def get_today(self, user_id: int) -> TodayAttendanceOut:
         day = self._today()
         attendance = await self.repo.get_for_user_date(user_id, day)

@@ -24,7 +24,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.exceptions import bad_request, forbidden, not_found
+from app.core.exceptions import attendance_required, bad_request, forbidden, not_found
 from app.core.storage import get_storage
 from app.models.crm import (
     Farmer,
@@ -40,6 +40,7 @@ from app.models.crm import (
 from app.models.enums import UserRole
 from app.models.user import User
 from app.repositories.visit_repository import VisitRepository
+from app.services.attendance_service import AttendanceService
 from app.schemas.crm import (
     CheckInRequest,
     CheckInResponse,
@@ -129,6 +130,13 @@ class VisitService:
         if farmer is None:
             raise not_found("Farmer not found")
         self._assert_can_visit(farmer, user)
+
+        # A15: attendance must be active before an employee can check in to a
+        # visit. Supervisors/admins are exempt — attendance isn't mandatory
+        # for them.
+        if not self._is_privileged(user):
+            if not await AttendanceService(self.db).is_active_today(user.id):
+                raise attendance_required()
 
         now = datetime.now(timezone.utc)
         warning = False

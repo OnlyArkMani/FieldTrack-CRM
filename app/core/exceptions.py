@@ -81,6 +81,14 @@ def forbidden(detail: str = "Insufficient permissions") -> ApiError:
     return ApiError(403, detail, "FORBIDDEN")
 
 
+def attendance_required() -> ApiError:
+    return ApiError(
+        403,
+        "Start your attendance before checking in to a visit",
+        "ATTENDANCE_REQUIRED",
+    )
+
+
 def rate_limited(retry_after_seconds: int) -> ApiError:
     return ApiError(
         429,
