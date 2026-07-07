@@ -159,6 +159,7 @@ class CrmPerformanceOut(_BaseModel):
     employee_id: int
     start_date: date
     end_date: date
+    visits_planned: int
     visits_completed: int
     orders_captured: int
     hot_leads: int
@@ -188,7 +189,7 @@ async def crm_performance(
     from datetime import timedelta, date as _date
     from sqlalchemy import func, select, distinct
     from app.models.crm import (
-        Visit, VisitOrder, Lead, FollowUp, DailyReport,
+        Visit, VisitOrder, Lead, FollowUp, DailyReport, VisitPlan, VisitPlanItem,
     )
 
     today = _date.today()
@@ -196,6 +197,20 @@ async def crm_performance(
         end_date = today
     if start_date is None:
         start_date = today - timedelta(days=29)
+
+    # Visits planned in range (checklist A5 — same source as the daily DSR's
+    # visits_planned: count of VisitPlanItem rows under this employee's plans)
+    visits_planned = (
+        await db.execute(
+            select(func.count(VisitPlanItem.id))
+            .join(VisitPlan, VisitPlan.id == VisitPlanItem.plan_id)
+            .where(
+                VisitPlan.employee_id == employee_id,
+                VisitPlan.plan_date >= start_date,
+                VisitPlan.plan_date <= end_date,
+            )
+        )
+    ).scalar_one() or 0
 
     # Visits completed in range
     visits_completed = (
@@ -292,6 +307,7 @@ async def crm_performance(
         employee_id=employee_id,
         start_date=start_date,
         end_date=end_date,
+        visits_planned=visits_planned,
         visits_completed=visits_completed,
         orders_captured=orders_captured,
         hot_leads=hot_leads,

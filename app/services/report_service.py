@@ -1004,6 +1004,9 @@ class ReportService:
             ])
 
         # 3) Visits
+        visits_planned = await self.repo.employee_visits_planned_count_in_range(
+            user_id=uid, start=n.start, end=n.end
+        )
         visits = await self.repo.employee_visits_in_range(
             user_id=uid, start=n.start, end=n.end
         )
@@ -1080,6 +1083,7 @@ class ReportService:
             ("Total hours", self._fmt_duration(total_minutes)),
             ("Total distance", f"{total_distance_m / 1000:.2f} km"),
             ("Mock-GPS flags", str(total_mock)),
+            ("Visits planned", str(visits_planned)),
             ("Visits (completed)", f"{len(visit_rows)} ({completed_visits})"),
             ("Orders captured", str(len(order_rows))),
             ("Bags ordered", str(total_bags)),

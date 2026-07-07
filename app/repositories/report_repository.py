@@ -10,7 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.attendance import Attendance
-from app.models.crm import Farmer, Lead, LivestockProfile, Visit, VisitOrder
+from app.models.crm import (
+    Farmer,
+    Lead,
+    LivestockProfile,
+    Visit,
+    VisitOrder,
+    VisitPlan,
+    VisitPlanItem,
+)
 from app.models.enums import AttendanceStatus, GeofenceEventType, UserRole
 from app.models.geofence import Geofence, GeofenceEvent
 from app.models.location import LocationLog
@@ -281,6 +289,24 @@ class ReportRepository:
         )
         result = await self.db.execute(stmt)
         return [(r[0], r[1]) for r in result.all()]
+
+    async def employee_visits_planned_count_in_range(
+        self, *, user_id: int, start: date, end: date
+    ) -> int:
+        """Count of VisitPlanItem rows under this employee's plans in
+        [start, end] (by plan_date) — same source as the daily DSR's
+        visits_planned and the crm-performance endpoint's visits_planned."""
+        stmt = (
+            select(func.count(VisitPlanItem.id))
+            .join(VisitPlan, VisitPlan.id == VisitPlanItem.plan_id)
+            .where(
+                VisitPlan.employee_id == user_id,
+                VisitPlan.plan_date >= start,
+                VisitPlan.plan_date <= end,
+            )
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one() or 0
 
     async def employee_orders_in_range(
         self, *, user_id: int, start: date, end: date

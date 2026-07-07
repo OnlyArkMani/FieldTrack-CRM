@@ -703,8 +703,8 @@ function CrmScorecard({ employeeId }) {
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Mini
-            label="Visits"
-            value={data.visits_completed}
+            label="Visits (Done/Planned)"
+            value={`${data.visits_completed}/${data.visits_planned}`}
             color="var(--ft-status-active)"
           />
           <Mini
