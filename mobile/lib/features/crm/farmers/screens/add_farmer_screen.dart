@@ -107,7 +107,7 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.category_rounded),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppDimens.radius),
+                  borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
                 ),
               ),
               items: CustomerType.values
