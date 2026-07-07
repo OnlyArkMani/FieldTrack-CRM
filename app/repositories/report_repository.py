@@ -64,41 +64,12 @@ class ReportRepository:
         result = await self.db.execute(stmt)
         return [(row[0], row[1]) for row in result.all()]
 
-    async def mock_counts_in_range(
-        self, *, start: date, end: date, user_ids: list[int]
-    ) -> dict[tuple[int, date], int]:
-        """Flagged (is_mock_gps) ping counts grouped by (user_id, calendar
-        day) over the window. func.date() casts the timestamptz in the session
-        tz (UTC on the server) so it lines up with attendance.date."""
-        if not user_ids:
-            return {}
-        day = func.date(LocationLog.timestamp)
-        stmt = (
-            select(LocationLog.user_id, day.label("day"), func.count(LocationLog.id))
-            .where(
-                LocationLog.user_id.in_(user_ids),
-                LocationLog.is_mock_gps.is_(True),
-                day >= start,
-                day <= end,
-            )
-            .group_by(LocationLog.user_id, day)
-        )
-        result = await self.db.execute(stmt)
-        out: dict[tuple[int, date], int] = {}
-        for uid, d, count in result.all():
-            # func.date may yield a date or an ISO string depending on driver;
-            # normalize to date.
-            dd = d if isinstance(d, date) else date.fromisoformat(str(d))
-            out[(int(uid), dd)] = int(count)
-        return out
-
     async def location_points_in_range(
         self, *, start: date, end: date, user_ids: list[int]
     ) -> dict[tuple[int, date], list[tuple[float, float, datetime]]]:
         """Raw GPS pings bucketed by (user_id, calendar day), each bucket
         ordered by timestamp ascending — ready for consecutive-point Haversine.
-        func.date() casts in the session tz (UTC) to line up with attendance.date,
-        same as mock_counts_in_range."""
+        func.date() casts in the session tz (UTC) to line up with attendance.date."""
         if not user_ids:
             return {}
         day = func.date(LocationLog.timestamp)

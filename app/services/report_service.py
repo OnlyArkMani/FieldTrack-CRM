@@ -409,24 +409,18 @@ class ReportService:
             user_id=n.user_id, status=n.status,
         )
         user_ids = list({u.id for _, u in rows})
-        mock = await self.repo.mock_counts_in_range(
-            start=n.start, end=n.end, user_ids=user_ids
-        )
 
         columns = [
             "Employee", "Date", "Start", "End", "Duration",
-            "Distance (km)", "Status", "Mock GPS", "Work Summary",
+            "Distance (km)", "Status", "Work Summary",
         ]
         table_rows: list[list[Any]] = []
         total_minutes = 0
         total_distance = 0.0
-        total_mock = 0
         for att, user in rows:
             start_t, end_t = self._session_bounds(att.sessions)
-            mock_n = mock.get((user.id, att.date), 0)
             total_minutes += att.total_duration_minutes
             total_distance += att.total_distance_meters
-            total_mock += mock_n
             table_rows.append([
                 user.name,
                 att.date.isoformat(),
@@ -435,7 +429,6 @@ class ReportService:
                 self._fmt_duration(att.total_duration_minutes),
                 round(att.total_distance_meters / 1000, 2),
                 att.status.value,
-                mock_n,
                 (att.work_summary or "").strip(),
             ])
 
@@ -444,7 +437,6 @@ class ReportService:
             ("Employees", str(len(user_ids))),
             ("Total hours", self._fmt_duration(total_minutes)),
             ("Total distance", f"{total_distance / 1000:.2f} km"),
-            ("Mock-GPS flags", str(total_mock)),
         ]
         return ReportData(
             title="Attendance Report",
@@ -456,7 +448,7 @@ class ReportService:
                 name="Attendance",
                 columns=columns,
                 rows=table_rows,
-                numeric_cols={5, 7},
+                numeric_cols={5},
             )],
             filename_stem=f"attendance_{n.start}_{n.end}",
         )
@@ -940,24 +932,18 @@ class ReportService:
         emp_name = target.name if target else str(n.user_id)
         uid = n.user_id
 
-        # 1) Attendance (+ mock GPS)
+        # 1) Attendance
         att_rows = await self.repo.attendance_in_range(
             start=n.start, end=n.end, user_id=uid, status=None
-        )
-        mock = await self.repo.mock_counts_in_range(
-            start=n.start, end=n.end, user_ids=[uid]
         )
         att_table_rows: list[list[Any]] = []
         total_minutes = 0
         total_distance_m = 0.0
-        total_mock = 0
         present_days = half_days = absent_days = 0
         for att, _user in att_rows:
             start_t, end_t = self._session_bounds(att.sessions)
-            mock_n = mock.get((uid, att.date), 0)
             total_minutes += att.total_duration_minutes
             total_distance_m += att.total_distance_meters
-            total_mock += mock_n
             if att.status == AttendanceStatus.PRESENT:
                 present_days += 1
             elif att.status == AttendanceStatus.HALF_DAY:
@@ -968,7 +954,7 @@ class ReportService:
                 att.date.isoformat(), start_t, end_t,
                 self._fmt_duration(att.total_duration_minutes),
                 round(att.total_distance_meters / 1000, 2),
-                att.status.value, mock_n,
+                att.status.value,
                 (att.work_summary or "").strip(),
             ])
 
@@ -1082,7 +1068,6 @@ class ReportService:
             ("Days absent", str(absent_days)),
             ("Total hours", self._fmt_duration(total_minutes)),
             ("Total distance", f"{total_distance_m / 1000:.2f} km"),
-            ("Mock-GPS flags", str(total_mock)),
             ("Visits planned", str(visits_planned)),
             ("Visits (completed)", f"{len(visit_rows)} ({completed_visits})"),
             ("Orders captured", str(len(order_rows))),
@@ -1100,10 +1085,9 @@ class ReportService:
                 ReportTable(
                     name="Attendance",
                     columns=["Date", "Start", "End", "Duration",
-                             "Distance (km)", "Status", "Mock GPS",
-                             "Work Summary"],
+                             "Distance (km)", "Status", "Work Summary"],
                     rows=att_table_rows,
-                    numeric_cols={4, 6},
+                    numeric_cols={4},
                 ),
                 ReportTable(
                     name="Distance & Zones",
