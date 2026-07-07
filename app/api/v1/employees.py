@@ -179,6 +179,11 @@ class CrmPerformanceOut(_BaseModel):
     dsrs_submitted: int
     dsrs_total: int
     unique_farmers_visited: int
+    visits_with_remarks: int
+    # Order count/bags per customer_type (FARMER / FPO / VLCC). Always has an
+    # entry for every current CustomerType value, 0 when there's no data.
+    orders_by_type: dict[str, int]
+    bags_by_type: dict[str, int]
 
 
 @router.get("/{employee_id}/crm-performance", response_model=CrmPerformanceOut)
@@ -195,11 +200,12 @@ async def crm_performance(
     Accessible by supervisors and admins.
     """
     from datetime import timedelta, date as _date
-    from sqlalchemy import func, select, distinct
+    from sqlalchemy import func, select, distinct, or_
     from app.models.crm import (
-        Visit, VisitOrder, Lead, FollowUp, DailyReport, VisitPlan, VisitPlanItem,
-        Farmer,
+        Visit, VisitOrder, Lead, FollowUp, DailyReport, VisitNote, Farmer,
+        VisitPlan, VisitPlanItem,
     )
+    from app.models.enums import CustomerType
 
     today = _date.today()
     if end_date is None:
@@ -349,6 +355,47 @@ async def crm_performance(
 
     completion_rate = (fu_done / fu_total) if fu_total > 0 else 0.0
 
+    # Orders captured, grouped by the customer's type (Farmer/FPO/VLCC)
+    orders_by_type_rows = (
+        await db.execute(
+            select(
+                Farmer.customer_type,
+                func.count(VisitOrder.id),
+                func.coalesce(func.sum(VisitOrder.bags_count), 0),
+            )
+            .join(Visit, Visit.id == VisitOrder.visit_id)
+            .join(Farmer, Farmer.id == VisitOrder.farmer_id)
+            .where(
+                Visit.employee_id == employee_id,
+                func.date(Visit.check_in_at) >= start_date,
+                func.date(Visit.check_in_at) <= end_date,
+            )
+            .group_by(Farmer.customer_type)
+        )
+    ).all()
+    orders_by_type = {t.value: 0 for t in CustomerType}
+    bags_by_type = {t.value: 0 for t in CustomerType}
+    for customer_type, order_count, bag_count in orders_by_type_rows:
+        orders_by_type[customer_type] = order_count
+        bags_by_type[customer_type] = int(bag_count)
+
+    # Visits with a remark captured (meeting highlights and/or farmer concerns)
+    visits_with_remarks = (
+        await db.execute(
+            select(func.count(func.distinct(Visit.id)))
+            .join(VisitNote, VisitNote.visit_id == Visit.id)
+            .where(
+                Visit.employee_id == employee_id,
+                func.date(Visit.check_in_at) >= start_date,
+                func.date(Visit.check_in_at) <= end_date,
+                or_(
+                    func.trim(VisitNote.meeting_highlights) != "",
+                    func.trim(VisitNote.farmer_concerns) != "",
+                ),
+            )
+        )
+    ).scalar_one() or 0
+
     return CrmPerformanceOut(
         employee_id=employee_id,
         start_date=start_date,
@@ -368,4 +415,7 @@ async def crm_performance(
         dsrs_submitted=dsr_submitted,
         dsrs_total=dsr_total,
         unique_farmers_visited=unique_farmers,
+        visits_with_remarks=visits_with_remarks,
+        orders_by_type=orders_by_type,
+        bags_by_type=bags_by_type,
     )

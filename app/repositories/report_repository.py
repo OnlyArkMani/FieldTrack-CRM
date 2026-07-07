@@ -15,6 +15,7 @@ from app.models.crm import (
     Lead,
     LivestockProfile,
     Visit,
+    VisitNote,
     VisitOrder,
     VisitPlan,
     VisitPlanItem,
@@ -244,13 +245,21 @@ class ReportRepository:
 
     async def employee_visits_in_range(
         self, *, user_id: int, start: date, end: date
-    ) -> list[tuple[Visit, str | None, str | None]]:
+    ) -> list[tuple[Visit, str | None, str | None, str | None, str | None]]:
         """This employee's visits in [start, end] (by check-in), each paired with
-        the FPO/farmer name and customer_type (checklist A7). Ordered oldest-first."""
+        the FPO/farmer name, customer_type, and meeting-notes remarks (highlights/concerns)
+        captured on the guided visit-notes form, if any. Ordered oldest-first."""
         lo, hi = self._utc_bounds(start, end)
         stmt = (
-            select(Visit, Farmer.name, Farmer.customer_type)
+            select(
+                Visit,
+                Farmer.name,
+                Farmer.customer_type,
+                VisitNote.meeting_highlights,
+                VisitNote.farmer_concerns,
+            )
             .join(Farmer, Farmer.id == Visit.farmer_id, isouter=True)
+            .outerjoin(VisitNote, VisitNote.visit_id == Visit.id)
             .where(
                 Visit.employee_id == user_id,
                 Visit.check_in_at >= lo,
@@ -259,7 +268,7 @@ class ReportRepository:
             .order_by(Visit.check_in_at.asc())
         )
         result = await self.db.execute(stmt)
-        return [(r[0], r[1], r[2]) for r in result.all()]
+        return [(r[0], r[1], r[2], r[3], r[4]) for r in result.all()]
 
     async def employee_visits_planned_count_in_range(
         self, *, user_id: int, start: date, end: date

@@ -65,6 +65,8 @@ class VisitSummaryItem(BaseModel):
     purpose: str | None
     check_in_at: Any
     check_out_at: Any
+    check_in_lat: float | None = None
+    check_in_lng: float | None = None
     lead_status: str | None
     meeting_highlights: str | None = None
     farmer_concerns: str | None = None
@@ -526,8 +528,8 @@ async def visits_export(
     ws.title = "Visits"
     headers = [
         "Date", "Employee", "Team", "Customer", "Type", "Village", "District",
-        "Check-in", "Check-out", "Duration (min)", "Loc. warning", "Lead",
-        "Order bags", "Order value", "Vet needed", "Vet cattle", "Breed",
+        "Check-in", "Check-out", "Lat", "Lng", "Duration (min)", "Loc. warning",
+        "Lead", "Order bags", "Order value", "Vet needed", "Vet cattle", "Breed",
         "Current brand", "Cattle", "Price/bag", "Highlights", "Concerns",
         "Product interest",
     ]
@@ -545,6 +547,8 @@ async def visits_export(
             r["date"].isoformat() if r["date"] else "",
             r["employee"], r["team"], r["customer"], r["type"], r["village"],
             r["district"], _t(r["check_in"]), _t(r["check_out"]),
+            r["lat"] if r["lat"] is not None else "",
+            r["lng"] if r["lng"] is not None else "",
             r["duration_min"] if r["duration_min"] is not None else "",
             r["location_warning"], r["lead"], r["order_bags"],
             float(r["order_value"]) if r["order_value"] is not None else "",
