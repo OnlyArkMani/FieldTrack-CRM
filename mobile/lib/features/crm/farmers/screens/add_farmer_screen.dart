@@ -174,7 +174,7 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
             ),
             const SizedBox(height: AppDimens.grid * 2),
             AppTextField(
-              label: 'Village *',
+              label: 'Village/Town/City *',
               controller: _village,
               errorText: _villageError,
               textInputAction: TextInputAction.next,

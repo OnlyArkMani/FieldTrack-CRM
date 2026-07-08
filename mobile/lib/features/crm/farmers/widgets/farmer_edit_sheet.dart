@@ -116,7 +116,7 @@ class _FarmerEditFormState extends ConsumerState<_FarmerEditForm> {
             controller: _phone,
             keyboardType: TextInputType.phone),
         const SizedBox(height: AppDimens.grid * 2),
-        AppTextField(label: 'Village', controller: _village),
+        AppTextField(label: 'Village/Town/City', controller: _village),
         const SizedBox(height: AppDimens.grid * 2),
         AppTextField(label: 'District', controller: _district),
         const SizedBox(height: AppDimens.grid * 2),
