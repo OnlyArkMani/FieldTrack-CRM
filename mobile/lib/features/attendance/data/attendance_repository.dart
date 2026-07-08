@@ -38,11 +38,6 @@ class AttendanceRepository {
     return Attendance.fromJson(data);
   }
 
-  /// Called automatically on logout. Omits work_summary so the
-  /// backend auto-fills "Auto clock-out on logout." — no user input required.
-  Future<void> endOnLogout(double lat, double lng) async {
-    await _api.post('/attendance/end', body: {'lat': lat, 'lng': lng});
-  }
 
   Future<Attendance> _transition(String action, double lat, double lng) async {
     final data =
