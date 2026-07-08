@@ -278,6 +278,12 @@ class LivestockProfile(Base):
     willing_to_pay_max: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     health_status: Mapped[str | None] = mapped_column(String(20))  # Excellent/Good/Fair/Poor
     health_notes: Mapped[str | None] = mapped_column(Text)
+    # Gates for the Farmer entity form (migration 0020): does the farmer
+    # currently use a branded feed at all (gates brand/current_price_per_bag
+    # being meaningful), and are they interested in a new one (gates
+    # willing_to_pay_min/max being meaningful).
+    uses_cattle_feed: Mapped[bool | None] = mapped_column(Boolean)
+    interested_in_new_feed: Mapped[bool | None] = mapped_column(Boolean)
     recorded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -501,6 +507,12 @@ class VisitOrgAnswer(Base):
     interested_bags: Mapped[int | None] = mapped_column(Integer)
     # Current price per bag they pay (mirrors LivestockProfile for farmers).
     current_price_per_bag: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    # Retailer entity-form field (migration 0020): the price range a Retailer
+    # resells feed to farmers at (unlike FPOs/VLCCs, who report a single
+    # current_price_per_bag). current_brand doubles as "Current feed brand"
+    # for the Retailer form too, so no separate column was needed for that.
+    price_min: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    price_max: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     notes: Mapped[str | None] = mapped_column(Text)
     recorded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

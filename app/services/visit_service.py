@@ -359,6 +359,8 @@ class VisitService:
         answer.interested_in_supply = payload.interested_in_supply
         answer.interested_bags = payload.interested_bags
         answer.current_price_per_bag = payload.current_price_per_bag
+        answer.price_min = payload.price_min
+        answer.price_max = payload.price_max
         answer.notes = payload.notes
         if existing is None:
             self.repo.add(answer)

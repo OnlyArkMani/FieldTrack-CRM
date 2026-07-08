@@ -96,6 +96,8 @@ class VisitRepository {
     bool interestedInSupply = false,
     int? interestedBags,
     double? currentPricePerBag,
+    double? priceMin,
+    double? priceMax,
     String? notes,
     String? paymentMode,
   }) async {
@@ -107,6 +109,8 @@ class VisitRepository {
       'interested_in_supply': interestedInSupply,
       'interested_bags': interestedBags,
       if (currentPricePerBag != null) 'current_price_per_bag': currentPricePerBag,
+      if (priceMin != null) 'price_min': priceMin,
+      if (priceMax != null) 'price_max': priceMax,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
       if (paymentMode != null) 'payment_mode': paymentMode,
     });

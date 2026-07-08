@@ -57,9 +57,12 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
   final _interest = TextEditingController();
   Timer? _autosave;
 
-  // livestock
+  // livestock. Bags/month, kg/animal/day and current price are gated behind
+  // "Use cattle feed?" — meaningless if the farmer doesn't use any. Willing
+  // to pay (min/max) is further gated behind "Interested in Sanjeevni?".
   final _cattle = TextEditingController();
-  final _brand = TextEditingController();
+  bool _usesCattleFeed = false;
+  bool _interestedInNewFeed = false;
   final _bagsPerMonth = TextEditingController();
   final _kgPerAnimal = TextEditingController();
   final _pricePerBag = TextEditingController();
@@ -70,15 +73,21 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
   String? _ageGroup;
   String? _health;
 
-  // org answers (FPO / VLCC shared 5-question form — replaces livestock)
+  // org answers — none of FPO/VLCC/Retailer collect total cattle anymore.
+  // _orgBrand ("Current feed brand") + monthly bags + interested-in-supply +
+  // notes are shared by all three; Retailer additionally gets a price range
+  // (_sellPriceMin/_sellPriceMax) instead of the single _orgPricePerBag.
   final _orgMembers = TextEditingController();
-  final _orgCattle = TextEditingController();
   final _orgBrand = TextEditingController();
   final _orgMonthlyBags = TextEditingController();
   final _orgInterestedBags = TextEditingController();
   final _orgPricePerBag = TextEditingController();
   final _orgNotes = TextEditingController();
   bool _orgInterested = false;
+
+  // Retailer: the price range they resell feed to farmers at.
+  final _sellPriceMin = TextEditingController();
+  final _sellPriceMax = TextEditingController();
 
   // vet requirement (captured on step 2, for both farmer & org customers)
   bool _vetRequired = false;
@@ -114,10 +123,11 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
   void dispose() {
     _autosave?.cancel();
     for (final c in [
-      _remark, _highlights, _concerns, _interest, _cattle, _brand,
+      _remark, _highlights, _concerns, _interest, _cattle,
       _bagsPerMonth, _kgPerAnimal, _pricePerBag, _payMin, _payMax, _healthNotes,
-      _orgMembers, _orgCattle, _orgBrand, _orgMonthlyBags,
+      _orgMembers, _orgBrand, _orgMonthlyBags,
       _orgInterestedBags, _orgPricePerBag, _orgNotes,
+      _sellPriceMin, _sellPriceMax,
       _vetCattle, _vetNotes,
       _bagsCount, _deliveryAddress, _orderNotes, _followUpPurpose,
     ]) {
@@ -289,16 +299,21 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
         'total_cattle': int.tryParse(_cattle.text.trim()),
       if (_breed != null) 'breed': _breed,
       if (_ageGroup != null) 'age_group': _ageGroup,
-      if (_brand.text.trim().isNotEmpty) 'current_brand': _brand.text.trim(),
-      if (_bagsPerMonth.text.trim().isNotEmpty)
+      'uses_cattle_feed': _usesCattleFeed,
+      if (_usesCattleFeed && _bagsPerMonth.text.trim().isNotEmpty)
         'bags_per_month': int.tryParse(_bagsPerMonth.text.trim()),
-      if (_kgPerAnimal.text.trim().isNotEmpty)
+      if (_usesCattleFeed && _kgPerAnimal.text.trim().isNotEmpty)
         'kg_per_animal_per_day': double.tryParse(_kgPerAnimal.text.trim()),
-      if (_pricePerBag.text.trim().isNotEmpty)
+      if (_usesCattleFeed && _pricePerBag.text.trim().isNotEmpty)
         'current_price_per_bag': double.tryParse(_pricePerBag.text.trim()),
-      if (_payMin.text.trim().isNotEmpty)
+      if (_usesCattleFeed) 'interested_in_new_feed': _interestedInNewFeed,
+      if (_usesCattleFeed &&
+          _interestedInNewFeed &&
+          _payMin.text.trim().isNotEmpty)
         'willing_to_pay_min': double.tryParse(_payMin.text.trim()),
-      if (_payMax.text.trim().isNotEmpty)
+      if (_usesCattleFeed &&
+          _interestedInNewFeed &&
+          _payMax.text.trim().isNotEmpty)
         'willing_to_pay_max': double.tryParse(_payMax.text.trim()),
       if (_health != null) 'health_status': _health,
       if (_healthNotes.text.trim().isNotEmpty)
@@ -307,12 +322,49 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
     await _repo.saveLivestock(_visitId!, fields);
   }
 
-  Future<void> _saveOrgAnswers() async {
+  /// Retailer: Number of farmers / Current feed brand / Monthly feed
+  /// requirement / Price on you sell (min & max) / Interested in supply
+  /// (+ bags) / Notes. No total cattle.
+  Future<void> _saveRetailerAnswers() async {
     final interestedBags = int.tryParse(_orgInterestedBags.text.trim());
     await _repo.saveOrgAnswers(
       _visitId!,
       memberCount: int.tryParse(_orgMembers.text.trim()),
-      totalCattle: int.tryParse(_orgCattle.text.trim()),
+      currentBrand:
+          _orgBrand.text.trim().isEmpty ? null : _orgBrand.text.trim(),
+      monthlyBags: int.tryParse(_orgMonthlyBags.text.trim()),
+      interestedInSupply: _orgInterested,
+      interestedBags: _orgInterested ? interestedBags : null,
+      priceMin: double.tryParse(_sellPriceMin.text.trim()),
+      priceMax: double.tryParse(_sellPriceMax.text.trim()),
+      notes: _orgNotes.text.trim().isEmpty ? null : _orgNotes.text.trim(),
+    );
+  }
+
+  /// FPO: same fields as the original form minus total cattle.
+  Future<void> _saveFpoAnswers() async {
+    final interestedBags = int.tryParse(_orgInterestedBags.text.trim());
+    await _repo.saveOrgAnswers(
+      _visitId!,
+      memberCount: int.tryParse(_orgMembers.text.trim()),
+      currentBrand:
+          _orgBrand.text.trim().isEmpty ? null : _orgBrand.text.trim(),
+      monthlyBags: int.tryParse(_orgMonthlyBags.text.trim()),
+      interestedInSupply: _orgInterested,
+      interestedBags: _orgInterested ? interestedBags : null,
+      currentPricePerBag: double.tryParse(_orgPricePerBag.text.trim()),
+      notes: _orgNotes.text.trim().isEmpty ? null : _orgNotes.text.trim(),
+    );
+  }
+
+  /// VLCC: original shared form minus total cattle.
+  Future<void> _saveOrgAnswers() async {
+    if (_customerType == CustomerType.retailer) return _saveRetailerAnswers();
+    if (_customerType == CustomerType.fpo) return _saveFpoAnswers();
+    final interestedBags = int.tryParse(_orgInterestedBags.text.trim());
+    await _repo.saveOrgAnswers(
+      _visitId!,
+      memberCount: int.tryParse(_orgMembers.text.trim()),
       currentBrand:
           _orgBrand.text.trim().isEmpty ? null : _orgBrand.text.trim(),
       monthlyBags: int.tryParse(_orgMonthlyBags.text.trim()),
@@ -619,7 +671,12 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
               key: ValueKey(_step),
               child: switch (_step) {
                 1 => _notesStep(),
-                2 => _isOrg ? _orgAnswersStep() : _livestockStep(),
+                2 => switch (_customerType) {
+                    CustomerType.retailer => _retailerAnswersStep(),
+                    CustomerType.fpo => _fpoAnswersStep(),
+                    CustomerType.vlcc => _orgAnswersStep(),
+                    CustomerType.farmer => _livestockStep(),
+                  },
                 3 => _orderStep(),
                 _ => _leadStep(),
               },
@@ -685,6 +742,39 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
   }
 
   // ── step 1: notes ─────────────────────────────────────────────────────────
+  Widget _interestBadges() {
+    final presets = ['Bypass Protein', 'Calf Starter', 'Milk Booster', 'Mineral Mixture', 'Dry Cow Feed', 'Premium Pellets', 'Urea Molasses Block'];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppDimens.grid * 1.5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Product interest', style: AppTextStyles.caption.copyWith(color: context.appColors.textSecondary, fontWeight: FontWeight.bold)),
+          const SizedBox(height: AppDimens.grid),
+          Wrap(
+            spacing: AppDimens.grid,
+            runSpacing: AppDimens.grid,
+            children: presets.map((p) {
+              final isSel = _interest.text.split(',').map((s) => s.trim()).contains(p);
+              return ChoiceChip(
+                label: Text(p, style: AppTextStyles.caption.copyWith(color: isSel ? Theme.of(context).colorScheme.primary : context.appColors.textSecondary)),
+                selected: isSel,
+                onSelected: (selected) {
+                  setState(() {
+                    var items = _interest.text.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+                    selected ? items.add(p) : items.remove(p);
+                    _interest.text = items.join(', ');
+                  });
+                },
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── step 1: notes ─────────────────────────────────────────────────────────
   Widget _notesStep() {
     return ListView(
       padding: const EdgeInsets.all(AppDimens.grid * 2),
@@ -694,8 +784,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
             'What was discussed?', maxLen: 1000),
         _counterField(_concerns, 'Concerns', 'Any concerns raised?',
             maxLen: 1000),
-        _counterField(_interest, 'Product interest', 'What are they interested in?',
-            maxLen: 1000),
+        _interestBadges(),
         Text('Auto-saves every 30 seconds.',
             style: AppTextStyles.caption
                 .copyWith(color: context.appColors.textSecondary)),
@@ -712,26 +801,65 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
   Widget _livestockStep() {
     final farmer = ref.watch(farmerDetailProvider(widget.farmerId)).value;
     final last = farmer?.latestLivestock;
+    final scheme = Theme.of(context).colorScheme;
     return ListView(
       padding: const EdgeInsets.all(AppDimens.grid * 2),
       children: [
         if (last != null) _LastLivestockCard(profile: last),
         _sectionTitle('Livestock profile'),
-        _numField(_cattle, 'Total cattle'),
+        _numField(_cattle, 'Number of Cattle owned'),
         _dropdown('Breed', _breeds, _breed, (v) => setState(() => _breed = v)),
         _chipsField('Age group', _ageGroups, _ageGroup,
             (v) => setState(() => _ageGroup = v)),
-        _textField(_brand, 'Current brand'),
-        _numField(_bagsPerMonth, 'Bags / month'),
-        _numField(_kgPerAnimal, 'Kg / animal / day'),
-        _numField(_pricePerBag, 'Current price / bag (₹)'),
-        Row(
-          children: [
-            Expanded(child: _numField(_payMin, 'Willing to pay — min (₹)')),
-            const SizedBox(width: AppDimens.grid),
-            Expanded(child: _numField(_payMax, 'max (₹)')),
-          ],
+        AppCard(
+          child: Row(
+            children: [
+              Expanded(
+                child: Text('Use cattle feed?',
+                    style: AppTextStyles.bodyMedium
+                        .copyWith(color: scheme.onSurface)),
+              ),
+              Switch(
+                value: _usesCattleFeed,
+                onChanged: (v) => setState(() => _usesCattleFeed = v),
+              ),
+            ],
+          ),
         ),
+        if (_usesCattleFeed) ...[
+          const SizedBox(height: AppDimens.grid),
+          _numField(_bagsPerMonth, 'Bags / month'),
+          _numField(_kgPerAnimal, 'Kg / animal / day'),
+          _numField(_pricePerBag, 'Current price / bag (₹)'),
+          const SizedBox(height: AppDimens.grid),
+          AppCard(
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('Interested in using Sanjeevni cattle feed?',
+                      style: AppTextStyles.bodyMedium
+                          .copyWith(color: scheme.onSurface)),
+                ),
+                Switch(
+                  value: _interestedInNewFeed,
+                  onChanged: (v) => setState(() => _interestedInNewFeed = v),
+                ),
+              ],
+            ),
+          ),
+          if (_interestedInNewFeed) ...[
+            const SizedBox(height: AppDimens.grid),
+            Row(
+              children: [
+                Expanded(
+                    child: _numField(_payMin, 'Willing to pay — min (₹)')),
+                const SizedBox(width: AppDimens.grid),
+                Expanded(child: _numField(_payMax, 'max (₹)')),
+              ],
+            ),
+          ],
+        ],
+        const SizedBox(height: AppDimens.grid),
         _chipsField('Health status', _healthLevels, _health,
             (v) => setState(() => _health = v)),
         _textField(_healthNotes, 'Health notes (optional)'),
@@ -780,29 +908,19 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
     );
   }
 
-  // ── step 2 (FPO/VLCC): shared 5-question organisation form ───────────────
-  Widget _orgAnswersStep() {
+  /// Shared by all three org forms: the interested-in-supply switch (+ bags)
+  /// and notes, identical everywhere it appears.
+  Widget _interestedAndNotesFields() {
     final colors = context.appColors;
     final scheme = Theme.of(context).colorScheme;
-    final typeLabel = _customerType.label;
-    final memberQ = _customerType == CustomerType.vlcc
-        ? 'Farmers pouring milk'
-        : 'Member farmers';
-    return ListView(
-      padding: const EdgeInsets.all(AppDimens.grid * 2),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle('$typeLabel details'),
-        _numField(_orgMembers, 'Q1 · $memberQ'),
-        _numField(_orgCattle, 'Q2 · Total cattle (approx)'),
-        _textField(_orgBrand, 'Q3 · Current feed brand / procurement'),
-        _numField(_orgMonthlyBags, 'Q4 · Monthly feed requirement (bags)'),
-        _numField(_orgPricePerBag, 'Current price / bag (₹)'),
-        const SizedBox(height: AppDimens.grid),
         AppCard(
           child: Row(
             children: [
               Expanded(
-                child: Text('Q5 · Interested in supply from us?',
+                child: Text('Interested in supply from us?',
                     style: AppTextStyles.bodyMedium
                         .copyWith(color: scheme.onSurface)),
               ),
@@ -825,7 +943,66 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
         ],
         const SizedBox(height: AppDimens.grid),
         _textField(_orgNotes, 'Notes (optional)'),
+      ],
+    );
+  }
+
+  // ── step 2 (VLCC): original shared form, minus total cattle, no Q-prefixes
+  Widget _orgAnswersStep() {
+    return ListView(
+      padding: const EdgeInsets.all(AppDimens.grid * 2),
+      children: [
+        _sectionTitle('${_customerType.label} details'),
+        _numField(_orgMembers, 'Number of farmers'),
+        _textField(_orgBrand, 'Current cattle feed brand'),
+        _numField(_orgMonthlyBags, 'Monthly cattle feed demand'),
+        _numField(_orgPricePerBag, 'Current price / bag (₹)'),
+        const SizedBox(height: AppDimens.grid),
+        _interestedAndNotesFields(),
         _vetSection(),
+      ],
+    );
+  }
+
+  // ── step 2 (FPO): same as the original form, minus total cattle ─────────
+  Widget _fpoAnswersStep() {
+    return ListView(
+      padding: const EdgeInsets.all(AppDimens.grid * 2),
+      children: [
+        _sectionTitle('FPO details'),
+        _numField(_orgMembers, 'Number of farmers'),
+        _textField(_orgBrand, 'Selling Cattle feed brand'),
+        _numField(_orgMonthlyBags, 'Current monthly demand'),
+        _numField(_orgPricePerBag, 'Price on you sell (₹)'),
+        const SizedBox(height: AppDimens.grid),
+        _interestedAndNotesFields(),
+        _vetSection(),
+      ],
+    );
+  }
+
+  // ── step 2 (Retailer): Number of farmers / Current feed brand / Current
+  // monthly demand / Average selling price (min & max) / Interested in
+  // supply (+ bags) / Notes. No total cattle, no vet section. ─────────────
+  Widget _retailerAnswersStep() {
+    return ListView(
+      padding: const EdgeInsets.all(AppDimens.grid * 2),
+      children: [
+        _sectionTitle('Retailer details'),
+        _numField(_orgMembers, 'Number of farmers'),
+        _textField(_orgBrand, 'Current cattle feed brand'),
+        _numField(_orgMonthlyBags, 'Current monthly demand'),
+        Row(
+          children: [
+            Expanded(
+                child:
+                    _numField(_sellPriceMin, 'Average selling price — min (₹)')),
+            const SizedBox(width: AppDimens.grid),
+            Expanded(child: _numField(_sellPriceMax, 'max (₹)')),
+          ],
+        ),
+        const SizedBox(height: AppDimens.grid),
+        _interestedAndNotesFields(),
       ],
     );
   }
