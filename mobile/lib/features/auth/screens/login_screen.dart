@@ -112,17 +112,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 child: Column(
                   children: [
                     Container(
-                      width: 84,
-                      height: 84,
+                      width: 96,
+                      height: 96,
+                      padding: const EdgeInsets.all(AppDimens.grid * 1.5),
                       decoration: BoxDecoration(
-                        color: scheme.primary,
+                        color: Colors.white,
                         borderRadius:
                             BorderRadius.circular(AppDimens.cardRadius * 2),
                         boxShadow:
                             AppDimens.shadow(Theme.of(context).brightness),
                       ),
-                      child: Icon(Icons.location_on_rounded,
-                          size: 44, color: scheme.onPrimary),
+                      child: Image.asset(
+                        'assets/images/app_logo_tree.png',
+                        fit: BoxFit.contain,
+                      ),
                     ),
                     const SizedBox(height: AppDimens.grid * 2),
                     Text(
