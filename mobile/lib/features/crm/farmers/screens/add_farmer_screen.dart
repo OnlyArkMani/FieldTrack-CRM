@@ -126,23 +126,60 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
                 style: AppTextStyles.caption
                     .copyWith(color: colors.textSecondary)),
             const SizedBox(height: AppDimens.grid),
-            DropdownButtonFormField<CustomerType>(
-              initialValue: _type,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.category_rounded),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+            Stack(
+              children: [
+                InputDecorator(
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: AppDimens.grid * 0.75,
+                    ),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<CustomerType>(
+                      value: _type,
+                      isDense: true,
+                      isExpanded: true,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                      selectedItemBuilder: (context) {
+                        return CustomerType.values.map((t) {
+                          return Padding(
+                            padding: const EdgeInsets.only(left: 36),
+                            child: Text(t.label,
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                          );
+                        }).toList();
+                      },
+                      items: CustomerType.values
+                          .map((t) => DropdownMenuItem(
+                                value: t,
+                                child: Text(t.label,
+                                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ))
+                          .toList(),
+                      onChanged: (v) =>
+                          setState(() => _type = v ?? CustomerType.farmer),
+                    ),
+                  ),
                 ),
-              ),
-              items: CustomerType.values
-                  .map((t) => DropdownMenuItem(
-                        value: t,
-                        child: Text(t.label,
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
-                      ))
-                  .toList(),
-              onChanged: (v) =>
-                  setState(() => _type = v ?? CustomerType.farmer),
+                Positioned(
+                  left: 16,
+                  top: 0,
+                  bottom: 0,
+                  child: IgnorePointer(
+                    child: Icon(
+                      Icons.category_rounded,
+                      size: 20,
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: AppDimens.grid * 2),
             AppTextField(
