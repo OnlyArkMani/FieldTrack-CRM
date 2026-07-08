@@ -40,6 +40,7 @@ class PlanItemCard extends StatelessWidget {
     this.trailing,
     this.onTap,
     this.onStartVisit,
+    this.visitDisabled = false,
   });
 
   final PlanItem item;
@@ -51,6 +52,10 @@ class PlanItemCard extends StatelessWidget {
 
   /// When set, a "Start Visit" button is shown that launches the visit flow.
   final VoidCallback? onStartVisit;
+
+  /// True when attendance blocks starting a visit right now (checked out /
+  /// on leave) — the button stays visible but greyed out and unclickable.
+  final bool visitDisabled;
 
   @override
   Widget build(BuildContext context) {
@@ -163,7 +168,7 @@ class PlanItemCard extends StatelessWidget {
                   Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton.icon(
-                      onPressed: onStartVisit,
+                      onPressed: visitDisabled ? null : onStartVisit,
                       icon: const Icon(Icons.play_arrow_rounded, size: 18),
                       label: const Text('Start Visit'),
                       style: TextButton.styleFrom(

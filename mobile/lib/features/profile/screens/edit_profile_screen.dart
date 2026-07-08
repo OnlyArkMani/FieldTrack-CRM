@@ -298,17 +298,19 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               prefixIcon: Icons.map_rounded,
               enabled: !authState.isLoading,
             ),
-            const SizedBox(height: AppDimens.grid * 4),
-
-            // ── Save Button ────────────────────────────────────────────────
-            AppButton(
-              label: 'Save Changes',
-              onPressed: authState.isLoading ? null : _save,
-              isLoading: authState.isLoading,
-              icon: Icons.check_circle_outline_rounded,
-            ),
             const SizedBox(height: AppDimens.grid * 3),
           ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppDimens.grid * 3),
+          child: AppButton(
+            label: 'Save Changes',
+            onPressed: authState.isLoading ? null : _save,
+            isLoading: authState.isLoading,
+            icon: Icons.check_circle_outline_rounded,
+          ),
         ),
       ),
     );

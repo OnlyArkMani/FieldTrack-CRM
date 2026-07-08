@@ -7,6 +7,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/shimmer_card.dart';
 import '../../../../core/widgets/state_views.dart';
+import '../../../attendance/providers/attendance_provider.dart';
 import '../models/visit_plan.dart';
 import '../providers/visit_plan_provider.dart';
 import '../widgets/add_visit_sheet.dart';
@@ -42,6 +43,10 @@ class VisitPlanScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(visitPlanProvider);
     final notifier = ref.read(visitPlanProvider.notifier);
+    // Checked out / on leave for the day => can't start a visit right now.
+    final attendanceState = ref.watch(attendanceProvider).state;
+    final visitBlocked =
+        attendanceState.isEnded || attendanceState.isOnLeave;
 
     // Scoped ScaffoldMessenger: without this, "removed"/"saved" SnackBars are
     // hosted by the app-root messenger (above the Navigator) and keep showing
@@ -71,7 +76,9 @@ class VisitPlanScreen extends ConsumerWidget {
                 onNext: notifier.nextDay,
               ),
               _StatusBar(state: state),
-              Expanded(child: _body(context, ref, state, notifier)),
+              Expanded(
+                  child:
+                      _body(context, ref, state, notifier, visitBlocked)),
               _BottomBar(state: state, notifier: notifier),
             ],
           ),
@@ -85,6 +92,7 @@ class VisitPlanScreen extends ConsumerWidget {
     WidgetRef ref,
     VisitPlanState state,
     VisitPlanNotifier notifier,
+    bool visitBlocked,
   ) {
     if (state.isLoading) return const ShimmerList(count: 4);
 
@@ -104,12 +112,13 @@ class VisitPlanScreen extends ConsumerWidget {
       );
     }
 
-    final main = _mainList(context, ref, notifier, carryOver);
+    final main = _mainList(context, ref, notifier, carryOver, visitBlocked);
     if (carryOver.isEmpty) return main;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _CarryOverSection(items: carryOver, notifier: notifier),
+        _CarryOverSection(
+            items: carryOver, notifier: notifier, blocked: visitBlocked),
         Expanded(child: main),
       ],
     );
@@ -120,6 +129,7 @@ class VisitPlanScreen extends ConsumerWidget {
     WidgetRef ref,
     VisitPlanNotifier notifier,
     List<PlanItem> carryOver,
+    bool visitBlocked,
   ) {
     final active = notifier.activeItems;
     final completed = notifier.completedItems;
@@ -156,6 +166,7 @@ class VisitPlanScreen extends ConsumerWidget {
                 item: item,
                 index: index,
                 onStartVisit: () => _startVisit(context, item, completed),
+                visitDisabled: visitBlocked,
                 trailing: ReorderableDragStartListener(
                   index: index,
                   child: Icon(Icons.drag_handle_rounded,
@@ -186,6 +197,7 @@ class VisitPlanScreen extends ConsumerWidget {
                 item: active[i],
                 index: i,
                 onStartVisit: () => _startVisit(context, active[i], completed),
+                visitDisabled: visitBlocked,
               ),
             ),
         ],
@@ -294,9 +306,16 @@ class VisitPlanScreen extends ConsumerWidget {
 /// Missed stops carried over from earlier days. Each can be started now,
 /// rescheduled onto another day, or dropped.
 class _CarryOverSection extends StatelessWidget {
-  const _CarryOverSection({required this.items, required this.notifier});
+  const _CarryOverSection({
+    required this.items,
+    required this.notifier,
+    required this.blocked,
+  });
   final List<PlanItem> items;
   final VisitPlanNotifier notifier;
+
+  /// Checked out / on leave for the day — the Start action is disabled.
+  final bool blocked;
 
   Future<void> _reschedule(BuildContext context, PlanItem item) async {
     final picked = await showDatePicker(
@@ -396,8 +415,10 @@ class _CarryOverSection extends StatelessWidget {
                     tooltip: 'Start',
                     visualDensity: VisualDensity.compact,
                     icon: Icon(Icons.play_arrow_rounded, color: scheme.primary),
-                    onPressed: () => context.push(
-                        '/visit/start/${item.farmerId}?plan_item=${item.id}'),
+                    onPressed: blocked
+                        ? null
+                        : () => context.push(
+                            '/visit/start/${item.farmerId}?plan_item=${item.id}'),
                   ),
                   IconButton(
                     tooltip: 'Reschedule',

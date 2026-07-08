@@ -13,6 +13,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/state_views.dart';
+import '../../../attendance/providers/attendance_provider.dart';
 import '../../../auth/models/user.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../reports/data/report_downloader.dart';
@@ -202,6 +203,10 @@ class _Content extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authProvider).user;
     final canEdit = _canEdit(user);
+    // Checked out / on leave for the day => can't start a visit right now.
+    final attendanceState = ref.watch(attendanceProvider).state;
+    final visitBlocked =
+        attendanceState.isEnded || attendanceState.isOnLeave;
 
     return RefreshIndicator(
       onRefresh: () =>
@@ -244,7 +249,9 @@ class _Content extends ConsumerWidget {
           const SizedBox(height: AppDimens.grid * 2),
           _ActionButtons(
             onPlan: () => context.push('/planning'),
-            onStart: () => context.push('/visit/start/${farmer.id}'),
+            onStart: visitBlocked
+                ? null
+                : () => context.push('/visit/start/${farmer.id}'),
             onReport: () => _exportReport(context, ref),
           ),
           const SizedBox(height: AppDimens.grid * 2),
@@ -753,7 +760,9 @@ class _ActionButtons extends StatelessWidget {
   const _ActionButtons(
       {required this.onPlan, required this.onStart, required this.onReport});
   final VoidCallback onPlan;
-  final VoidCallback onStart;
+
+  /// null when checked out / on leave for the day — the button disables.
+  final VoidCallback? onStart;
   final VoidCallback onReport;
 
   @override
