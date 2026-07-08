@@ -13,6 +13,8 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/state_views.dart';
+import '../../../attendance/models/attendance.dart';
+import '../../../attendance/providers/attendance_provider.dart';
 import '../../../auth/models/user.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../reports/data/report_downloader.dart';
@@ -116,6 +118,15 @@ class _Content extends ConsumerWidget {
     return farmer.createdBy == user.id;
   }
 
+  /// Mirrors the backend's A15 gate (AttendanceService.is_active_today):
+  /// employees can't start a visit once they've checked out (or before
+  /// checking in) for the day. Supervisors/admins are exempt.
+  bool _canStartVisit(User? user, MachineState state) {
+    if (user == null) return false;
+    if (user.role != UserRole.employee) return true;
+    return !state.notStarted && !state.isEnded;
+  }
+
   Future<void> _call(BuildContext context, String phone) async {
     final uri = Uri(scheme: 'tel', path: phone);
     if (!await launchUrl(uri)) {
@@ -202,6 +213,8 @@ class _Content extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authProvider).user;
     final canEdit = _canEdit(user);
+    final attendanceState = ref.watch(attendanceProvider).state;
+    final canStartVisit = _canStartVisit(user, attendanceState);
 
     return RefreshIndicator(
       onRefresh: () =>
@@ -244,7 +257,12 @@ class _Content extends ConsumerWidget {
           const SizedBox(height: AppDimens.grid * 2),
           _ActionButtons(
             onPlan: () => context.push('/planning'),
-            onStart: () => context.push('/visit/start/${farmer.id}'),
+            onStart: canStartVisit
+                ? () => context.push('/visit/start/${farmer.id}')
+                : null,
+            startDisabledReason: canStartVisit
+                ? null
+                : 'Start your attendance to begin a visit',
             onReport: () => _exportReport(context, ref),
           ),
           const SizedBox(height: AppDimens.grid * 2),
@@ -750,11 +768,16 @@ class _FollowUps extends StatelessWidget {
 
 // ── Action buttons ───────────────────────────────────────────────────────────
 class _ActionButtons extends StatelessWidget {
-  const _ActionButtons(
-      {required this.onPlan, required this.onStart, required this.onReport});
+  const _ActionButtons({
+    required this.onPlan,
+    required this.onStart,
+    required this.onReport,
+    this.startDisabledReason,
+  });
   final VoidCallback onPlan;
-  final VoidCallback onStart;
+  final VoidCallback? onStart;
   final VoidCallback onReport;
+  final String? startDisabledReason;
 
   @override
   Widget build(BuildContext context) {
@@ -780,6 +803,17 @@ class _ActionButtons extends StatelessWidget {
             ),
           ],
         ),
+        if (startDisabledReason != null) ...[
+          const SizedBox(height: AppDimens.grid),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              startDisabledReason!,
+              style: AppTextStyles.caption
+                  .copyWith(color: context.appColors.textSecondary),
+            ),
+          ),
+        ],
         const SizedBox(height: AppDimens.grid * 1.5),
         AppButton(
           label: 'Generate Report',
