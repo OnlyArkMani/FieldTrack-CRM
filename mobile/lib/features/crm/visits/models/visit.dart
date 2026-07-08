@@ -136,6 +136,8 @@ class OrgAnswers {
     this.interestedInSupply = false,
     this.interestedBags,
     this.currentPricePerBag,
+    this.priceMin,
+    this.priceMax,
     this.notes,
   });
 
@@ -146,6 +148,8 @@ class OrgAnswers {
   final bool interestedInSupply;
   final int? interestedBags;
   final double? currentPricePerBag;
+  final double? priceMin;
+  final double? priceMax;
   final String? notes;
 
   factory OrgAnswers.fromJson(Map<String, dynamic> json) => OrgAnswers(
@@ -156,6 +160,8 @@ class OrgAnswers {
         interestedInSupply: (json['interested_in_supply'] as bool?) ?? false,
         interestedBags: json['interested_bags'] as int?,
         currentPricePerBag: _d(json['current_price_per_bag']),
+        priceMin: _d(json['price_min']),
+        priceMax: _d(json['price_max']),
         notes: json['notes'] as String?,
       );
 }

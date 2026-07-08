@@ -368,6 +368,8 @@ class LivestockProfileResponse(BaseModel):
     willing_to_pay_max: Decimal | None
     health_status: str | None
     health_notes: str | None
+    uses_cattle_feed: bool | None
+    interested_in_new_feed: bool | None
     recorded_at: datetime
 
 
@@ -575,6 +577,8 @@ class LivestockUpsert(BaseModel):
     willing_to_pay_max: Decimal | None = Field(default=None, ge=0)
     health_status: str | None = Field(default=None, max_length=20)
     health_notes: str | None = None
+    uses_cattle_feed: bool | None = None
+    interested_in_new_feed: bool | None = None
 
 
 class OrderCreate(BaseModel):
@@ -667,6 +671,10 @@ class OrgAnswersUpsert(BaseModel):
     interested_in_supply: bool = False
     interested_bags: int | None = Field(default=None, ge=0)
     current_price_per_bag: Decimal | None = Field(default=None, ge=0)
+    # Retailer entity-form field (migration 0020): the price range they
+    # resell feed at (current_brand doubles as "Current feed brand" here too).
+    price_min: Decimal | None = Field(default=None, ge=0)
+    price_max: Decimal | None = Field(default=None, ge=0)
     notes: str | None = None
     # Optional order details when interested (defaults applied server-side).
     delivery_date: date | None = None
@@ -686,6 +694,8 @@ class OrgAnswerResponse(BaseModel):
     interested_in_supply: bool
     interested_bags: int | None
     current_price_per_bag: Decimal | None
+    price_min: Decimal | None
+    price_max: Decimal | None
     notes: str | None
     recorded_at: datetime
 

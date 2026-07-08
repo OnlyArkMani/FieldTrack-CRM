@@ -188,6 +188,8 @@ class LivestockProfile {
     this.willingToPayMax,
     this.healthStatus,
     this.healthNotes,
+    this.usesCattleFeed,
+    this.interestedInNewFeed,
     this.recordedAt,
   });
 
@@ -205,6 +207,8 @@ class LivestockProfile {
   final double? willingToPayMax;
   final String? healthStatus;
   final String? healthNotes;
+  final bool? usesCattleFeed;
+  final bool? interestedInNewFeed;
   final DateTime? recordedAt;
 
   factory LivestockProfile.fromJson(Map<String, dynamic> json) =>
@@ -223,6 +227,8 @@ class LivestockProfile {
         willingToPayMax: _d(json['willing_to_pay_max']),
         healthStatus: json['health_status'] as String?,
         healthNotes: json['health_notes'] as String?,
+        usesCattleFeed: json['uses_cattle_feed'] as bool?,
+        interestedInNewFeed: json['interested_in_new_feed'] as bool?,
         recordedAt: _dt(json['recorded_at']),
       );
 }
