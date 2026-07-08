@@ -45,9 +45,8 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      // Matches scaffoldBackgroundColor (cream/dark) — no white flash.
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Center(
           child: Column(
@@ -58,16 +57,19 @@ class _SplashScreenState extends State<SplashScreen>
                 child: ScaleTransition(
                   scale: _logoScale,
                   child: Container(
-                    width: 84,
-                    height: 84,
+                    width: 96,
+                    height: 96,
+                    padding: const EdgeInsets.all(AppDimens.grid * 1.5),
                     decoration: BoxDecoration(
-                      color: scheme.primary,
+                      color: Colors.white,
                       borderRadius:
                           BorderRadius.circular(AppDimens.cardRadius * 2),
                       boxShadow: AppDimens.shadow(Theme.of(context).brightness),
                     ),
-                    child: Icon(Icons.location_on_rounded,
-                        size: 44, color: scheme.onPrimary),
+                    child: Image.asset(
+                      'assets/images/app_logo_tree.png',
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
               ),

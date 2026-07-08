@@ -54,9 +54,19 @@ class _ExportError implements Exception {
 }
 
 class FarmerDetailScreen extends ConsumerWidget {
-  const FarmerDetailScreen({super.key, required this.farmerId});
+  const FarmerDetailScreen({
+    super.key,
+    required this.farmerId,
+    this.justCompletedVisit = false,
+  });
 
   final int farmerId;
+
+  /// True only for the single arrival right after the visit flow completes a
+  /// visit for this farmer — shows the Follow Up action instead of the usual
+  /// plan/start/report row regardless of lead outcome. Not persisted: a
+  /// later re-open of this screen (new push, refresh) resets to false.
+  final bool justCompletedVisit;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -100,7 +110,10 @@ class FarmerDetailScreen extends ConsumerWidget {
               onRetry: () =>
                   ref.read(farmerDetailProvider(farmerId).notifier).refresh(),
             ),
-            data: (farmer) => _Content(farmer: farmer),
+            data: (farmer) => _Content(
+              farmer: farmer,
+              justCompletedVisit: justCompletedVisit,
+            ),
           ),
         ),
       ),
@@ -109,7 +122,8 @@ class FarmerDetailScreen extends ConsumerWidget {
 }
 
 class _Content extends ConsumerWidget {
-  const _Content({required this.farmer});
+  const _Content({required this.farmer, this.justCompletedVisit = false});
+  final bool justCompletedVisit;
   final FarmerDetail farmer;
 
   bool _canEdit(User? user) {
@@ -255,16 +269,33 @@ class _Content extends ConsumerWidget {
             _FollowUps(items: farmer.pendingFollowUps),
           ],
           const SizedBox(height: AppDimens.grid * 2),
-          _ActionButtons(
-            onPlan: () => context.push('/planning'),
-            onStart: canStartVisit
-                ? () => context.push('/visit/start/${farmer.id}')
-                : null,
-            startDisabledReason: canStartVisit
-                ? null
-                : 'Start your attendance to begin a visit',
-            onReport: () => _exportReport(context, ref),
-          ),
+          // Show Follow Up instead of the usual plan/start/report row when
+          // either: (a) this is the one arrival right after completing a
+          // visit here, regardless of lead outcome — resets on the next
+          // normal open of this screen; or (b) a follow-up is genuinely
+          // still pending from a Warm/Cold outcome (completing a new visit
+          // auto-closes it server-side, see visit_service.py's
+          // complete_visit) — this one persists across sessions.
+          if (justCompletedVisit || farmer.pendingFollowUps.isNotEmpty)
+            _FollowUpAction(
+              onTap: canStartVisit
+                  ? () => context.push('/visit/start/${farmer.id}')
+                  : null,
+              disabledReason: canStartVisit
+                  ? null
+                  : 'Start your attendance to begin a visit',
+            )
+          else
+            _ActionButtons(
+              onPlan: () => context.push('/planning'),
+              onStart: canStartVisit
+                  ? () => context.push('/visit/start/${farmer.id}')
+                  : null,
+              startDisabledReason: canStartVisit
+                  ? null
+                  : 'Start your attendance to begin a visit',
+              onReport: () => _exportReport(context, ref),
+            ),
           const SizedBox(height: AppDimens.grid * 2),
         ],
       ),
@@ -762,6 +793,37 @@ class _FollowUps extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+// ── Follow-up action ─────────────────────────────────────────────────────────
+class _FollowUpAction extends StatelessWidget {
+  const _FollowUpAction({required this.onTap, this.disabledReason});
+  final VoidCallback? onTap;
+  final String? disabledReason;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        AppButton(
+          label: 'Follow Up',
+          icon: Icons.event_repeat_rounded,
+          onPressed: onTap,
+        ),
+        if (disabledReason != null) ...[
+          const SizedBox(height: AppDimens.grid),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              disabledReason!,
+              style: AppTextStyles.caption
+                  .copyWith(color: context.appColors.textSecondary),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

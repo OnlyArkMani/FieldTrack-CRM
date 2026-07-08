@@ -419,7 +419,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       HapticFeedback.heavyImpact();
       await _showSuccess();
       if (!mounted) return;
-      context.go('/farmer/${widget.farmerId}');
+      context.go('/farmer/${widget.farmerId}', extra: true);
     } on ApiException catch (e) {
       setState(() {
         _busy = false;

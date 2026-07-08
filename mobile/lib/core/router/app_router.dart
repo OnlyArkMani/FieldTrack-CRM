@@ -153,6 +153,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           key: state.pageKey,
           child: FarmerDetailScreen(
             farmerId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
+            // Set when the visit flow lands back here right after completing
+            // a visit — shows the Follow Up action for this one arrival only.
+            justCompletedVisit: state.extra == true,
           ),
         ),
       ),

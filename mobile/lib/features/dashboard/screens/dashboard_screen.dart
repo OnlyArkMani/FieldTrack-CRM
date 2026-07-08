@@ -42,7 +42,7 @@ class DashboardScreen extends ConsumerWidget {
             // Prominent entry to pre-day visit planning (CRM).
             _QuickAction(
               icon: Icons.event_note_rounded,
-              label: 'Plan visits',
+              label: 'My Visit',
               subtitle: "Plan tomorrow's farmer visits",
               onTap: () => context.push('/planning'),
             ),
