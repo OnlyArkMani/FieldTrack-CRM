@@ -52,6 +52,7 @@ class _FarmerEditFormState extends ConsumerState<_FarmerEditForm> {
 
   bool _saving = false;
   String? _nameError;
+  String? _phoneError;
   String? _formError;
 
   @override
@@ -70,11 +71,23 @@ class _FarmerEditFormState extends ConsumerState<_FarmerEditForm> {
 
   Future<void> _save() async {
     final name = _name.text.trim();
+    final phone = _phone.text.trim();
     setState(() {
       _nameError = name.isEmpty ? 'Name is required' : null;
+      if (phone.isNotEmpty) {
+        if (phone.length != 10) {
+          _phoneError = 'Phone number must be exactly 10 digits';
+        } else if (!RegExp(r'^\d+$').hasMatch(phone)) {
+          _phoneError = 'Only numbers are allowed';
+        } else {
+          _phoneError = null;
+        }
+      } else {
+        _phoneError = null;
+      }
       _formError = null;
     });
-    if (name.isEmpty) return;
+    if (name.isEmpty || _phoneError != null) return;
 
     setState(() => _saving = true);
     try {
@@ -114,7 +127,12 @@ class _FarmerEditFormState extends ConsumerState<_FarmerEditForm> {
         AppTextField(
             label: 'Phone',
             controller: _phone,
-            keyboardType: TextInputType.phone),
+            errorText: _phoneError,
+            keyboardType: TextInputType.phone,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(10),
+            ]),
         const SizedBox(height: AppDimens.grid * 2),
         AppTextField(label: 'Village/Town/City', controller: _village),
         const SizedBox(height: AppDimens.grid * 2),
@@ -127,12 +145,14 @@ class _FarmerEditFormState extends ConsumerState<_FarmerEditForm> {
         AppTextField(
             label: 'PIN code',
             controller: _pincode,
-            keyboardType: TextInputType.number),
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly]),
         const SizedBox(height: AppDimens.grid * 2),
         AppTextField(
             label: 'Total cattle',
             controller: _cattle,
-            keyboardType: TextInputType.number),
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly]),
         const SizedBox(height: AppDimens.grid * 2),
         AppTextField(label: 'Notes', controller: _notes),
         if (_formError != null) ...[

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme/app_text_styles.dart';
 import '../theme/app_theme.dart';
@@ -21,6 +22,7 @@ class AppTextField extends StatelessWidget {
     this.onSubmitted,
     this.enabled = true,
     this.autofillHints,
+    this.inputFormatters,
   });
 
   final String label;
@@ -36,6 +38,7 @@ class AppTextField extends StatelessWidget {
   final ValueChanged<String>? onSubmitted;
   final bool enabled;
   final Iterable<String>? autofillHints;
+  final List<TextInputFormatter>? inputFormatters;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +64,7 @@ class AppTextField extends StatelessWidget {
           textInputAction: textInputAction,
           onSubmitted: onSubmitted,
           autofillHints: autofillHints,
+          inputFormatters: inputFormatters,
           style: AppTextStyles.body
               .copyWith(color: Theme.of(context).colorScheme.onSurface),
           decoration: InputDecoration(

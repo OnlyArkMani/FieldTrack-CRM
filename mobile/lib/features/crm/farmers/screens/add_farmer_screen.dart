@@ -65,7 +65,15 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
 
     setState(() {
       _nameError = name.isEmpty ? 'Name is required' : null;
-      _phoneError = phone.isEmpty ? 'Phone is required' : null;
+      if (phone.isEmpty) {
+        _phoneError = 'Phone is required';
+      } else if (phone.length != 10) {
+        _phoneError = 'Phone number must be exactly 10 digits';
+      } else if (!RegExp(r'^\d+$').hasMatch(phone)) {
+        _phoneError = 'Only numbers are allowed';
+      } else {
+        _phoneError = null;
+      }
       _villageError = village.isEmpty ? 'Village is required' : null;
       _districtError = district.isEmpty ? 'District is required' : null;
       _addressError = address.isEmpty ? 'Address is required' : null;
@@ -75,6 +83,8 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
 
     if (name.isEmpty ||
         phone.isEmpty ||
+        phone.length != 10 ||
+        !RegExp(r'^\d+$').hasMatch(phone) ||
         village.isEmpty ||
         district.isEmpty ||
         address.isEmpty ||
@@ -210,6 +220,10 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
               keyboardType: TextInputType.phone,
               textInputAction: TextInputAction.next,
               prefixIcon: Icons.phone_rounded,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(10),
+              ],
             ),
             const SizedBox(height: AppDimens.grid * 2),
             AppTextField(
@@ -253,6 +267,7 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
               keyboardType: TextInputType.number,
               textInputAction: TextInputAction.next,
               prefixIcon: Icons.markunread_mailbox_rounded,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             ),
             const SizedBox(height: AppDimens.grid * 2),
             AppTextField(
