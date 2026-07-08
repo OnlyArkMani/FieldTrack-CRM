@@ -743,31 +743,46 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
 
   // ── step 1: notes ─────────────────────────────────────────────────────────
   Widget _interestBadges() {
-    final presets = ['Bypass Protein', 'Calf Starter', 'Milk Booster', 'Mineral Mixture', 'Dry Cow Feed', 'Premium Pellets', 'Urea Molasses Block'];
+    final colors = context.appColors;
+    final isInterested = _interest.text == 'Sanjeevni Cattle Feed';
+
     return Padding(
       padding: const EdgeInsets.only(bottom: AppDimens.grid * 1.5),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Product interest', style: AppTextStyles.caption.copyWith(color: context.appColors.textSecondary, fontWeight: FontWeight.bold)),
-          const SizedBox(height: AppDimens.grid),
-          Wrap(
-            spacing: AppDimens.grid,
-            runSpacing: AppDimens.grid,
-            children: presets.map((p) {
-              final isSel = _interest.text.split(',').map((s) => s.trim()).contains(p);
-              return ChoiceChip(
-                label: Text(p, style: AppTextStyles.caption.copyWith(color: isSel ? Theme.of(context).colorScheme.primary : context.appColors.textSecondary)),
-                selected: isSel,
-                onSelected: (selected) {
+          Text(
+            'Interested in Sanjeevni Cattle Feed?',
+            style: AppTextStyles.caption.copyWith(
+              color: colors.textSecondary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: AppDimens.grid * 0.5),
+          Row(
+            children: [
+              Radio<bool>(
+                value: true,
+                groupValue: isInterested,
+                onChanged: (val) {
                   setState(() {
-                    var items = _interest.text.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-                    selected ? items.add(p) : items.remove(p);
-                    _interest.text = items.join(', ');
+                    _interest.text = 'Sanjeevni Cattle Feed';
                   });
                 },
-              );
-            }).toList(),
+              ),
+              Text('Yes', style: AppTextStyles.body),
+              const SizedBox(width: AppDimens.grid * 3),
+              Radio<bool>(
+                value: false,
+                groupValue: isInterested,
+                onChanged: (val) {
+                  setState(() {
+                    _interest.text = '';
+                  });
+                },
+              ),
+              Text('No', style: AppTextStyles.body),
+            ],
           ),
         ],
       ),
