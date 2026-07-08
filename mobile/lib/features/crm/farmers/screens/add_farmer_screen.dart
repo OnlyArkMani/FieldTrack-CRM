@@ -131,39 +131,50 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
                 InputDecorator(
                   decoration: InputDecoration(
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+                      borderRadius:
+                          BorderRadius.circular(AppDimens.buttonRadius),
                     ),
+                    // Horizontal inset lives on DropdownButton's own `padding`
+                    // instead of here — any horizontal contentPadding on this
+                    // InputDecorator makes DropdownButton's actual render box
+                    // (what Flutter anchors the popup menu to) narrower than
+                    // the visible border, so the menu would sit inset from
+                    // the field's edges instead of matching it exactly.
                     contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
                       vertical: AppDimens.grid * 0.75,
                     ),
                   ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<CustomerType>(
-                      value: _type,
-                      isDense: true,
-                      isExpanded: true,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface,
+                  child: ButtonTheme(
+                    alignedDropdown: true,
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<CustomerType>(
+                        value: _type,
+                        isDense: true,
+                        isExpanded: true,
+                        padding: const EdgeInsetsDirectional.only(end: 8),
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                        selectedItemBuilder: (context) {
+                          return CustomerType.values.map((t) {
+                            return Padding(
+                              padding: const EdgeInsets.only(left: 32),
+                              child: Text(t.label,
+                                  maxLines: 1, overflow: TextOverflow.ellipsis),
+                            );
+                          }).toList();
+                        },
+                        items: CustomerType.values
+                            .map((t) => DropdownMenuItem(
+                                  value: t,
+                                  child: Text(t.label,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis),
+                                ))
+                            .toList(),
+                        onChanged: (v) =>
+                            setState(() => _type = v ?? CustomerType.farmer),
                       ),
-                      selectedItemBuilder: (context) {
-                        return CustomerType.values.map((t) {
-                          return Padding(
-                            padding: const EdgeInsets.only(left: 36),
-                            child: Text(t.label,
-                                maxLines: 1, overflow: TextOverflow.ellipsis),
-                          );
-                        }).toList();
-                      },
-                      items: CustomerType.values
-                          .map((t) => DropdownMenuItem(
-                                value: t,
-                                child: Text(t.label,
-                                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                              ))
-                          .toList(),
-                      onChanged: (v) =>
-                          setState(() => _type = v ?? CustomerType.farmer),
                     ),
                   ),
                 ),
