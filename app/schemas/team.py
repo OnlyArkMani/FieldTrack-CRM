@@ -10,7 +10,7 @@ DESIGN:
 - Soft delete: DELETE marks is_active=False (teams are referenced by users +
   audit history; a hard delete would orphan or cascade-null those).
 """
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class TeamCreate(BaseModel):
@@ -54,6 +54,14 @@ class TeamMemberOut(BaseModel):
     # Redis-derived live status (ACTIVE | IDLE | OFFLINE); read-time, never
     # persisted. Lets the Teams screen show who's live per team.
     live_status: str = "OFFLINE"
+
+    @model_validator(mode="after")
+    def format_profile_photo(self) -> "TeamMemberOut":
+        if self.profile_photo_url and not self.profile_photo_url.startswith(
+            ("http://", "https://", "/")
+        ):
+            self.profile_photo_url = f"/api/v1/employees/{self.id}/profile-photo"
+        return self
 
 
 class TeamDetailOut(TeamOut):

@@ -11,7 +11,7 @@ VALIDATION DECISIONS:
 """
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.models.enums import UserRole
 
@@ -50,6 +50,25 @@ class UserOut(BaseModel):
     team_id: int | None
     profile_photo_url: str | None
     is_active: bool
+    village: str | None = None
+    district: str | None = None
+    state: str | None = None
+
+    @model_validator(mode="after")
+    def format_profile_photo(self) -> "UserOut":
+        if self.profile_photo_url and not self.profile_photo_url.startswith(
+            ("http://", "https://", "/")
+        ):
+            self.profile_photo_url = f"/api/v1/employees/{self.id}/profile-photo"
+        return self
+
+
+class UserProfileUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    phone: str | None = Field(default=None, max_length=20)
+    village: str | None = Field(default=None, max_length=120)
+    district: str | None = Field(default=None, max_length=120)
+    state: str | None = Field(default=None, max_length=120)
 
 
 class TokenResponse(BaseModel):

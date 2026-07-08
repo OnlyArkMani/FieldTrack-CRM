@@ -29,6 +29,7 @@ import '../../features/home/screens/home_shell.dart';
 import '../../features/map/screens/map_screen.dart';
 import '../../features/notifications/screens/notifications_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
+import '../../features/profile/screens/edit_profile_screen.dart';
 import '../../features/reports/screens/reports_screen.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/teams/screens/team_list_screen.dart';
@@ -287,6 +288,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/dsr/team',
         pageBuilder: (context, state) =>
             WaterPage(key: state.pageKey, child: const TeamDsrScreen()),
+      ),
+
+      GoRoute(
+        path: '/profile/edit',
+        pageBuilder: (context, state) =>
+            WaterPage(key: state.pageKey, child: const EditProfileScreen()),
       ),
     ],
   );

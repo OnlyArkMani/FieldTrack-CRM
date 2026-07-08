@@ -1,3 +1,4 @@
+import '../../../core/config/env.dart';
 import '../../auth/models/user.dart' show UserRole;
 
 class TeamMember {
@@ -25,15 +26,20 @@ class TeamMember {
     return parts.take(2).map((p) => p[0].toUpperCase()).join();
   }
 
-  factory TeamMember.fromJson(Map<String, dynamic> json) => TeamMember(
-        id: json['id'] as int,
-        name: json['name'] as String,
-        email: json['email'] as String,
-        role: UserRole.fromWire(json['role'] as String),
-        isActive: (json['is_active'] as bool?) ?? true,
-        profilePhotoUrl: json['profile_photo_url'] as String?,
-        liveStatus: (json['live_status'] as String?) ?? 'OFFLINE',
-      );
+  factory TeamMember.fromJson(Map<String, dynamic> json) {
+    final photoUrl = json['profile_photo_url'] as String?;
+    return TeamMember(
+      id: json['id'] as int,
+      name: json['name'] as String,
+      email: json['email'] as String,
+      role: UserRole.fromWire(json['role'] as String),
+      isActive: (json['is_active'] as bool?) ?? true,
+      profilePhotoUrl: (photoUrl != null && photoUrl.startsWith('/'))
+          ? '${Env.apiOrigin}$photoUrl'
+          : photoUrl,
+      liveStatus: (json['live_status'] as String?) ?? 'OFFLINE',
+    );
+  }
 }
 
 class Team {

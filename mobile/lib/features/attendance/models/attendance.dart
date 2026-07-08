@@ -1,3 +1,4 @@
+import '../../../core/config/env.dart';
 import 'package:flutter/material.dart';
 
 /// One tap in the state machine.
@@ -102,13 +103,17 @@ class AttendanceEmployeeRef {
   final String? profilePhotoUrl;
   final String? role;
 
-  factory AttendanceEmployeeRef.fromJson(Map<String, dynamic> json) =>
-      AttendanceEmployeeRef(
-        id: json['id'] as int,
-        name: json['name'] as String,
-        profilePhotoUrl: json['profile_photo_url'] as String?,
-        role: json['role'] as String?,
-      );
+  factory AttendanceEmployeeRef.fromJson(Map<String, dynamic> json) {
+    final photoUrl = json['profile_photo_url'] as String?;
+    return AttendanceEmployeeRef(
+      id: json['id'] as int,
+      name: json['name'] as String,
+      profilePhotoUrl: (photoUrl != null && photoUrl.startsWith('/'))
+          ? '${Env.apiOrigin}$photoUrl'
+          : photoUrl,
+      role: json['role'] as String?,
+    );
+  }
 }
 
 class Attendance {

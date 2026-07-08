@@ -458,3 +458,98 @@ class EmployeeService:
             flagged_today=flagged_today,
             points=[GpsFlagPoint.model_validate(p) for p in points],
         )
+
+    # ── Profile & Avatar Self-service ─────────────────────────────────────
+    async def get_profile_photo_url(self, employee_id: int) -> str:
+        import asyncio
+        from app.core.storage import get_storage
+        
+        user = await self.repo.get_by_id(employee_id)
+        if user is None or not user.profile_photo_url:
+            raise not_found("Profile photo not found")
+        
+        if user.profile_photo_url.startswith(("http://", "https://")):
+            return user.profile_photo_url
+            
+        storage = get_storage()
+        if not await asyncio.to_thread(storage.exists, user.profile_photo_url):
+            raise not_found("Profile photo file is missing")
+            
+        return await asyncio.to_thread(
+            storage.presigned_url,
+            user.profile_photo_url,
+            expires_in=300,
+        )
+
+    async def self_update(
+        self, user: User, payload: Any
+    ) -> Any:
+        fields = payload.model_dump(exclude_unset=True)
+        if "name" in fields:
+            user.name = fields["name"]
+        if "phone" in fields:
+            new_phone = fields["phone"]
+            if new_phone != user.phone and await self.repo.phone_exists(
+                new_phone, exclude_id=user.id
+            ):
+                raise conflict("An account with this phone number already exists")
+            user.phone = new_phone
+        if "village" in fields:
+            user.village = fields["village"]
+        if "district" in fields:
+            user.district = fields["district"]
+        if "state" in fields:
+            user.state = fields["state"]
+            
+        self.repo.add(user)
+        await self.db.commit()
+        await self.db.refresh(user)
+        
+        from app.schemas.auth import UserOut
+        return UserOut.model_validate(user)
+
+    async def upload_profile_photo(
+        self, user: User, content: bytes, content_type: str | None
+    ) -> Any:
+        import uuid
+        import asyncio
+        from app.core.storage import get_storage
+        from app.schemas.auth import UserOut
+        
+        ctype = (content_type or "").split(";")[0].strip().lower()
+        _ALLOWED_PHOTO_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic"}
+        _PHOTO_EXT = {
+            "image/jpeg": "jpg",
+            "image/jpg": "jpg",
+            "image/png": "png",
+            "image/webp": "webp",
+            "image/heic": "heic",
+        }
+        if ctype not in _ALLOWED_PHOTO_TYPES:
+            raise bad_request("Photo must be a JPEG, PNG, WEBP or HEIC image")
+        if not content:
+            raise bad_request("Empty file")
+        if len(content) > self.settings.max_profile_photo_bytes:
+            mb = self.settings.max_profile_photo_bytes // (1024 * 1024)
+            raise bad_request(f"Photo exceeds the {mb} MB limit")
+            
+        ext = _PHOTO_EXT.get(ctype, "jpg")
+        object_key = f"{self.settings.profile_photo_minio_prefix}/{user.id}/{uuid.uuid4().hex}.{ext}"
+        storage = get_storage()
+        
+        # Delete old photo if it exists (best-effort)
+        old_photo = user.profile_photo_url
+        if old_photo and not old_photo.startswith(("http://", "https://")):
+            try:
+                await asyncio.to_thread(storage.delete, old_photo)
+            except Exception:
+                logger.warning("could not remove old profile photo %s", old_photo)
+                
+        # Upload new photo
+        await asyncio.to_thread(storage.upload_bytes, object_key, content, content_type=ctype)
+        
+        user.profile_photo_url = object_key
+        self.repo.add(user)
+        await self.db.commit()
+        await self.db.refresh(user)
+        return UserOut.model_validate(user)

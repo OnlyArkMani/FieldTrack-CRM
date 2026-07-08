@@ -14,7 +14,7 @@ from datetime import date as date_type
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enums import AttendanceStatus, SessionType
 
@@ -80,6 +80,14 @@ class AttendanceEmployeeRef(BaseModel):
     name: str
     profile_photo_url: str | None
     role: str
+
+    @model_validator(mode="after")
+    def format_profile_photo(self) -> "AttendanceEmployeeRef":
+        if self.profile_photo_url and not self.profile_photo_url.startswith(
+            ("http://", "https://", "/")
+        ):
+            self.profile_photo_url = f"/api/v1/employees/{self.id}/profile-photo"
+        return self
 
 
 class AttendanceOut(BaseModel):

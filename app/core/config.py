@@ -90,6 +90,10 @@ class Settings(BaseSettings):
     max_visit_photo_bytes: int = 8 * 1024 * 1024  # 8 MB per photo
     visit_photo_download_url_ttl_seconds: int = 300
 
+    profile_photo_minio_prefix: str = "profile_photos"
+    max_profile_photo_bytes: int = 5 * 1024 * 1024  # 5 MB per photo
+    profile_photo_download_url_ttl_seconds: int = 300
+
     # Data retention — location_logs is the hottest, highest-volume table.
     # 31 days keeps storage (and the VPS disk) small while still covering the
     # "last month" of employee trails the dashboard needs. Tune via env.

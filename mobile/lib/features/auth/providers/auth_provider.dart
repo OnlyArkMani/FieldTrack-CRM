@@ -84,6 +84,41 @@ class AuthNotifier extends Notifier<AuthState> {
     state = const AuthState(status: AuthStatus.unauthenticated);
   }
 
+  Future<bool> updateProfile({
+    required String name,
+    required String phone,
+    required String village,
+    required String district,
+    required String stateVal,
+  }) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final updatedUser = await _repo.updateProfile(
+        name: name,
+        phone: phone,
+        village: village,
+        district: district,
+        state: stateVal,
+      );
+      state = AuthState(status: AuthStatus.authenticated, user: updatedUser);
+      return true;
+    } on ApiException catch (e) {
+      state = state.copyWith(isLoading: false, error: e.message);
+      return false;
+    }
+  }
+
+  Future<bool> uploadProfilePhoto(String filePath) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final updatedUser = await _repo.uploadProfilePhoto(filePath);
+      state = AuthState(status: AuthStatus.authenticated, user: updatedUser);
+      return true;
+    } on ApiException catch (e) {
+      state = state.copyWith(isLoading: false, error: e.message);
+      return false;
+    }
+  }
 
   void clearError() => state = state.copyWith(clearError: true);
 }

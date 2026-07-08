@@ -9,7 +9,7 @@ WEB vs MOBILE refresh transport:
 """
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Request, Response, File, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -22,6 +22,7 @@ from app.schemas.auth import (
     ResetPasswordRequest,
     TokenResponse,
     UserOut,
+    UserProfileUpdate,
 )
 from app.services.auth_service import AuthService
 
@@ -154,3 +155,30 @@ async def reset_password(
         body.email, body.otp, body.new_password, _client_ip(request)
     )
     return MessageResponse(detail="Password updated. Please log in again.")
+
+
+@router.patch("/me", response_model=UserOut)
+async def update_profile(
+    body: UserProfileUpdate,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> UserOut:
+    """Update profile details of the currently logged-in user."""
+    from app.services.employee_service import EmployeeService
+    return await EmployeeService(db).self_update(user, body)
+
+
+@router.post("/me/profile-photo", response_model=UserOut)
+async def upload_profile_photo(
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: Annotated[UploadFile, File(description="JPEG/PNG/WEBP/HEIC, max 5 MB")],
+) -> UserOut:
+    """Upload a new profile picture for the currently logged-in user."""
+    content = await file.read()
+    from app.services.employee_service import EmployeeService
+    return await EmployeeService(db).upload_profile_photo(
+        user,
+        content=content,
+        content_type=file.content_type,
+    )

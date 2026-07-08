@@ -13,7 +13,7 @@ DESIGN:
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.models.enums import UserRole
 
@@ -110,6 +110,14 @@ class EmployeeOut(BaseModel):
     # warning dot on the admin list (anti-gaming). Filled by a single bulk
     # query in the list service; stays False if enrichment is skipped.
     mock_gps_today: bool = False
+
+    @model_validator(mode="after")
+    def format_profile_photo(self) -> "EmployeeOut":
+        if self.profile_photo_url and not self.profile_photo_url.startswith(
+            ("http://", "https://", "/")
+        ):
+            self.profile_photo_url = f"/api/v1/employees/{self.id}/profile-photo"
+        return self
 
 
 class EmployeeDetailOut(EmployeeOut):

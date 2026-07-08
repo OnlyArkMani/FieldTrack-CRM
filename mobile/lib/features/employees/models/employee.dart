@@ -1,3 +1,4 @@
+import '../../../core/config/env.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../auth/models/user.dart' show UserRole;
 
@@ -131,25 +132,30 @@ class Employee {
     return letters.isEmpty ? '?' : letters;
   }
 
-  factory Employee.fromJson(Map<String, dynamic> json) => Employee(
-        id: json['id'] as int,
-        name: json['name'] as String,
-        email: json['email'] as String,
-        role: UserRole.fromWire(json['role'] as String),
-        isActive: (json['is_active'] as bool?) ?? true,
-        phone: json['phone'] as String?,
-        teamId: json['team_id'] as int?,
-        profilePhotoUrl: json['profile_photo_url'] as String?,
-        createdAt: json['created_at'] != null
-            ? DateTime.tryParse(json['created_at'] as String)
-            : null,
-        team: json['team'] != null
-            ? TeamRef.fromJson(json['team'] as Map<String, dynamic>)
-            : null,
-        live: json['live'] != null
-            ? LiveStatus.fromJson(json['live'] as Map<String, dynamic>)
-            : null,
-      );
+  factory Employee.fromJson(Map<String, dynamic> json) {
+    final photoUrl = json['profile_photo_url'] as String?;
+    return Employee(
+      id: json['id'] as int,
+      name: json['name'] as String,
+      email: json['email'] as String,
+      role: UserRole.fromWire(json['role'] as String),
+      isActive: (json['is_active'] as bool?) ?? true,
+      phone: json['phone'] as String?,
+      teamId: json['team_id'] as int?,
+      profilePhotoUrl: (photoUrl != null && photoUrl.startsWith('/'))
+          ? '${Env.apiOrigin}$photoUrl'
+          : photoUrl,
+      createdAt: json['created_at'] != null
+          ? DateTime.tryParse(json['created_at'] as String)
+          : null,
+      team: json['team'] != null
+          ? TeamRef.fromJson(json['team'] as Map<String, dynamic>)
+          : null,
+      live: json['live'] != null
+          ? LiveStatus.fromJson(json['live'] as Map<String, dynamic>)
+          : null,
+    );
+  }
 }
 
 /// One paginated page of employees (mirrors the backend CursorPage envelope).

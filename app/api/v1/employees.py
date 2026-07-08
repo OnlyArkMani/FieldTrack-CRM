@@ -419,3 +419,17 @@ async def crm_performance(
         orders_by_type=orders_by_type,
         bags_by_type=bags_by_type,
     )
+
+
+@router.get("/{employee_id}/profile-photo")
+async def get_profile_photo(
+    employee_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Retrieve and redirect to the presigned download URL for the user's profile photo.
+    Public endpoint (no auth required) so browsers and image caches can fetch it directly.
+    """
+    from fastapi.responses import RedirectResponse
+    from app.services.employee_service import EmployeeService
+    url = await EmployeeService(db).get_profile_photo_url(employee_id)
+    return RedirectResponse(url, status_code=307)

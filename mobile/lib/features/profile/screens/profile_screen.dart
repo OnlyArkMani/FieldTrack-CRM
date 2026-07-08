@@ -137,7 +137,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   _SettingsTile(
                     icon: Icons.person_outline_rounded,
                     title: 'Edit Profile',
-                    onTap: () {/* edit-profile ships with profile phase */},
+                    onTap: () => context.push('/profile/edit'),
                   ),
                   const Divider(),
                   _SettingsTile(

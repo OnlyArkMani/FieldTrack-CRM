@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
@@ -52,4 +53,33 @@ class AuthRepository {
   }
 
   bool get hasStoredSession => _tokens.hasSession;
+
+  Future<User> updateProfile({
+    required String name,
+    required String phone,
+    required String village,
+    required String district,
+    required String state,
+  }) async {
+    final data = await _api.patch('/auth/me', body: {
+      'name': name.trim(),
+      'phone': phone.trim().isNotEmpty ? phone.trim() : null,
+      'village': village.trim().isNotEmpty ? village.trim() : null,
+      'district': district.trim().isNotEmpty ? district.trim() : null,
+      'state': state.trim().isNotEmpty ? state.trim() : null,
+    });
+    return User.fromJson(data);
+  }
+
+  Future<User> uploadProfilePhoto(String filePath) async {
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(filePath),
+    });
+    try {
+      final res = await _api.dio.post('/auth/me/profile-photo', data: form);
+      return User.fromJson(res.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw ApiClient.mapError(e);
+    }
+  }
 }
