@@ -28,6 +28,7 @@ class AttendanceStatus(str, enum.Enum):
     PRESENT = "PRESENT"
     ABSENT = "ABSENT"
     HALF_DAY = "HALF_DAY"
+    ON_LEAVE = "ON_LEAVE"
 
 
 class SessionType(str, enum.Enum):

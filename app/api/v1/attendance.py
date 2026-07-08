@@ -108,6 +108,16 @@ async def end(
     return result
 
 
+# ── Leave (self-service, only before any check-in today) ─────────────────
+@router.post("/leave", response_model=AttendanceOut)
+async def mark_leave(
+    request: Request,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AttendanceOut:
+    return await AttendanceService(db).mark_leave(user=user, ip=_client_ip(request))
+
+
 # ── Personal reads ───────────────────────────────────────────────────────
 @router.get("/today", response_model=TodayAttendanceOut)
 async def today(

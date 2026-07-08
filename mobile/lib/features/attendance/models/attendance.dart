@@ -35,7 +35,8 @@ enum MachineState {
   started('STARTED'),
   onBreak('ON_BREAK'),
   resumed('RESUMED'),
-  ended('ENDED');
+  ended('ENDED'),
+  onLeave('ON_LEAVE');
 
   const MachineState(this.wire);
   final String wire;
@@ -48,14 +49,16 @@ enum MachineState {
   bool get isWorking => this == MachineState.started || this == MachineState.resumed;
   bool get isOnBreak => this == MachineState.onBreak;
   bool get isEnded => this == MachineState.ended;
+  bool get isOnLeave => this == MachineState.onLeave;
   bool get notStarted => this == MachineState.none;
 }
 
 class AttendanceStatusValue {
-  // Day classification (present/absent/half_day).
+  // Day classification (present/absent/half_day/on_leave).
   static const present = 'PRESENT';
   static const absent = 'ABSENT';
   static const halfDay = 'HALF_DAY';
+  static const onLeave = 'ON_LEAVE';
 }
 
 class AttendanceSession {

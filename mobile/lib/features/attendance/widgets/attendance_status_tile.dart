@@ -4,52 +4,180 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../services/permission/permission_service.dart';
 import '../models/attendance.dart';
 import '../providers/attendance_provider.dart';
+import '../widgets/attendance_timer.dart';
+import '../widgets/work_summary_sheet.dart';
 
-/// Compact checked-in/checked-out indicator for the home dashboard. The
-/// Attendance tab owns the full START/BREAK/RESUME/END flow; this just
-/// answers "am I clocked in right now?" at a glance and jumps there on tap.
+/// Dashboard attendance control. Not checked in => Check In / On Leave
+/// buttons; checked in (incl. on break) => a running timer + Checkout;
+/// checked out => a total-hours badge that opens the full Attendance tab.
+/// The Attendance tab still owns the full START/BREAK/RESUME/END flow and
+/// history — this drives the same day's state machine from the home screen.
 class AttendanceStatusTile extends ConsumerWidget {
   const AttendanceStatusTile({super.key});
+
+  Future<void> _checkIn(BuildContext context, WidgetRef ref) async {
+    final result =
+        await PermissionService.instance.requestLocationPermissions(context);
+    if (result == PermissionResult.denied ||
+        result == PermissionResult.deniedForever) {
+      return; // PermissionService already showed the messaging.
+    }
+    await ref.read(attendanceProvider.notifier).start();
+  }
+
+  Future<void> _checkOut(BuildContext context, WidgetRef ref) async {
+    final summary = await showWorkSummarySheet(context);
+    if (summary == null || !context.mounted) return;
+    await ref.read(attendanceProvider.notifier).end(summary);
+    if (!context.mounted) return;
+    final state = ref.read(attendanceProvider);
+    final attendanceId = state.attendance?.id;
+    if (attendanceId != null && state.state == MachineState.ended) {
+      final today = DateTime.now();
+      final reportDate = DateTime(today.year, today.month, today.day);
+      // Give the background DSR generation a moment to complete before loading.
+      await Future<void>.delayed(const Duration(seconds: 2));
+      if (!context.mounted) return;
+      context.push('/dsr/review', extra: {'report_date': reportDate});
+    }
+  }
+
+  Future<void> _markLeave(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Mark today as on leave?'),
+        content: const Text(
+          "You won't be able to check in today after marking leave.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Mark leave'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await ref.read(attendanceProvider.notifier).markLeave();
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ui = ref.watch(attendanceProvider);
     final colors = context.appColors;
-    final scheme = Theme.of(context).colorScheme;
 
-    final (Color tint, IconData icon, String label, String subtitle) =
-        switch (ui.state) {
-      MachineState.started ||
-      MachineState.resumed =>
-        (
-          colors.statusActive,
-          Icons.play_circle_fill_rounded,
-          'Checked in',
-          'Working since ${_hhmm(ui.attendance?.startedAt)}',
+    return switch (ui.state) {
+      MachineState.none => AppCard(
+          child: Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  label: 'Check In',
+                  icon: Icons.login_rounded,
+                  isLoading: ui.isSubmitting,
+                  onPressed: ui.isSubmitting || ui.isMarkingLeave
+                      ? null
+                      : () => _checkIn(context, ref),
+                ),
+              ),
+              const SizedBox(width: AppDimens.grid * 1.5),
+              Expanded(
+                child: AppButton(
+                  label: 'On Leave',
+                  variant: AppButtonVariant.secondary,
+                  isLoading: ui.isMarkingLeave,
+                  onPressed: ui.isSubmitting || ui.isMarkingLeave
+                      ? null
+                      : () => _markLeave(context, ref),
+                ),
+              ),
+            ],
+          ),
         ),
-      MachineState.onBreak => (
-          colors.statusIdle,
-          Icons.pause_circle_filled_rounded,
-          'On break',
-          'Checked in — currently on break',
+      MachineState.started || MachineState.resumed || MachineState.onBreak =>
+        AppCard(
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Checked in',
+                      style: AppTextStyles.caption.copyWith(
+                        color: colors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    AttendanceTimer(
+                      start: ui.attendance?.startedAt ?? DateTime.now(),
+                      fontSize: 26,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppDimens.grid * 1.5),
+              AppButton(
+                label: 'Checkout',
+                icon: Icons.logout_rounded,
+                variant: AppButtonVariant.danger,
+                expanded: false,
+                isLoading: ui.isSubmitting,
+                onPressed:
+                    ui.isSubmitting ? null : () => _checkOut(context, ref),
+              ),
+            ],
+          ),
         ),
-      MachineState.ended => (
-          colors.statusOffline,
-          Icons.check_circle_rounded,
-          'Checked out',
-          "Day complete",
+      MachineState.ended => _BadgeCard(
+          icon: Icons.check_circle_rounded,
+          tint: colors.statusOffline,
+          label: 'Checked out',
+          subtitle:
+              'Total today: ${_fmtMinutes(ui.attendance?.totalDurationMinutes ?? 0)}',
         ),
-      MachineState.none => (
-          colors.statusOffline,
-          Icons.radio_button_unchecked_rounded,
-          'Not checked in',
-          'Tap to start your day',
+      MachineState.onLeave => _BadgeCard(
+          icon: Icons.beach_access_rounded,
+          tint: colors.statusIdle,
+          label: 'On leave',
+          subtitle: 'Marked as on leave today',
         ),
     };
+  }
+}
 
+/// Icon + label/subtitle badge, tappable through to the full Attendance tab
+/// (chevron on the right makes that affordance explicit).
+class _BadgeCard extends StatelessWidget {
+  const _BadgeCard({
+    required this.icon,
+    required this.tint,
+    required this.label,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final Color tint;
+  final String label;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final scheme = Theme.of(context).colorScheme;
     return AppCard(
       onTap: () => context.go('/home/attendance'),
       child: Row(
@@ -94,9 +222,10 @@ class AttendanceStatusTile extends ConsumerWidget {
   }
 }
 
-String _hhmm(DateTime? dt) {
-  if (dt == null) return '--:--';
-  final l = dt.toLocal();
-  return '${l.hour.toString().padLeft(2, '0')}:'
-      '${l.minute.toString().padLeft(2, '0')}';
+String _fmtMinutes(int minutes) {
+  if (minutes <= 0) return '0m';
+  final h = minutes ~/ 60;
+  final m = minutes % 60;
+  if (h == 0) return '${m}m';
+  return m == 0 ? '${h}h' : '${h}h ${m}m';
 }

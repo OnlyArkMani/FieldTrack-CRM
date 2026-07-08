@@ -21,6 +21,7 @@ class AttendanceUiState {
     this.isLoading = true,
     this.isSubmitting = false,
     this.pendingAction,
+    this.isMarkingLeave = false,
     this.error,
     this.errorNonce = 0,
   });
@@ -31,6 +32,10 @@ class AttendanceUiState {
 
   /// Which transition is in flight (drives the per-button spinner).
   final SessionType? pendingAction;
+
+  /// True while the leave request is in flight (drives the On Leave button
+  /// spinner — leave has no SessionType, so it isn't covered by pendingAction).
+  final bool isMarkingLeave;
   final String? error;
   final int errorNonce;
 
@@ -43,6 +48,7 @@ class AttendanceUiState {
     bool? isSubmitting,
     SessionType? pendingAction,
     bool clearPending = false,
+    bool? isMarkingLeave,
     String? error,
     bool clearError = false,
     int? errorNonce,
@@ -52,6 +58,7 @@ class AttendanceUiState {
         isLoading: isLoading ?? this.isLoading,
         isSubmitting: isSubmitting ?? this.isSubmitting,
         pendingAction: clearPending ? null : (pendingAction ?? this.pendingAction),
+        isMarkingLeave: isMarkingLeave ?? this.isMarkingLeave,
         error: clearError ? null : (error ?? this.error),
         errorNonce: errorNonce ?? this.errorNonce,
       );
@@ -149,6 +156,57 @@ class AttendanceNotifier extends Notifier<AttendanceUiState> {
         optimistic: () => _optimisticAppend(SessionType.end, MachineState.ended),
         call: (lat, lng) => _repo.end(lat, lng, workSummary: workSummary),
       );
+
+  /// Mark today as leave. No GPS involved (unlike the session transitions),
+  /// so this bypasses `_run` and drives its own submitting flag.
+  Future<void> markLeave() async {
+    if (state.isSubmitting || state.isMarkingLeave) return;
+    final snapshot = state.today;
+
+    final now = DateTime.now();
+    final synthetic = Attendance(
+      id: -1,
+      userId: 0,
+      date: now,
+      status: AttendanceStatusValue.onLeave,
+      totalDurationMinutes: 0,
+      totalDistanceMeters: 0,
+      currentState: MachineState.onLeave,
+      sessions: const [],
+    );
+    state = state.copyWith(
+      today: TodayAttendance(
+        hasAttendance: true,
+        currentState: MachineState.onLeave,
+        attendance: synthetic,
+      ),
+      isMarkingLeave: true,
+      clearError: true,
+    );
+
+    try {
+      final updated = await _repo.markLeave();
+      final newToday = TodayAttendance(
+        hasAttendance: true,
+        currentState: updated.currentState,
+        attendance: updated,
+      );
+      state = state.copyWith(
+        today: newToday,
+        isMarkingLeave: false,
+        clearError: true,
+      );
+      unawaited(HapticFeedback.lightImpact());
+    } on ApiException catch (e) {
+      unawaited(HapticFeedback.lightImpact());
+      state = state.copyWith(
+        today: snapshot,
+        isMarkingLeave: false,
+        error: e.message,
+        errorNonce: state.errorNonce + 1,
+      );
+    }
+  }
 
   /// Shared transition runner: snapshot → optimistic paint → GPS → API →
   /// reconcile or roll back.

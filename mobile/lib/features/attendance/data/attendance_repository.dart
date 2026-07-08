@@ -19,6 +19,11 @@ class AttendanceRepository {
   Future<Attendance> start(double lat, double lng) =>
       _transition('start', lat, lng);
 
+  Future<Attendance> markLeave() async {
+    final data = await _api.post('/attendance/leave');
+    return Attendance.fromJson(data);
+  }
+
   Future<Attendance> breakk(double lat, double lng) =>
       _transition('break', lat, lng);
 

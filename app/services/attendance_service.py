@@ -126,14 +126,11 @@ class AttendanceService:
     async def _current_state(
         self, user_id: int, attendance: Attendance | None
     ) -> str:
-        """STARTED|ON_BREAK|RESUMED|ENDED|NULL. Trusts the DB (last session)
-        when an attendance row is in hand; Redis is only the no-DB-row fast
-        path used before we've loaded today's row."""
+        """STARTED|ON_BREAK|RESUMED|ENDED|ON_LEAVE|NULL. Trusts the DB (last
+        session) when an attendance row is in hand; Redis is only the
+        no-DB-row fast path used before we've loaded today's row."""
         if attendance is not None:
-            if not attendance.sessions:
-                return "NULL"
-            last = max(attendance.sessions, key=lambda s: s.timestamp)
-            return _STATE_FOR_TYPE.get(last.type, "NULL")
+            return self._state_of(attendance)
         # No row loaded: peek Redis, else NULL (no attendance today).
         cached = await self.redis.hget(Keys.attendance_state(user_id), "state")
         return cached or "NULL"
@@ -168,6 +165,8 @@ class AttendanceService:
         attendance = await self.repo.get_for_user_date(user.id, day)
         state = await self._current_state(user.id, attendance)
 
+        if state == "ON_LEAVE":
+            raise conflict("Marked as on leave today — cannot check in")
         if state not in _ALLOWED_FROM[action]:
             raise conflict(_INVALID_MESSAGE[action])
 
@@ -282,7 +281,7 @@ class AttendanceService:
         day = self._today()
         attendance = await self.repo.get_for_user_date(user_id, day)
         state = await self._current_state(user_id, attendance)
-        return state not in ("NULL", "ENDED")
+        return state not in ("NULL", "ENDED", "ON_LEAVE")
 
     async def get_today(self, user_id: int) -> TodayAttendanceOut:
         day = self._today()
@@ -297,6 +296,41 @@ class AttendanceService:
             current_state=state,  # type: ignore[arg-type]
             attendance=self._to_out(attendance, state),
         )
+
+    async def mark_leave(self, *, user: User, ip: str | None) -> AttendanceOut:
+        """Self-service: mark today as leave. Only valid before any check-in
+        (no attendance row yet) — once STARTED/ON_LEAVE/ENDED exists for the
+        day, the UNIQUE(user_id, date) row is already claimed."""
+        day = self._today()
+        existing = await self.repo.get_for_user_date(user.id, day)
+        if existing is not None:
+            raise conflict("Attendance already recorded today")
+
+        attendance = Attendance(
+            user_id=user.id,
+            date=day,
+            status=AttendanceStatus.ON_LEAVE,
+            total_duration_minutes=0,
+            total_distance_meters=0.0,
+        )
+        self.repo.add_attendance(attendance)
+        await self.db.flush()
+        self.repo.add_audit_log(
+            user_id=user.id,
+            action="ATTENDANCE_ON_LEAVE",
+            entity_id=attendance.id,
+            ip_address=ip,
+            metadata={},
+        )
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            # UNIQUE(user_id, date) lost the race — someone else claimed today.
+            await self.db.rollback()
+            raise conflict("Attendance already recorded today")
+
+        refreshed = await self.repo.get_for_user_date(user.id, day)
+        return self._to_out(refreshed, "ON_LEAVE")
 
     async def get_history(
         self,
@@ -444,7 +478,11 @@ class AttendanceService:
     # ── Mapping helpers ──────────────────────────────────────────────────
     @staticmethod
     def _state_of(attendance: Attendance | None) -> str:
-        if attendance is None or not attendance.sessions:
+        if attendance is None:
+            return "NULL"
+        if attendance.status == AttendanceStatus.ON_LEAVE:
+            return "ON_LEAVE"
+        if not attendance.sessions:
             return "NULL"
         last = max(attendance.sessions, key=lambda s: s.timestamp)
         return _STATE_FOR_TYPE.get(last.type, "NULL")
