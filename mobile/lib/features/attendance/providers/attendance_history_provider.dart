@@ -24,6 +24,9 @@ class AttendanceHistoryState {
     this.endDate,
     this.entries = const [],
     this.isLoading = false,
+    this.isLoadingMore = false,
+    this.hasMore = false,
+    this.nextCursor,
     this.error,
   });
 
@@ -32,6 +35,9 @@ class AttendanceHistoryState {
   final DateTime? endDate;
   final List<Attendance> entries;
   final bool isLoading;
+  final bool isLoadingMore;
+  final bool hasMore;
+  final String? nextCursor;
   final String? error;
 
   AttendanceHistoryState copyWith({
@@ -40,6 +46,9 @@ class AttendanceHistoryState {
     DateTime? endDate,
     List<Attendance>? entries,
     bool? isLoading,
+    bool? isLoadingMore,
+    bool? hasMore,
+    String? nextCursor,
     String? error,
     bool clearError = false,
   }) =>
@@ -49,6 +58,9 @@ class AttendanceHistoryState {
         endDate: endDate ?? this.endDate,
         entries: entries ?? this.entries,
         isLoading: isLoading ?? this.isLoading,
+        isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+        hasMore: hasMore ?? this.hasMore,
+        nextCursor: nextCursor ?? this.nextCursor,
         error: clearError ? null : (error ?? this.error),
       );
 }
@@ -112,10 +124,10 @@ class AttendanceHistoryNotifier extends Notifier<AttendanceHistoryState> {
     }
 
     try {
-      final fetched = await _repo.getHistory(startDate: start, endDate: end);
+      final res = await _repo.getHistory(startDate: start, endDate: end, limit: 30);
       
       // Filter out current day (today) history logs as they are shown in the main UI
-      final filtered = fetched.where((e) {
+      final filtered = res.items.where((e) {
         return !(e.date.year == today.year &&
             e.date.month == today.month &&
             e.date.day == today.day);
@@ -124,11 +136,58 @@ class AttendanceHistoryNotifier extends Notifier<AttendanceHistoryState> {
       state = state.copyWith(
         entries: filtered,
         isLoading: false,
+        hasMore: res.hasMore,
+        nextCursor: res.nextCursor,
         clearError: true,
       );
     } on ApiException catch (e) {
       state = state.copyWith(
         isLoading: false,
+        error: e.message,
+      );
+    }
+  }
+
+  Future<void> loadMore() async {
+    if (state.isLoading || state.isLoadingMore || !state.hasMore || state.nextCursor == null) {
+      return;
+    }
+
+    final start = state.startDate;
+    final end = state.endDate;
+    if (start == null || end == null) return;
+
+    state = state.copyWith(
+      isLoadingMore: true,
+      clearError: true,
+    );
+
+    final today = DateTime.now();
+
+    try {
+      final res = await _repo.getHistory(
+        startDate: start,
+        endDate: end,
+        cursor: state.nextCursor,
+        limit: 30,
+      );
+
+      final filtered = res.items.where((e) {
+        return !(e.date.year == today.year &&
+            e.date.month == today.month &&
+            e.date.day == today.day);
+      }).toList();
+
+      state = state.copyWith(
+        entries: [...state.entries, ...filtered],
+        isLoadingMore: false,
+        hasMore: res.hasMore,
+        nextCursor: res.nextCursor,
+        clearError: true,
+      );
+    } on ApiException catch (e) {
+      state = state.copyWith(
+        isLoadingMore: false,
         error: e.message,
       );
     }

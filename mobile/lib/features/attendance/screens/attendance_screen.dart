@@ -698,6 +698,7 @@ class _AttendanceHistorySection extends ConsumerWidget {
     final historyState = ref.watch(attendanceHistoryProvider);
     final notifier = ref.read(attendanceHistoryProvider.notifier);
     final scheme = Theme.of(context).colorScheme;
+    final colors = context.appColors;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -823,7 +824,7 @@ class _AttendanceHistorySection extends ConsumerWidget {
         // History logs
         if (historyState.entries.isEmpty && !historyState.isLoading)
           const _EmptyHistory()
-        else
+        else ...[
           ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -834,6 +835,51 @@ class _AttendanceHistorySection extends ConsumerWidget {
               return _HistoryCard(entry: entry);
             },
           ),
+          if (historyState.hasMore) ...[
+            const SizedBox(height: AppDimens.grid * 2),
+            Center(
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: historyState.isLoadingMore
+                      ? null
+                      : () => ref.read(attendanceHistoryProvider.notifier).loadMore(),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: AppDimens.grid * 1.5),
+                    side: BorderSide(color: scheme.primary.withValues(alpha: 0.3)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+                    ),
+                  ),
+                  child: historyState.isLoadingMore
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          'Load More',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: scheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                ),
+              ),
+            ),
+          ] else if (historyState.entries.length >= 30) ...[
+            const SizedBox(height: AppDimens.grid * 3),
+            Center(
+              child: Text(
+                'End of history logs',
+                style: AppTextStyles.caption.copyWith(
+                  color: colors.textSecondary,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ],
+        ],
       ],
     );
   }

@@ -7,6 +7,20 @@ final attendanceRepositoryProvider = Provider<AttendanceRepository>((ref) {
   return AttendanceRepository(ref.watch(apiClientProvider));
 });
 
+class AttendanceHistoryResponse {
+  const AttendanceHistoryResponse({
+    required this.items,
+    this.nextCursor,
+    required this.hasMore,
+    required this.total,
+  });
+
+  final List<Attendance> items;
+  final String? nextCursor;
+  final bool hasMore;
+  final int total;
+}
+
 class AttendanceRepository {
   AttendanceRepository(this._api);
   final ApiClient _api;
@@ -43,11 +57,11 @@ class AttendanceRepository {
     return Attendance.fromJson(data);
   }
 
-
-  Future<List<Attendance>> getHistory({
+  Future<AttendanceHistoryResponse> getHistory({
     required DateTime startDate,
     required DateTime endDate,
-    int limit = 100,
+    String? cursor,
+    int limit = 30,
   }) async {
     final startStr = startDate.toIso8601String().substring(0, 10);
     final endStr = endDate.toIso8601String().substring(0, 10);
@@ -57,10 +71,17 @@ class AttendanceRepository {
         'start_date': startStr,
         'end_date': endStr,
         'limit': limit,
+        if (cursor != null) 'cursor': cursor,
       },
     );
-    final items = data['items'] as List;
-    return items.map((json) => Attendance.fromJson(json as Map<String, dynamic>)).toList();
+    final list = data['items'] as List;
+    final items = list.map((json) => Attendance.fromJson(json as Map<String, dynamic>)).toList();
+    return AttendanceHistoryResponse(
+      items: items,
+      nextCursor: data['next_cursor'] as String?,
+      hasMore: (data['has_more'] as bool?) ?? false,
+      total: (data['total'] as int?) ?? 0,
+    );
   }
 
   Future<Attendance> _transition(String action, double lat, double lng) async {
