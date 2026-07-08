@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/network/api_exceptions.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -138,6 +140,25 @@ class _VetDashboardScreenState extends ConsumerState<VetDashboardScreen> {
     );
   }
 
+  Future<void> _call(BuildContext context, String phone) async {
+    final uri = Uri(scheme: 'tel', path: phone);
+    try {
+      if (!await launchUrl(uri)) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not start a call to $phone')),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not start a call to $phone')),
+        );
+      }
+    }
+  }
+
   Widget _card(VetRequest r) {
     final colors = context.appColors;
     final scheme = Theme.of(context).colorScheme;
@@ -147,6 +168,9 @@ class _VetDashboardScreenState extends ConsumerState<VetDashboardScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppDimens.grid * 1.5),
       child: AppCard(
+        onTap: r.farmerId != null
+            ? () => context.push('/farmer/${r.farmerId}')
+            : null,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -154,8 +178,10 @@ class _VetDashboardScreenState extends ConsumerState<VetDashboardScreen> {
               children: [
                 Expanded(
                   child: Text(r.farmerName,
-                      style: AppTextStyles.bodyMedium
-                          .copyWith(color: scheme.onSurface),
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: scheme.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                 ),
@@ -192,10 +218,12 @@ class _VetDashboardScreenState extends ConsumerState<VetDashboardScreen> {
                 Icon(Icons.pets_rounded, size: 15, color: colors.textSecondary),
                 const SizedBox(width: 4),
                 Text('${r.vetCattleCount ?? '—'} cattle',
-                    style: AppTextStyles.caption
-                        .copyWith(color: scheme.onSurface)),
+                    style: AppTextStyles.caption.copyWith(
+                      color: scheme.onSurface,
+                      fontWeight: FontWeight.w500,
+                    )),
                 if (r.employeeName != null) ...[
-                  const SizedBox(width: AppDimens.grid),
+                  const SizedBox(width: AppDimens.grid * 1.5),
                   Icon(Icons.person_rounded,
                       size: 15, color: colors.textSecondary),
                   const SizedBox(width: 4),
@@ -210,35 +238,103 @@ class _VetDashboardScreenState extends ConsumerState<VetDashboardScreen> {
               ],
             ),
             if (r.vetNotes != null && r.vetNotes!.isNotEmpty) ...[
-              const SizedBox(height: AppDimens.grid * 0.5),
-              Text(r.vetNotes!,
-                  style: AppTextStyles.caption.copyWith(color: scheme.onSurface),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis),
-            ],
-            const SizedBox(height: AppDimens.grid),
-            Align(
-              alignment: Alignment.centerRight,
-              child: PopupMenuButton<String>(
-                onSelected: (s) => _setStatus(r, s),
-                itemBuilder: (context) => [
-                  for (final s in _statuses)
-                    if (s != r.vetStatus)
-                      PopupMenuItem(
-                          value: s, child: Text('Mark ${_pretty(s)}')),
-                ],
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+              const SizedBox(height: AppDimens.grid),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppDimens.grid * 1.5),
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: scheme.primary.withValues(alpha: 0.15),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.edit_rounded, size: 15, color: scheme.primary),
-                    const SizedBox(width: 4),
-                    Text('Update status',
-                        style: AppTextStyles.caption.copyWith(
+                    Row(
+                      children: [
+                        Icon(Icons.medical_information_rounded,
+                            size: 14, color: scheme.primary),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Symptoms / Notes',
+                          style: AppTextStyles.caption.copyWith(
                             color: scheme.primary,
-                            fontWeight: FontWeight.w600)),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      r.vetNotes!,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: scheme.onSurface,
+                        fontStyle: FontStyle.italic,
+                      ),
+                      maxLines: 5,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),
+            ],
+            const SizedBox(height: AppDimens.grid),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                if (r.phone != null && r.phone!.isNotEmpty)
+                  InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => _call(context, r.phone!),
+                    child: Padding(
+                      padding: const EdgeInsets.only(
+                          left: 0, right: 8, top: 4, bottom: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.phone_in_talk_rounded,
+                              size: 16, color: colors.statusActive),
+                          const SizedBox(width: 4),
+                           Text(
+                            'Call ${r.customerType.label}',
+                            style: AppTextStyles.caption.copyWith(
+                              color: colors.statusActive,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  const SizedBox.shrink(),
+                PopupMenuButton<String>(
+                  onSelected: (s) => _setStatus(r, s),
+                  itemBuilder: (context) => [
+                    for (final s in _statuses)
+                      if (s != r.vetStatus)
+                        PopupMenuItem(
+                            value: s, child: Text('Mark ${_pretty(s)}')),
+                  ],
+                  child: Padding(
+                    padding: const EdgeInsets.only(
+                        left: 8, right: 0, top: 4, bottom: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.edit_rounded, size: 15, color: scheme.primary),
+                        const SizedBox(width: 4),
+                        Text('Update status',
+                            style: AppTextStyles.caption.copyWith(
+                                color: scheme.primary,
+                                fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
