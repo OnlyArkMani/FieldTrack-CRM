@@ -138,9 +138,9 @@ class _DsrReviewScreenState extends ConsumerState<DsrReviewScreen>
         actions: [
           if (!_submitted)
             TextButton(
-              onPressed: _submitting ? null : () => context.go('/home/dashboard'),
+              onPressed: _submitting ? null : _submit,
               child: Text(
-                'Skip for now',
+                'Skip note & submit',
                 style: TextStyle(
                   color: theme.colorScheme.onSurface.withOpacity(0.55),
                   fontSize: 13,
