@@ -41,7 +41,7 @@ class FCMService:
     @property
     def _configured(self) -> bool:
         return bool(
-            self.settings.fcm_service_account_file
+            (self.settings.fcm_service_account_file or self.settings.fcm_service_account_b64)
             and self.settings.fcm_project_id
         )
 
@@ -59,9 +59,17 @@ class FCMService:
             from google.auth.transport.requests import Request
             from google.oauth2 import service_account
 
-            creds = service_account.Credentials.from_service_account_file(
-                self.settings.fcm_service_account_file, scopes=[_SCOPE]
-            )
+            if self.settings.fcm_service_account_b64:
+                import base64
+                decoded = base64.b64decode(self.settings.fcm_service_account_b64).decode("utf-8")
+                info = json.loads(decoded)
+                creds = service_account.Credentials.from_service_account_info(
+                    info, scopes=[_SCOPE]
+                )
+            else:
+                creds = service_account.Credentials.from_service_account_file(
+                    self.settings.fcm_service_account_file, scopes=[_SCOPE]
+                )
             creds.refresh(Request())
             FCMService._access_token = creds.token
             # creds.expiry is naive UTC; convert to epoch for comparison.

@@ -42,6 +42,7 @@ class Settings(BaseSettings):
 
     # FCM
     fcm_service_account_file: str = ""
+    fcm_service_account_b64: str = ""
     fcm_project_id: str = ""
 
     # Rate limiting
