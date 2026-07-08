@@ -9,6 +9,7 @@ Asia/Kolkata):
   09:00  ATTENDANCE_REMINDER  -> active field users with no attendance today
   18:00  END_WORK_REMINDER    -> active field users started-but-not-ended today
   23:00  redis cleanup        -> defensive TTL sweep of live keys
+  :00/:30 VISIT_REMINDER      -> employees with a planned visit ~1h away
 
 TIMEZONE NOTE: APScheduler fires on the business tz, but the "today" used to
 query attendance is the UTC calendar date — that's how attendance.date is
@@ -354,6 +355,47 @@ async def send_1h_followup_reminders() -> None:
         logger.info("FOLLOW_UP 1h reminders sent: %d", len(rows))
 
 
+def _visit_reminder_data(farmer_id: int | None) -> dict[str, str]:
+    """Deep-link payload: a planned-visit reminder opens the farmer's detail."""
+    data = {"screen": "farmer"}
+    if farmer_id is not None:
+        data["farmer_id"] = str(farmer_id)
+    return data
+
+
+async def send_visit_reminders() -> None:
+    """Every 30 min — remind employees of a planned visit ~1 hour away
+    (60±30 min), mirroring send_1h_followup_reminders (checklist B5)."""
+    now = _business_now()
+    today = now.date()
+    if not await _claim(f"visit_reminder:{now.strftime('%Y%m%d%H%M')}"):
+        return
+    t_from = (now + timedelta(minutes=30)).time()
+    upper = now + timedelta(minutes=90)
+    # Clamp to end-of-day if the window would spill into tomorrow.
+    t_to = upper.time() if upper.date() == today else time(23, 59, 59)
+    async with async_session_factory() as db:
+        repo = VisitPlanRepository(db)
+        rows = await repo.due_visit_reminders(today, t_from, t_to)
+        if not rows:
+            return
+        service = NotificationService(db)
+        for item, employee_id, farmer_name in rows:
+            when = item.time_slot.strftime("%H:%M") if item.time_slot else ""
+            await service.send_fcm(
+                employee_id,
+                title="Visit coming up",
+                body=f"Visit {farmer_name or 'a customer'} at {when}.",
+                type="VISIT_REMINDER",
+                data=_visit_reminder_data(item.farmer_id),
+                commit=False,
+            )
+            item.reminder_sent = True
+            db.add(item)
+        await db.commit()
+        logger.info("VISIT reminders sent: %d", len(rows))
+
+
 async def escalate_unacknowledged_followups() -> None:
     """Hourly — escalate to the supervisor any of today's follow-ups still
     PENDING (un-acknowledged) more than 2 hours past their time."""
@@ -696,6 +738,14 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
         send_1h_followup_reminders,
         CronTrigger(minute="0,30"),
         id="fu_1h_reminders",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=600,
+    )
+    scheduler.add_job(
+        send_visit_reminders,
+        CronTrigger(minute="0,30"),
+        id="visit_reminders",
         max_instances=1,
         coalesce=True,
         misfire_grace_time=600,

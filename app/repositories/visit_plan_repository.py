@@ -7,6 +7,7 @@ last meeting note) so the planning cards render in one round-trip. All three
 subqueries are PG + SQLite safe (no DISTINCT ON / window functions).
 """
 from datetime import date as date_type
+from datetime import time as time_type
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -257,3 +258,28 @@ class VisitPlanRepository:
             VisitPlan.status == "SUBMITTED",
         )
         return {r for r in (await self.db.execute(stmt)).scalars().all() if r}
+
+    async def due_visit_reminders(
+        self, today: date_type, t_from: time_type, t_to: time_type
+    ) -> list[tuple[VisitPlanItem, int, str | None]]:
+        """(VisitPlanItem, employee_id, farmer_name) for PLANNED items on
+        today's plan with a time_slot in [t_from, t_to], no reminder sent yet.
+        Used by the planned-visit reminder job."""
+        stmt = (
+            select(VisitPlanItem, VisitPlan.employee_id, Farmer.name)
+            .join(VisitPlan, VisitPlan.id == VisitPlanItem.plan_id)
+            .outerjoin(Farmer, Farmer.id == VisitPlanItem.farmer_id)
+            .where(
+                VisitPlan.plan_date == today,
+                VisitPlanItem.time_slot.is_not(None),
+                VisitPlanItem.time_slot >= t_from,
+                VisitPlanItem.time_slot <= t_to,
+                VisitPlanItem.status == "PLANNED",
+                VisitPlanItem.reminder_sent.is_(False),
+            )
+        )
+        return [
+            (row[0], row[1], row[2])
+            for row in (await self.db.execute(stmt)).all()
+            if row[1] is not None
+        ]

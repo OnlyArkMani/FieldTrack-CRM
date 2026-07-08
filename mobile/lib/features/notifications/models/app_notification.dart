@@ -22,6 +22,7 @@ enum AppNotificationType {
   dsrLateSupervisor('DSR_LATE_SUPERVISOR'),
   dsrComment('DSR_COMMENT'),
   orderCaptured('ORDER_CAPTURED'),
+  visitReminder('VISIT_REMINDER'),
   unknown('UNKNOWN');
 
   const AppNotificationType(this.wire);
@@ -49,7 +50,8 @@ enum AppNotificationType {
         // CRM in-app routes (list screens — no per-entity id is stored on the
         // in-app row; the FCM push-tap path deep-links to the farmer detail).
         AppNotificationType.planReminder ||
-        AppNotificationType.planNotSubmitted =>
+        AppNotificationType.planNotSubmitted ||
+        AppNotificationType.visitReminder =>
           '/planning',
         AppNotificationType.followUpReminder ||
         AppNotificationType.followUpEscalated =>
@@ -85,6 +87,7 @@ enum AppNotificationType {
         AppNotificationType.dsrLateSupervisor => Icons.report_problem_rounded,
         AppNotificationType.dsrComment => Icons.comment_rounded,
         AppNotificationType.orderCaptured => Icons.shopping_bag_rounded,
+        AppNotificationType.visitReminder => Icons.event_note_rounded,
         AppNotificationType.unknown => Icons.notifications_rounded,
       };
 
