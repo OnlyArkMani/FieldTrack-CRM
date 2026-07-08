@@ -93,7 +93,9 @@ class VisitOrder {
 }
 
 /// One photo attached to a visit (checklist #24). The image bytes are fetched
-/// from [downloadUrl] (relative to the API base) with the bearer token.
+/// from [downloadUrl] (a full path from the server root, e.g. already
+/// including `/api/v1` — resolve against `Env.apiOrigin`, not `Env.apiBaseUrl`)
+/// with the bearer token.
 class VisitPhoto {
   const VisitPhoto({
     required this.id,

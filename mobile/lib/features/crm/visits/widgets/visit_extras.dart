@@ -288,7 +288,7 @@ class _VisitPhotosSectionState extends ConsumerState<VisitPhotosSection> {
             children: [
               for (final p in _photos)
                 _Thumb(
-                  url: '${Env.apiBaseUrl}${p.downloadUrl}',
+                  url: '${Env.apiOrigin}${p.downloadUrl}',
                   token: token,
                   onDelete: _busy ? null : () => _delete(p),
                 ),
