@@ -126,32 +126,53 @@ class _DsrReviewScreenState extends ConsumerState<DsrReviewScreen>
     final dateLabel =
         DateFormat('d MMMM yyyy').format(widget.reportDate.toLocal());
 
-    return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        title: Text(
-          "Today's Summary",
-          style: AppTextStyles.heading,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        actions: [
-          if (!_submitted)
-            TextButton(
-              onPressed: _submitting ? null : _submit,
-              child: Text(
-                'Skip note & submit',
-                style: TextStyle(
-                  color: theme.colorScheme.onSurface.withOpacity(0.55),
-                  fontSize: 13,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/home/dashboard');
+          }
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/home/dashboard');
+              }
+            },
+          ),
+          title: Text(
+            "Today's Summary",
+            style: AppTextStyles.heading,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          actions: [
+            if (!_submitted)
+              TextButton(
+                onPressed: _submitting ? null : _submit,
+                child: Text(
+                  'Skip note & submit',
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurface.withOpacity(0.55),
+                    fontSize: 13,
+                  ),
                 ),
               ),
-            ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: SafeArea(
-        child: _submitted ? _buildSuccess(context) : _buildBody(context, dateLabel),
+            const SizedBox(width: 8),
+          ],
+        ),
+        body: SafeArea(
+          child: _submitted ? _buildSuccess(context) : _buildBody(context, dateLabel),
+        ),
       ),
     );
   }

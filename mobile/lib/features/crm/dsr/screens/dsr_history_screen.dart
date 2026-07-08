@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'package:go_router/go_router.dart';
+
 import '../../../../core/network/api_exceptions.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -88,49 +90,71 @@ class _DsrHistoryScreenState extends ConsumerState<DsrHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final monthLabel = DateFormat('MMMM yyyy')
-        .format(DateTime(_selectedYear, _selectedMonth));
+    final monthLabel =
+        DateFormat('MMMM yyyy').format(DateTime(_selectedYear, _selectedMonth));
     final isCurrentMonth =
         _selectedMonth == _now.month && _selectedYear == _now.year;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'DSR',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/home/dashboard');
+          }
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/home/dashboard');
+              }
+            },
+          ),
+          title: const Text(
+            'DSR',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Month picker
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.chevron_left),
-                    onPressed: _prevMonth,
-                  ),
-                  Text(
-                    monthLabel,
-                    style: AppTextStyles.heading,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.chevron_right),
-                    onPressed: isCurrentMonth ? null : _nextMonth,
-                  ),
-                ],
+        body: SafeArea(
+          child: Column(
+            children: [
+              // Month picker
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left),
+                      onPressed: _prevMonth,
+                    ),
+                    Text(
+                      monthLabel,
+                      style: AppTextStyles.heading,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right),
+                      onPressed: isCurrentMonth ? null : _nextMonth,
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: _buildBody(context),
-            ),
-          ],
+              const Divider(height: 1),
+              Expanded(
+                child: _buildBody(context),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -245,9 +269,9 @@ class _StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withValues(alpha:0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha:0.35)),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
       child: Text(
         isSubmitted ? 'Submitted' : 'Draft',
@@ -265,14 +289,14 @@ class _LateBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: coral.withValues(alpha:0.12),
+        color: coral.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: coral.withValues(alpha:0.4)),
+        border: Border.all(color: coral.withValues(alpha: 0.4)),
       ),
       child: const Text(
         'LATE',
-        style: TextStyle(
-            color: coral, fontSize: 10, fontWeight: FontWeight.w700),
+        style:
+            TextStyle(color: coral, fontSize: 10, fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -305,8 +329,8 @@ class _DsrDetailViewState extends ConsumerState<_DsrDetailView> {
     try {
       final repo = ref.read(dsrRepositoryProvider);
       final path = await repo.downloadMyDsrCsv(widget.summary.reportDate);
-      final dateLabel = DateFormat('d MMM yyyy')
-          .format(widget.summary.reportDate.toLocal());
+      final dateLabel =
+          DateFormat('d MMM yyyy').format(widget.summary.reportDate.toLocal());
       await Share.shareXFiles([XFile(path)], subject: 'DSR · $dateLabel');
     } on ApiException catch (e) {
       if (mounted) {
@@ -343,8 +367,8 @@ class _DsrDetailViewState extends ConsumerState<_DsrDetailView> {
 
   @override
   Widget build(BuildContext context) {
-    final title = DateFormat('d MMMM yyyy')
-        .format(widget.summary.reportDate.toLocal());
+    final title =
+        DateFormat('d MMMM yyyy').format(widget.summary.reportDate.toLocal());
     return Scaffold(
       appBar: AppBar(
         title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -411,8 +435,7 @@ class _DsrDetailViewState extends ConsumerState<_DsrDetailView> {
                 value: d.coldLeads.toString(),
                 color: const Color(0xFF8B7FD4)),
             _InfoChip(
-                label: 'Follow-ups',
-                value: d.followUps.length.toString()),
+                label: 'Follow-ups', value: d.followUps.length.toString()),
           ],
         ),
         const SizedBox(height: 16),
@@ -422,8 +445,7 @@ class _DsrDetailViewState extends ConsumerState<_DsrDetailView> {
           _SectionLabel('Visits'),
           ...d.visits.map(
             (v) => AppCard(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Row(
                 children: [
                   Expanded(
@@ -465,8 +487,7 @@ class _DsrDetailViewState extends ConsumerState<_DsrDetailView> {
           _SectionLabel('Orders'),
           ...d.orders.map(
             (o) => AppCard(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Row(
                 children: [
                   Expanded(
@@ -507,7 +528,7 @@ class _DsrDetailViewState extends ConsumerState<_DsrDetailView> {
         if (d.managerComment != null && d.managerComment!.isNotEmpty) ...[
           _SectionLabel('Manager Comment'),
           AppCard(
-            color: const Color(0xFFF5A623).withValues(alpha:0.1),
+            color: const Color(0xFFF5A623).withValues(alpha: 0.1),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -539,8 +560,7 @@ class _SectionLabel extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 8, top: 4),
         child: Text(
           label,
-          style: AppTextStyles.caption
-              .copyWith(fontWeight: FontWeight.w600),
+          style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600),
         ),
       );
 }
@@ -557,23 +577,19 @@ class _InfoChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: c.withValues(alpha:0.08),
+        color: c.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: c.withValues(alpha:0.25)),
+        border: Border.all(color: c.withValues(alpha: 0.25)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(value,
               style: TextStyle(
-                  color: c,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14)),
+                  color: c, fontWeight: FontWeight.w700, fontSize: 14)),
           const SizedBox(width: 4),
           Text(label,
-              style: TextStyle(
-                  color: c.withValues(alpha:0.8),
-                  fontSize: 12)),
+              style: TextStyle(color: c.withValues(alpha: 0.8), fontSize: 12)),
         ],
       ),
     );
@@ -597,14 +613,13 @@ class _LeadBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: c.withValues(alpha:0.12),
+        color: c.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: c.withValues(alpha:0.4)),
+        border: Border.all(color: c.withValues(alpha: 0.4)),
       ),
       child: Text(
         status,
-        style:
-            TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.w600),
+        style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.w600),
       ),
     );
   }

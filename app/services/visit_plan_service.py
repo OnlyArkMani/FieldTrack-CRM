@@ -131,8 +131,11 @@ class VisitPlanService:
         # (checklist: missed-visit carry-over). Only merged for today/future
         # plans, never when reviewing a past date.
         if plan_date >= self._today_business():
+            # Carry-over only includes items from strictly past dates. Any item
+            # planned for today or future dates is not "missed" yet.
+            query_date = min(plan_date, self._today_business())
             missed_rows = await self.repo.missed_plan_items_joined(
-                employee_id, plan_date
+                employee_id, query_date
             )
             for r in missed_rows:
                 item = r[0]
