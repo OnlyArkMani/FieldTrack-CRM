@@ -44,6 +44,25 @@ class AttendanceRepository {
   }
 
 
+  Future<List<Attendance>> getHistory({
+    required DateTime startDate,
+    required DateTime endDate,
+    int limit = 100,
+  }) async {
+    final startStr = startDate.toIso8601String().substring(0, 10);
+    final endStr = endDate.toIso8601String().substring(0, 10);
+    final data = await _api.get(
+      '/attendance/history',
+      query: {
+        'start_date': startStr,
+        'end_date': endStr,
+        'limit': limit,
+      },
+    );
+    final items = data['items'] as List;
+    return items.map((json) => Attendance.fromJson(json as Map<String, dynamic>)).toList();
+  }
+
   Future<Attendance> _transition(String action, double lat, double lng) async {
     final data =
         await _api.post('/attendance/$action', body: {'lat': lat, 'lng': lng});

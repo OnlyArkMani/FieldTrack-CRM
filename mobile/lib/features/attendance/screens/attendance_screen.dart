@@ -16,6 +16,7 @@ import '../../../widgets/sync_status_indicator.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../models/attendance.dart';
 import '../providers/attendance_provider.dart';
+import '../providers/attendance_history_provider.dart';
 import '../widgets/attendance_timer.dart';
 import '../widgets/session_timeline.dart';
 import '../widgets/work_summary_sheet.dart';
@@ -110,7 +111,12 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
       ),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () => ref.read(attendanceProvider.notifier).load(),
+          onRefresh: () async {
+            await Future.wait([
+              ref.read(attendanceProvider.notifier).load(),
+              ref.read(attendanceHistoryProvider.notifier).load(),
+            ]);
+          },
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(AppDimens.grid * 2),
@@ -145,6 +151,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
                 const SizedBox(height: AppDimens.grid),
                 SessionTimeline(
                     sessions: state.attendance?.sessions ?? const []),
+                const SizedBox(height: AppDimens.grid * 4),
+                const _AttendanceHistorySection(),
               ],
             ],
           ),
@@ -680,4 +688,368 @@ String _fmtMinutes(int minutes) {
 String _fmtDistance(double meters) {
   if (meters < 1000) return '${meters.round()} m';
   return '${(meters / 1000).toStringAsFixed(1)} km';
+}
+
+class _AttendanceHistorySection extends ConsumerWidget {
+  const _AttendanceHistorySection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final historyState = ref.watch(attendanceHistoryProvider);
+    final notifier = ref.read(attendanceHistoryProvider.notifier);
+    final scheme = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                'Attendance History',
+                style: AppTextStyles.heading.copyWith(fontSize: 18),
+              ),
+            ),
+            if (historyState.isLoading) ...[
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: AppDimens.grid * 1.5),
+            ],
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimens.grid * 1.5,
+                vertical: AppDimens.grid * 0.5,
+              ),
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: scheme.primary.withValues(alpha: 0.15),
+                  width: 1.2,
+                ),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<HistoryFilterType>(
+                  value: historyState.filterType,
+                  isDense: true,
+                  icon: Icon(
+                    Icons.arrow_drop_down_rounded,
+                    color: scheme.primary,
+                    size: 20,
+                  ),
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: scheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  dropdownColor: scheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(16),
+                  onChanged: (type) {
+                    if (type != null) {
+                      if (type == HistoryFilterType.custom) {
+                        _showCustomRangePicker(context, ref);
+                      } else {
+                        notifier.setFilter(type);
+                      }
+                    }
+                  },
+                  items: HistoryFilterType.values.map((type) {
+                    return DropdownMenuItem(
+                      value: type,
+                      child: Text(type.label),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: AppDimens.grid * 1.5),
+
+        // Custom Date Range Display
+        if (historyState.filterType == HistoryFilterType.custom &&
+            historyState.startDate != null &&
+            historyState.endDate != null) ...[
+          InkWell(
+            onTap: () => _showCustomRangePicker(context, ref),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimens.grid * 2,
+                vertical: AppDimens.grid * 1.5,
+              ),
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: scheme.primary.withValues(alpha: 0.15),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.calendar_today_rounded, size: 16, color: scheme.primary),
+                  const SizedBox(width: AppDimens.grid * 1.5),
+                  Text(
+                    '${DateFormat('d MMM yyyy').format(historyState.startDate!)}  —  ${DateFormat('d MMM yyyy').format(historyState.endDate!)}',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: scheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Spacer(),
+                  Icon(Icons.edit_calendar_rounded, size: 16, color: scheme.primary),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: AppDimens.grid * 2),
+        ],
+
+        // Error message
+        if (historyState.error != null) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppDimens.grid * 2),
+            child: Text(
+              historyState.error!,
+              style: AppTextStyles.bodyMedium.copyWith(color: scheme.error),
+            ),
+          ),
+        ],
+
+        // History logs
+        if (historyState.entries.isEmpty && !historyState.isLoading)
+          const _EmptyHistory()
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: historyState.entries.length,
+            separatorBuilder: (context, index) => const SizedBox(height: AppDimens.grid * 1.5),
+            itemBuilder: (context, index) {
+              final entry = historyState.entries[index];
+              return _HistoryCard(entry: entry);
+            },
+          ),
+      ],
+    );
+  }
+
+  Future<void> _showCustomRangePicker(BuildContext context, WidgetRef ref) async {
+    final historyState = ref.read(attendanceHistoryProvider);
+    final initialRange = (historyState.startDate != null && historyState.endDate != null)
+        ? DateTimeRange(start: historyState.startDate!, end: historyState.endDate!)
+        : DateTimeRange(
+            start: DateTime.now().subtract(const Duration(days: 7)),
+            end: DateTime.now(),
+          );
+
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime.now().subtract(const Duration(days: 365 * 3)),
+      lastDate: DateTime.now(),
+      initialDateRange: initialRange,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+                  primary: Theme.of(context).colorScheme.primary,
+                  onPrimary: Theme.of(context).colorScheme.onPrimary,
+                  surface: Theme.of(context).colorScheme.surface,
+                  onSurface: Theme.of(context).colorScheme.onSurface,
+                ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (range != null) {
+      ref.read(attendanceHistoryProvider.notifier).setCustomRange(range.start, range.end);
+    }
+  }
+}
+
+class _EmptyHistory extends StatelessWidget {
+  const _EmptyHistory();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.all(AppDimens.grid * 3),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(
+              Icons.history_toggle_off_rounded,
+              size: 40,
+              color: context.appColors.textSecondary.withValues(alpha: 0.5),
+            ),
+            const SizedBox(height: AppDimens.grid),
+            Text(
+              'No logs found in this range',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: context.appColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HistoryCard extends StatefulWidget {
+  const _HistoryCard({required this.entry});
+  final Attendance entry;
+
+  @override
+  State<_HistoryCard> createState() => _HistoryCardState();
+}
+
+class _HistoryCardState extends State<_HistoryCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final colors = context.appColors;
+    final entry = widget.entry;
+
+    // Status colors
+    final (Color badgeBg, Color badgeFg) = switch (entry.status) {
+      AttendanceStatusValue.present => (Colors.green.shade50, Colors.green.shade700),
+      AttendanceStatusValue.onLeave => (Colors.blue.shade50, Colors.blue.shade700),
+      AttendanceStatusValue.halfDay => (Colors.orange.shade50, Colors.orange.shade700),
+      AttendanceStatusValue.absent || _ => (Colors.red.shade50, Colors.red.shade700),
+    };
+
+    final statusLabel = switch (entry.status) {
+      AttendanceStatusValue.present => 'Present',
+      AttendanceStatusValue.onLeave => 'On Leave',
+      AttendanceStatusValue.halfDay => 'Half Day',
+      AttendanceStatusValue.absent || _ => 'Absent',
+    };
+
+    // Calculate hours / minutes
+    final hours = entry.totalDurationMinutes ~/ 60;
+    final mins = entry.totalDurationMinutes % 60;
+    final durationStr = hours > 0 ? '${hours}h ${mins}m' : '${mins}m';
+    final distanceKm = (entry.totalDistanceMeters / 1000).toStringAsFixed(1);
+
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.grid * 2,
+              vertical: AppDimens.grid * 0.5,
+            ),
+            title: Text(
+              DateFormat('EEE, d MMM yyyy').format(entry.date),
+              style: AppTextStyles.body.copyWith(
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurface,
+              ),
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: AppDimens.grid * 0.75),
+              child: Row(
+                children: [
+                  Icon(Icons.timer_outlined, size: 14, color: colors.textSecondary),
+                  const SizedBox(width: 4),
+                  Text(
+                    durationStr,
+                    style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+                  ),
+                  const SizedBox(width: AppDimens.grid * 2),
+                  Icon(Icons.directions_walk_rounded, size: 14, color: colors.textSecondary),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${distanceKm} km',
+                    style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: badgeBg,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    statusLabel,
+                    style: AppTextStyles.caption.copyWith(
+                      color: badgeFg,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (entry.sessions.isNotEmpty) ...[
+                  const SizedBox(width: AppDimens.grid),
+                  Icon(
+                    _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                    color: colors.textSecondary,
+                  ),
+                ],
+              ],
+            ),
+            onTap: entry.sessions.isEmpty
+                ? null
+                : () {
+                    setState(() {
+                      _expanded = !_expanded;
+                    });
+                  },
+          ),
+          if (_expanded && entry.sessions.isNotEmpty) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(AppDimens.grid * 2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Timeline Logs',
+                    style: AppTextStyles.caption.copyWith(
+                      color: colors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: AppDimens.grid * 1.5),
+                  SessionTimeline(sessions: entry.sessions),
+                  if (entry.workSummary != null && entry.workSummary!.isNotEmpty) ...[
+                    const SizedBox(height: AppDimens.grid * 1.5),
+                    const Divider(),
+                    const SizedBox(height: AppDimens.grid),
+                    Text(
+                      'Work Summary',
+                      style: AppTextStyles.caption.copyWith(
+                        color: colors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      entry.workSummary!,
+                      style: AppTextStyles.bodyMedium.copyWith(color: scheme.onSurface),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
