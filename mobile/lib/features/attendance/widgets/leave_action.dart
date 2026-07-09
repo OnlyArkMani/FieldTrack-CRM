@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers/attendance_history_provider.dart';
 import '../providers/attendance_provider.dart';
+import '../providers/upcoming_leaves_provider.dart';
 
 /// Shared "apply for leave" flow used by both the home dashboard tile and
 /// the full Attendance screen. `restrictToFuture` must be true whenever
@@ -54,4 +56,6 @@ Future<void> applyForLeave(
   await ref
       .read(attendanceProvider.notifier)
       .markLeave(date: isToday ? null : picked);
+  ref.read(attendanceHistoryProvider.notifier).load();
+  ref.read(upcomingLeavesProvider.notifier).load();
 }
