@@ -156,6 +156,7 @@ class LocationService:
         now = datetime.now(timezone.utc)
         processed = skipped = failed = 0
         mappings: list[dict] = []
+        claimed_keys: list[str] = []  # dedup keys to release if the insert fails
         newest = None  # newest accepted record, for the live cache
 
         for record in batch.records:
@@ -168,8 +169,9 @@ class LocationService:
                 continue
 
             # Atomic claim: False => another request already processed this fix.
+            dedup_key = Keys.sync_processed(_dedup_hash(user.id, ts))
             claimed = await self.redis.set(
-                Keys.sync_processed(_dedup_hash(user.id, ts)),
+                dedup_key,
                 "1",
                 nx=True,
                 ex=DEDUP_TTL_SECONDS,
@@ -177,6 +179,7 @@ class LocationService:
             if not claimed:
                 skipped += 1
                 continue
+            claimed_keys.append(dedup_key)
 
             mappings.append({
                 "user_id": user.id,
@@ -198,8 +201,21 @@ class LocationService:
         prev = await self.repo.latest_for_user(user.id) if newest is not None else None
 
         if mappings:
-            await self.repo.bulk_insert(mappings)
-            await self.db.commit()
+            try:
+                await self.repo.bulk_insert(mappings)
+                await self.db.commit()
+            except Exception:
+                # The dedup keys were claimed BEFORE the insert. If the insert
+                # fails we must release them, otherwise the device's retry of
+                # this batch is skipped as "duplicate" and the fixes are lost
+                # forever (permanent gaps in the trail).
+                await self.db.rollback()
+                if claimed_keys:
+                    pipe = self.redis.pipeline()
+                    for k in claimed_keys:
+                        pipe.delete(k)
+                    await pipe.execute()
+                raise
 
         if newest is not None:
             await self._update_live_cache(user.id, newest)
