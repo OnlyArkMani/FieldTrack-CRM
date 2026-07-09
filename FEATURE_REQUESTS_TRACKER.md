@@ -25,7 +25,7 @@ Each item below has the current codebase state as found, plus what needs to chan
 
 - No auto *check-in* exists anywhere in the backend or mobile app.
 - Auto **clock-out** exists: `app/api/v1/attendance.py:83-108` — `POST /attendance/end` treats a request with `work_summary == None` as mobile's "auto-clock-out-on-logout" (checklist #52) and auto-submits the DSR via `generate_and_submit_dsr` (`app/services/dsr_service.py`). A manual End (has `work_summary`) leaves the DSR in DRAFT.
-- State machine lives in `app/services/attendance_service.py` (`AttendanceService.transition_state`), roles in `app/models/enums.py::UserRole` (ADMIN/MANAGER/EMPLOYEE — "executive" = EMPLOYEE colloquially, see comments in `app/core/scheduler.py`, `app/repositories/notification_repository.py`).
+- State machine lives in `app/services/attendance_service.py` (`AttendanceService.transition_state`), roles in `app/models/enums.py::UserRole` (ADMIN/SUPERVISOR/EMPLOYEE — "executive" = EMPLOYEE colloquially, see comments in `app/core/scheduler.py`, `app/repositories/notification_repository.py`).
 - Mobile: `mobile/lib/features/attendance/screens/attendance_screen.dart` — START/BREAK/RESUME/END all manual taps today; need to find the logout call site that fires `/attendance/end` with no summary (not yet located — likely in an auth/session-teardown service).
 
 **What needs to change:** Remove/disable the no-summary auto-clock-out path (or gate it off for EMPLOYEE role) so attendance END always requires the manual work-summary flow. Confirm there's truly no auto check-in path before implementing (client wording implies one may be expected elsewhere, e.g. geofence-triggered) — clarify with client if unclear.
@@ -115,7 +115,7 @@ Client narrowed the original broad "read-only after checkout" ask to specificall
 
 **Found already in place (no change needed):**
 
-- Backend already enforced this exactly: `app/services/visit_service.py:132-139` — `check_in()` calls `AttendanceService.is_active_today(user.id)` (`app/services/attendance_service.py:278-285`, which returns `False` when state is `ENDED` or `NULL`) and raises `attendance_required()` (403, `ATTENDANCE_REQUIRED`) for EMPLOYEE role only — managers/admins exempt. `create_farmer` (`app/api/v1/farmers.py:180`, `app/services/farmer_service.py:179`) has no attendance gate at all, so adding a farmer was never blocked.
+- Backend already enforced this exactly: `app/services/visit_service.py:132-139` — `check_in()` calls `AttendanceService.is_active_today(user.id)` (`app/services/attendance_service.py:278-285`, which returns `False` when state is `ENDED` or `NULL`) and raises `attendance_required()` (403, `ATTENDANCE_REQUIRED`) for EMPLOYEE role only — supervisors/admins exempt. `create_farmer` (`app/api/v1/farmers.py:180`, `app/services/farmer_service.py:179`) has no attendance gate at all, so adding a farmer was never blocked.
 
 **Changed:**
 
@@ -150,7 +150,7 @@ Client supplied the logo directly: `https://samarthagri.com/wp-content/uploads/2
 **Current state:**
 
 - `mobile/lib/features/profile/screens/profile_screen.dart:139-140` has an "Edit Profile" list item that is a **stub**: `onTap: () {/* edit-profile ships with profile phase */}` — does nothing today.
-- Backend: `GET /auth/me` exists (`app/api/v1/auth.py:132`) returning `UserOut`, but there is no self-service update endpoint (PATCH/PUT) for a user's own profile. `PUT /employees/{employee_id}` exists (`app/api/v1/employees.py:87`) but that's the admin/manager-facing employee-management endpoint, not a self-edit endpoint, and is likely gated to ADMIN/MANAGER roles.
+- Backend: `GET /auth/me` exists (`app/api/v1/auth.py:132`) returning `UserOut`, but there is no self-service update endpoint (PATCH/PUT) for a user's own profile. `PUT /employees/{employee_id}` exists (`app/api/v1/employees.py:87`) but that's the admin/supervisor-facing employee-management endpoint, not a self-edit endpoint, and is likely gated to ADMIN/SUPERVISOR roles.
 
 **What needs to change:** Add a `PATCH /auth/me` (or similar) self-update endpoint (name, phone, maybe photo — confirm which fields are editable vs locked), wire the mobile stub to a new edit-profile form screen calling it.
 

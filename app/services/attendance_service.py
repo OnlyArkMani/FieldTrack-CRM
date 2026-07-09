@@ -280,8 +280,7 @@ class AttendanceService:
         (checklist A15) for employees — managers/admins are exempt."""
         day = self._today()
         attendance = await self.repo.get_for_user_date(user_id, day)
-        state = await self._current_state(user_id, attendance)
-        return state not in ("NULL", "ENDED", "ON_LEAVE")
+        return await self._current_state(user_id, attendance)
 
     async def get_today(self, user_id: int) -> TodayAttendanceOut:
         day = self._today()

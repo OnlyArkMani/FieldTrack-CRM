@@ -68,10 +68,10 @@ stateless tokens; refresh rotation with a Redis allowlist detects token theft.
 field, but JWT auth requires one. Added `password_hash` (bcrypt). If you
 later want OTP-only login, it becomes nullable in a 2-line migration.
 
-**ASSUMPTION — `managers` table dropped.** The earlier table list had a
-separate `managers` table; the final schema models it as
-`teams.manager_id → users.id` + `role=MANAGER`, which is normalized and
-was implied by your column spec. One manager per team; a manager's
+**ASSUMPTION — `supervisors` table dropped.** The earlier table list had a
+separate `supervisors` table; the final schema models it as
+`teams.supervisor_id → users.id` + `role=SUPERVISOR`, which is normalized and
+was implied by your column spec. One supervisor per team; a supervisor's
 scope = their team's members.
 
 **Circular FK users↔teams** handled with `use_alter` (ORM) and
@@ -129,13 +129,13 @@ service-account JSON path + project id for the HTTP v1 API instead.
 
 ## Scaling story to 100 employees (config-only)
 
-| Knob                      | Now   | At 100                 |
-| ------------------------- | ----- | ---------------------- |
-| `DB_POOL_SIZE`            | 10    | 20                     |
-| `UVICORN_WORKERS`         | 2     | 2–3 (or bump vCPU)     |
-| Postgres `shared_buffers` | 256MB | 512MB (if RAM raised)  |
-| Redis maxmemory           | 200mb | unchanged (≪1 MB used) |
-| Schema/code               | —     | **unchanged**          |
+| Knob | Now | At 100 |
+|---|---|---|
+| `DB_POOL_SIZE` | 10 | 20 |
+| `UVICORN_WORKERS` | 2 | 2–3 (or bump vCPU) |
+| Postgres `shared_buffers` | 256MB | 512MB (if RAM raised) |
+| Redis maxmemory | 200mb | unchanged (≪1 MB used) |
+| Schema/code | — | **unchanged** |
 
 ## Getting started
 

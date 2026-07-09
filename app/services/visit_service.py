@@ -24,7 +24,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.exceptions import attendance_required, bad_request, forbidden, not_found
+from app.core.exceptions import (
+    attendance_required,
+    bad_request,
+    forbidden,
+    not_found,
+    on_leave_blocked,
+)
 from app.core.storage import get_storage
 from app.models.crm import (
     Farmer,
@@ -135,7 +141,10 @@ class VisitService:
         # visit. Managers/admins are exempt — attendance isn't mandatory
         # for them.
         if not self._is_privileged(user):
-            if not await AttendanceService(self.db).is_active_today(user.id):
+            state = await AttendanceService(self.db).current_state_today(user.id)
+            if state == "ON_LEAVE":
+                raise on_leave_blocked()
+            if state in ("NULL", "ENDED"):
                 raise attendance_required()
 
         now = datetime.now(timezone.utc)
