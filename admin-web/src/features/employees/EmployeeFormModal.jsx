@@ -5,6 +5,7 @@ import { Input, Select } from "@/components/ui/Input";
 import { apiErrorMessage } from "@/services/api/client";
 import { useCreateEmployee, useUpdateEmployee } from "@/hooks/useEmployees";
 import { useTeams } from "@/hooks/useTeams";
+import { INDIAN_STATES, INDIAN_UNION_TERRITORIES } from "@/lib/indianStates";
 
 const EMPTY = {
   name: "",
@@ -17,7 +18,8 @@ const EMPTY = {
   state: "",
 };
 
-/** Create or edit an employee. Pass `employee` to edit, omit to create. */
+/** Create or edit an employee. Pass `employee` to edit, omit to create.
+ * Assigning a manager to a team happens on the Teams page, not here. */
 export default function EmployeeFormModal({ open, onClose, employee }) {
   const isEdit = !!employee;
   const { data: teams = [] } = useTeams();
@@ -50,6 +52,10 @@ export default function EmployeeFormModal({ open, onClose, employee }) {
   }, [open, employee]);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  // Phone is digits-only, capped at 10 — strip anything else as it's typed
+  // (also blocks paste of formatted numbers) rather than validating after.
+  const setPhone = (e) =>
+    setForm((f) => ({ ...f, phone: e.target.value.replace(/\D/g, "").slice(0, 10) }));
   const pending = create.isPending || update.isPending;
 
   const submit = async () => {
@@ -79,12 +85,16 @@ export default function EmployeeFormModal({ open, onClose, employee }) {
     }
   };
 
+  // Edit allows leaving phone as-is (already saved); create always requires
+  // a full 10 digits, matching the backend's E.164-less 10-digit convention.
+  const phoneValid = isEdit ? form.phone.length === 0 || form.phone.length === 10 : form.phone.length === 10;
+
   const valid =
     form.name.trim().length >= 2 &&
+    phoneValid &&
     (isEdit ||
       (form.email.includes("@") &&
         password.length >= 8 &&
-        form.phone.trim().length > 0 &&
         form.village.trim().length > 0 &&
         form.district.trim().length > 0 &&
         form.state.trim().length > 0));
@@ -106,20 +116,34 @@ export default function EmployeeFormModal({ open, onClose, employee }) {
       }
     >
       <div className="space-y-4">
-        <Input label="Full name" value={form.name} onChange={set("name")} />
+        <Input
+          label="Full name"
+          value={form.name}
+          onChange={set("name")}
+          placeholder="Full name"
+        />
         {!isEdit && (
           <Input
             label="Email"
             type="email"
             value={form.email}
             onChange={set("email")}
+            placeholder="name@example.com"
           />
         )}
         <Input
           label="Phone"
+          type="tel"
+          inputMode="numeric"
+          maxLength={10}
           value={form.phone}
-          onChange={set("phone")}
-          placeholder="Phone"
+          onChange={setPhone}
+          placeholder="10-digit phone number"
+          error={
+            form.phone.length > 0 && form.phone.length < 10
+              ? "Enter a 10-digit phone number"
+              : undefined
+          }
         />
         {!isEdit && (
           <Input
@@ -158,12 +182,19 @@ export default function EmployeeFormModal({ open, onClose, employee }) {
             onChange={set("district")}
             placeholder={"District"}
           />
-          <Input
-            label="State"
-            value={form.state}
-            onChange={set("state")}
-            placeholder={"State"}
-          />
+          <Select label="State" value={form.state} onChange={set("state")}>
+            <option value="">Select state / UT</option>
+            <optgroup label="States">
+              {INDIAN_STATES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Union Territories">
+              {INDIAN_UNION_TERRITORIES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </optgroup>
+          </Select>
         </div>
         {error && <p className="text-sm text-danger">{error}</p>}
       </div>

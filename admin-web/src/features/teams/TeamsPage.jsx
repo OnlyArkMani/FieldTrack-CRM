@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { Plus, Trash2, Users, ShieldCheck } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Plus, Trash2, Pencil, Users, ShieldCheck } from 'lucide-react';
 
 import {
   useTeams,
   useCreateTeam,
+  useUpdateTeam,
   useDeleteTeam,
 } from '@/hooks/useTeams';
 import { useEmployees } from '@/hooks/useEmployees';
@@ -32,8 +33,14 @@ function PerformanceRing({ pct }) {
   );
 }
 
-function CreateTeamModal({ open, onClose }) {
+/** Create when `team` is omitted, edit an existing team otherwise. A manager
+ * has no uniqueness constraint on the backend (Team.manager_id has no unique
+ * index) — this form lets you pick a manager who already owns other teams,
+ * and surfaces that fact so the assignment is a deliberate choice. */
+function TeamFormModal({ open, onClose, team, teams }) {
+  const isEdit = !!team;
   const create = useCreateTeam();
+  const update = useUpdateTeam(team?.id);
   const { data: emps } = useEmployees({});
   const managers = (emps?.items || []).filter(
     (e) => e.role === 'MANAGER' || e.role === 'ADMIN',
@@ -43,17 +50,32 @@ function CreateTeamModal({ open, onClose }) {
   const [managerId, setManagerId] = useState('');
   const [error, setError] = useState(null);
 
+  useEffect(() => {
+    if (open) {
+      setError(null);
+      setName(team?.name || '');
+      setDescription(team?.description || '');
+      setManagerId(team?.manager_id ? String(team.manager_id) : '');
+    }
+  }, [open, team]);
+
+  const otherTeamsForManager = managerId
+    ? teams.filter((t) => String(t.manager_id) === managerId && t.id !== team?.id)
+    : [];
+
   const submit = async () => {
     setError(null);
     try {
-      await create.mutateAsync({
+      const payload = {
         name: name.trim(),
         description: description.trim() || null,
         manager_id: managerId === '' ? null : Number(managerId),
-      });
-      setName('');
-      setDescription('');
-      setManagerId('');
+      };
+      if (isEdit) {
+        await update.mutateAsync(payload);
+      } else {
+        await create.mutateAsync(payload);
+      }
       onClose();
     } catch (err) {
       setError(apiErrorMessage(err));
@@ -64,12 +86,12 @@ function CreateTeamModal({ open, onClose }) {
     <Modal
       open={open}
       onClose={onClose}
-      title="New team"
+      title={isEdit ? `Edit ${team.name}` : 'New team'}
       footer={
         <>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={submit} loading={create.isPending} disabled={name.trim().length < 2}>
-            Create team
+          <Button onClick={submit} loading={create.isPending || update.isPending} disabled={name.trim().length < 2}>
+            {isEdit ? 'Save changes' : 'Create team'}
           </Button>
         </>
       }
@@ -83,6 +105,13 @@ function CreateTeamModal({ open, onClose }) {
             <option key={s.id} value={s.id}>{s.name} ({titleCase(s.role)})</option>
           ))}
         </Select>
+        {otherTeamsForManager.length > 0 && (
+          <p className="text-xs text-text-secondary">
+            Already manages <b className="text-text-primary">{otherTeamsForManager.map((t) => t.name).join(', ')}</b>.
+            Assigning them here adds this team alongside it — records the two teams create stay visible only to
+            each other's own members and this manager, never to other managers.
+          </p>
+        )}
         {error && <p className="text-sm text-danger">{error}</p>}
       </div>
     </Modal>
@@ -93,6 +122,21 @@ export default function TeamsPage() {
   const { data: teams, isLoading } = useTeams();
   const del = useDeleteTeam();
   const [creating, setCreating] = useState(false);
+  const [editingTeam, setEditingTeam] = useState(null);
+  const [managerFilter, setManagerFilter] = useState('');
+
+  const managerOptions = useMemo(() => {
+    const seen = new Map();
+    for (const t of teams || []) {
+      if (t.manager_id) seen.set(String(t.manager_id), t.manager_name);
+    }
+    return [...seen.entries()];
+  }, [teams]);
+
+  const visibleTeams = useMemo(() => {
+    if (!managerFilter) return teams || [];
+    return (teams || []).filter((t) => String(t.manager_id) === managerFilter);
+  }, [teams, managerFilter]);
 
   const remove = async (team) => {
     if (!window.confirm(`Delete "${team.name}"? Members will be unassigned.`)) return;
@@ -111,13 +155,30 @@ export default function TeamsPage() {
         actions={<Button icon={Plus} onClick={() => setCreating(true)}>New team</Button>}
       />
 
+      {managerOptions.length > 0 && (
+        <div className="max-w-xs">
+          <Select
+            label="Check teams for a manager"
+            value={managerFilter}
+            onChange={(e) => setManagerFilter(e.target.value)}
+          >
+            <option value="">All managers</option>
+            {managerOptions.map(([id, name]) => (
+              <option key={id} value={id}>{name}</option>
+            ))}
+          </Select>
+        </div>
+      )}
+
       {isLoading ? (
         <Spinner label="Loading teams…" className="py-20" />
-      ) : (teams || []).length === 0 ? (
-        <Card className="text-center text-text-secondary">No teams yet.</Card>
+      ) : visibleTeams.length === 0 ? (
+        <Card className="text-center text-text-secondary">
+          {managerFilter ? 'This manager owns no teams.' : 'No teams yet.'}
+        </Card>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {teams.map((t) => (
+          {visibleTeams.map((t) => (
             <Card key={t.id}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -138,14 +199,28 @@ export default function TeamsPage() {
                   <Users className="h-4 w-4" /> {t.member_count} member{t.member_count === 1 ? '' : 's'}
                 </span>
                 <span className="text-text-secondary">{t.present_today} present today</span>
-                <Button size="sm" variant="ghost" icon={Trash2} onClick={() => remove(t)} title="Delete" />
+                <span className="flex items-center gap-1">
+                  <Button size="sm" variant="ghost" icon={Pencil} onClick={() => setEditingTeam(t)} title="Edit" />
+                  <Button size="sm" variant="ghost" icon={Trash2} onClick={() => remove(t)} title="Delete" />
+                </span>
               </div>
             </Card>
           ))}
         </div>
       )}
 
-      <CreateTeamModal open={creating} onClose={() => setCreating(false)} />
+      <TeamFormModal
+        open={creating}
+        onClose={() => setCreating(false)}
+        team={null}
+        teams={teams || []}
+      />
+      <TeamFormModal
+        open={!!editingTeam}
+        onClose={() => setEditingTeam(null)}
+        team={editingTeam}
+        teams={teams || []}
+      />
     </div>
   );
 }
