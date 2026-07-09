@@ -19,10 +19,11 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.exceptions import forbidden, not_found
+from app.core.exceptions import conflict, forbidden, not_found
 from app.models.crm import VisitPlan, VisitPlanItem
-from app.models.enums import UserRole
+from app.models.enums import AttendanceStatus, UserRole
 from app.models.user import User
+from app.repositories.attendance_repository import AttendanceRepository
 from app.repositories.visit_plan_repository import VisitPlanRepository
 from app.schemas.crm import (
     MyPlanResponse,
@@ -167,10 +168,26 @@ class VisitPlanService:
     ) -> MyPlanResponse:
         return await self._build_my_plan(user.id, plan_date)
 
+    # ── leave guard ──────────────────────────────────────────────────────
+    async def _assert_not_on_leave(self, employee_id: int, day: date_type) -> None:
+        """Block planning a visit onto a date that's already marked leave for
+        this employee — otherwise leave only gets checked once, at the moment
+        it's requested, and a visit silently added afterward would just fail
+        at check-in time with no warning."""
+        attendance = await AttendanceRepository(self.db).get_for_user_date(
+            employee_id, day
+        )
+        if attendance is not None and attendance.status == AttendanceStatus.ON_LEAVE:
+            raise conflict(
+                f"{day.isoformat()} is marked as leave — visits can't be planned for that day"
+            )
+
     # ── public: upsert ───────────────────────────────────────────────────
     async def upsert_plan(
         self, user: User, payload: VisitPlanCreate
     ) -> MyPlanResponse:
+        if payload.items:
+            await self._assert_not_on_leave(user.id, payload.plan_date)
         now = datetime.now(timezone.utc)
         plan = await self.repo.get_plan(user.id, payload.plan_date)
         if plan is None:
@@ -339,6 +356,8 @@ class VisitPlanService:
         is_privileged = user.role in (UserRole.ADMIN, UserRole.SUPERVISOR)
         if source_plan.employee_id != user.id and not is_privileged:
             raise forbidden("This plan isn't yours")
+
+        await self._assert_not_on_leave(source_plan.employee_id, target_date)
 
         # Target plan for the new date (create if absent).
         target_plan = await self.repo.get_plan(source_plan.employee_id, target_date)

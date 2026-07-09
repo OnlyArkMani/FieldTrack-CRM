@@ -89,6 +89,14 @@ def attendance_required() -> ApiError:
     )
 
 
+def on_leave_blocked() -> ApiError:
+    return ApiError(
+        403,
+        "You're marked on leave today — visits are disabled",
+        "ON_LEAVE",
+    )
+
+
 def rate_limited(retry_after_seconds: int) -> ApiError:
     return ApiError(
         429,
