@@ -141,52 +141,68 @@ class PlanItemCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: AppDimens.grid * 0.75),
-                Row(
+                Wrap(
+                  spacing: AppDimens.grid * 0.75,
+                  runSpacing: 4.0,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     _chip(context, purposeLabel(item.purpose),
                         scheme.secondary),
-                    if (item.targetOrderBags != null) ...[
-                      const SizedBox(width: AppDimens.grid * 0.75),
+                    if (item.targetOrderBags != null)
                       _chip(context, 'Target ${item.targetOrderBags} bags',
                           colors.statusActive),
-                    ],
-                    const SizedBox(width: AppDimens.grid * 0.75),
                     if (item.leadStatus != null)
                       LeadStatusBadge(status: item.leadStatus),
-                    const Spacer(),
-                    _statusDot(statusColor, statusLabel),
                   ],
                 ),
-                if (item.village != null && item.village!.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(Icons.place_rounded,
-                          size: 12, color: colors.textSecondary),
-                      const SizedBox(width: 3),
-                      Expanded(
-                        child: Text(
-                          item.village!,
-                          style: AppTextStyles.caption
-                              .copyWith(color: colors.textSecondary),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                const SizedBox(height: 4),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (item.village != null && item.village!.isNotEmpty) ...[
+                            Row(
+                              children: [
+                                Icon(Icons.place_rounded,
+                                    size: 12, color: colors.textSecondary),
+                                const SizedBox(width: 3),
+                                Expanded(
+                                  child: Text(
+                                    item.village!,
+                                    style: AppTextStyles.caption
+                                        .copyWith(color: colors.textSecondary),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          if (item.lastVisitNote != null &&
+                              item.lastVisitNote!.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              'Last note: ${item.lastVisitNote!}',
+                              style: AppTextStyles.caption
+                                  .copyWith(color: colors.textSecondary),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ],
                       ),
-                    ],
-                  ),
-                ],
-                if (item.lastVisitNote != null &&
-                    item.lastVisitNote!.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    'Last note: ${item.lastVisitNote!}',
-                    style: AppTextStyles.caption
-                        .copyWith(color: colors.textSecondary),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                    ),
+                    const SizedBox(width: AppDimens.grid),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: _statusDot(statusColor, statusLabel),
+                    ),
+                  ],
+                ),
                 if (onStartVisit != null) ...[
                   const SizedBox(height: AppDimens.grid * 0.5),
                   Align(
