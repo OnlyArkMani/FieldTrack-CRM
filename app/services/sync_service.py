@@ -91,6 +91,8 @@ class SyncService:
                     notes=rec.notes,
                 )
             )
+            if rec.type == SessionType.END and attendance.work_summary is None:
+                attendance.work_summary = rec.notes
             seen[attendance.id].append((rec.type, ts))
             touched.add(attendance.id)
             processed += 1
