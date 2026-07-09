@@ -118,6 +118,11 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       ref.read(farmerDetailProvider(widget.farmerId)).value?.customerType ??
       CustomerType.farmer;
   bool get _isOrg => _customerType.isOrg;
+  bool get _isSpecialOrg =>
+      _customerType == CustomerType.fpo ||
+      _customerType == CustomerType.vlcc ||
+      _customerType == CustomerType.distributor ||
+      _customerType == CustomerType.retailer;
 
   @override
   void dispose() {
@@ -279,7 +284,8 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
           if (!mounted) return;
           _enterStep(3);
         case 3:
-          if (_orderEnabled) await _saveOrder();
+          final shouldSave = _isSpecialOrg ? _orgInterested : _orderEnabled;
+          if (shouldSave) await _saveOrder();
           await _saveNotes(step: 3, silent: true);
           if (!mounted) return;
           _enterStep(4);
@@ -404,6 +410,25 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
   }
 
   Future<void> _saveOrder() async {
+    if (_isSpecialOrg) {
+      if (!_orgInterested) return;
+      final bags = int.tryParse(_orgInterestedBags.text.trim()) ?? 0;
+      if (bags < 1) {
+        throw const ValidationException('Enter at least 1 bag for the order.');
+      }
+      final delivery = DateTime.now().add(const Duration(days: 7));
+      await _repo.createOrder(
+        _visitId!,
+        bagsCount: bags,
+        deliveryDate: delivery,
+        deliveryAddress: '',
+        paymentMode: 'CASH',
+        specialNotes: 'Auto-captured from FPO/VLCC/Distributor supply interest',
+        pricePerBag: null,
+      );
+      return;
+    }
+
     final bags = int.tryParse(_bagsCount.text.trim()) ?? 0;
     if (bags < 1) {
       throw const ValidationException('Enter at least 1 bag for the order.');
@@ -924,40 +949,12 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
     );
   }
 
-  /// Shared by all three org forms: the interested-in-supply switch (+ bags)
-  /// and notes, identical everywhere it appears.
+  /// Shared by all three org forms: notes, identical everywhere it appears.
+  /// Supply interest is now captured in the third step to prevent duplication.
   Widget _interestedAndNotesFields() {
-    final colors = context.appColors;
-    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        AppCard(
-          child: Row(
-            children: [
-              Expanded(
-                child: Text('Interested in supply from us?',
-                    style: AppTextStyles.bodyMedium
-                        .copyWith(color: scheme.onSurface)),
-              ),
-              Switch(
-                value: _orgInterested,
-                onChanged: (v) => setState(() => _orgInterested = v),
-              ),
-            ],
-          ),
-        ),
-        if (_orgInterested) ...[
-          const SizedBox(height: AppDimens.grid),
-          _numField(_orgInterestedBags, 'Bags they want to order'),
-          Text(
-            'Recording bags here creates an order (delivery in 7+ days) that '
-            'shows in the DSR and manager dashboard.',
-            style:
-                AppTextStyles.caption.copyWith(color: colors.textSecondary),
-          ),
-        ],
-        const SizedBox(height: AppDimens.grid),
         _textField(_orgNotes, 'Notes (optional)'),
       ],
     );
@@ -1027,6 +1024,34 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
   Widget _orderStep() {
     final colors = context.appColors;
     final scheme = Theme.of(context).colorScheme;
+
+    if (_isSpecialOrg) {
+      return ListView(
+        padding: const EdgeInsets.all(AppDimens.grid * 2),
+        children: [
+          AppCard(
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('Interested in supply from us?',
+                      style: AppTextStyles.bodyMedium
+                          .copyWith(color: scheme.onSurface)),
+                ),
+                Switch(
+                  value: _orgInterested,
+                  onChanged: (v) => setState(() => _orgInterested = v),
+                ),
+              ],
+            ),
+          ),
+          if (_orgInterested) ...[
+            const SizedBox(height: AppDimens.grid * 2),
+            _numField(_orgInterestedBags, 'Bags they want to order'),
+          ],
+        ],
+      );
+    }
+
     return ListView(
       padding: const EdgeInsets.all(AppDimens.grid * 2),
       children: [
@@ -1045,16 +1070,6 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
             ],
           ),
         ),
-        if (_isOrg && _orgInterested)
-          Padding(
-            padding: const EdgeInsets.only(top: AppDimens.grid),
-            child: Text(
-              'Supply interest from the previous step is already recorded as '
-              'an order. Only add another here if it is a separate order.',
-              style:
-                  AppTextStyles.caption.copyWith(color: colors.textSecondary),
-            ),
-          ),
         if (_orderEnabled) ...[
           const SizedBox(height: AppDimens.grid),
           _numField(_bagsCount, 'Bags count (min 1)'),

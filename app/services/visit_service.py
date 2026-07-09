@@ -411,34 +411,7 @@ class VisitService:
             self.repo.add(answer)
         await self.db.flush()
 
-        # Interest -> real order (same table as farmer orders). Only when a
-        # positive bag count is given; avoid creating duplicate orders on re-save.
-        if payload.interested_in_supply and (payload.interested_bags or 0) > 0:
-            already = (
-                await self.db.execute(
-                    select(func.count(VisitOrder.id)).where(
-                        VisitOrder.visit_id == visit.id
-                    )
-                )
-            ).scalar_one()
-            if not already:
-                min_date = self._today() + _days(ORDER_MIN_LEAD_DAYS)
-                delivery = payload.delivery_date or min_date
-                if delivery < min_date:
-                    delivery = min_date
-                self.repo.add(
-                    VisitOrder(
-                        visit_id=visit.id,
-                        farmer_id=visit.farmer_id,
-                        employee_id=user.id,
-                        bags_count=payload.interested_bags,
-                        delivery_date=delivery,
-                        payment_mode=payload.payment_mode,
-                        price_per_bag=payload.current_price_per_bag,
-                        special_notes="Auto-captured from FPO/VLCC supply interest",
-                        status="SUBMITTED",
-                    )
-                )
+
 
         await self.db.commit()
         await self.db.refresh(answer)
