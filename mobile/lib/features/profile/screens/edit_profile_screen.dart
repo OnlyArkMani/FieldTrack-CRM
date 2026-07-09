@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/constants/indian_states.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_button.dart';
@@ -26,7 +27,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _phoneController = TextEditingController();
   final _villageController = TextEditingController();
   final _districtController = TextEditingController();
-  final _stateController = TextEditingController();
+  String? _selectedState;
 
   File? _pickedImage;
   String? _nameError;
@@ -42,7 +43,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         _phoneController.text = user.phone ?? '';
         _villageController.text = user.village ?? '';
         _districtController.text = user.district ?? '';
-        _stateController.text = user.state ?? '';
+        final state = user.state;
+        _selectedState = (state != null && state.trim().isNotEmpty) ? state.trim() : null;
       }
       ref.read(authProvider.notifier).clearError();
     });
@@ -54,7 +56,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _phoneController.dispose();
     _villageController.dispose();
     _districtController.dispose();
-    _stateController.dispose();
     super.dispose();
   }
 
@@ -116,7 +117,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final phone = _phoneController.text.trim();
     final village = _villageController.text.trim();
     final district = _districtController.text.trim();
-    final stateVal = _stateController.text.trim();
+    final stateVal = _selectedState ?? '';
 
     setState(() {
       _nameError = name.isEmpty ? 'Name is required' : null;
@@ -175,6 +176,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final authState = ref.watch(authProvider);
     final user = authState.user;
     final scheme = Theme.of(context).colorScheme;
+    final colors = context.appColors;
 
     return Scaffold(
       appBar: AppBar(
@@ -291,12 +293,36 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             ),
             const SizedBox(height: AppDimens.grid * 2.5),
 
-            AppTextField(
-              label: 'State',
-              controller: _stateController,
-              hint: 'Enter state name',
-              prefixIcon: Icons.map_rounded,
-              enabled: !authState.isLoading,
+            Text(
+              'State',
+              style: AppTextStyles.bodyMedium
+                  .copyWith(color: Theme.of(context).colorScheme.onSurface),
+            ),
+            const SizedBox(height: AppDimens.grid),
+            DropdownButtonFormField<String?>(
+              value: _selectedState,
+              isExpanded: true,
+              decoration: InputDecoration(
+                hintText: 'Select state',
+                prefixIcon: Icon(Icons.map_rounded, size: 20, color: colors.textSecondary),
+              ),
+              items: [
+                if (_selectedState != null &&
+                    !kIndianStatesAndUnionTerritories.contains(_selectedState))
+                  DropdownMenuItem<String?>(
+                    value: _selectedState,
+                    child: Text(_selectedState!, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                ...kIndianStatesAndUnionTerritories.map(
+                  (s) => DropdownMenuItem<String?>(
+                    value: s,
+                    child: Text(s, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                ),
+              ],
+              onChanged: authState.isLoading
+                  ? null
+                  : (v) => setState(() => _selectedState = v),
             ),
             const SizedBox(height: AppDimens.grid * 3),
           ],

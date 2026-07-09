@@ -126,7 +126,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
               const SizedBox(height: AppDimens.grid * 2),
               if (state.isLoading)
                 const AttendanceCardShimmer()
-              else
+              else ...[
                 _ShakeWrapper(
                   controller: _shake,
                   child: _StatusCard(
@@ -135,6 +135,14 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
                     onStart: _startWithPermission,
                   ),
                 ),
+                if (!state.state.isOnLeave) ...[
+                  const SizedBox(height: AppDimens.grid * 1.5),
+                  _ApplyLeaveLink(
+                    restrictToFuture: !state.state.notStarted,
+                    isBusy: state.isMarkingLeave,
+                  ),
+                ],
+              ],
               if (_bgLimited && !state.isLoading) ...[
                 const SizedBox(height: AppDimens.grid * 1.5),
                 const _BackgroundWarningCard(),
@@ -252,6 +260,9 @@ class _StatusCard extends StatelessWidget {
       return _OnBreak(
           key: const ValueKey('on_break'), state: state, onEndTap: onEndTap);
     }
+    if (s.isOnLeave) {
+      return _OnLeave(key: const ValueKey('on_leave'), state: state);
+    }
     return _Ended(key: const ValueKey('ended'), state: state);
   }
 }
@@ -296,8 +307,6 @@ class _NotStarted extends ConsumerWidget {
           isLoading: starting,
           onPressed: starting ? null : onStart,
         ),
-        const SizedBox(height: AppDimens.grid * 1.5),
-        _ApplyLeaveLink(restrictToFuture: false, isBusy: state.isMarkingLeave),
       ],
     );
   }
@@ -311,6 +320,7 @@ class _Working extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.appColors;
+    final scheme = Theme.of(context).colorScheme;
     final notifier = ref.read(attendanceProvider.notifier);
     final startedAt = state.attendance?.startedAt ?? DateTime.now();
     final breaking =
@@ -321,15 +331,52 @@ class _Working extends ConsumerWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: colors.statusActive,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'ACTIVE WORK SESSION',
+              style: AppTextStyles.caption.copyWith(
+                color: colors.statusActive,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppDimens.grid * 0.5),
         Text(
           'Working since ${_hhmm(startedAt)}',
           style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        const SizedBox(height: AppDimens.grid * 1.5),
-        AttendanceTimer(start: startedAt),
-        const SizedBox(height: AppDimens.grid * 2.5),
+        const SizedBox(height: AppDimens.grid * 2),
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.grid * 3,
+            vertical: AppDimens.grid * 1.5,
+          ),
+          decoration: BoxDecoration(
+            color: scheme.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(AppDimens.cardRadius),
+            border: Border.all(
+              color: scheme.primary.withValues(alpha: 0.15),
+              width: 1.5,
+            ),
+          ),
+          child: AttendanceTimer(start: startedAt),
+        ),
+        const SizedBox(height: AppDimens.grid * 3),
         Row(
           children: [
             Expanded(
@@ -353,8 +400,6 @@ class _Working extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: AppDimens.grid * 1.5),
-        _ApplyLeaveLink(restrictToFuture: true, isBusy: state.isMarkingLeave),
       ],
     );
   }
@@ -378,41 +423,73 @@ class _OnBreak extends ConsumerWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          padding: const EdgeInsets.all(AppDimens.grid * 2),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: colors.statusIdle.withValues(alpha: 0.16),
-          ),
-          child: Icon(Icons.local_cafe_rounded,
-              size: 36, color: colors.statusIdle),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: colors.statusIdle,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'ON BREAK',
+              style: AppTextStyles.caption.copyWith(
+                color: colors.statusIdle,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: AppDimens.grid * 2),
-        Text(
-          'On break',
-          style: AppTextStyles.heading
-              .copyWith(color: Theme.of(context).colorScheme.onSurface),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 2),
-        DefaultTextStyle(
-          style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.grid * 3,
+            vertical: AppDimens.grid * 1.5,
+          ),
+          decoration: BoxDecoration(
+            color: colors.statusIdle.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(AppDimens.cardRadius),
+            border: Border.all(
+              color: colors.statusIdle.withValues(alpha: 0.15),
+              width: 1.5,
+            ),
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('Paused for '),
-              ElapsedLabel(
-                start: breakStart,
-                style: AppTextStyles.caption.copyWith(
+              Icon(Icons.local_cafe_rounded, size: 24, color: colors.statusIdle),
+              const SizedBox(width: 12),
+              DefaultTextStyle(
+                style: AppTextStyles.display.copyWith(
                   color: colors.statusIdle,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Paused: '),
+                    ElapsedLabel(
+                      start: breakStart,
+                      style: AppTextStyles.display.copyWith(
+                        color: colors.statusIdle,
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: AppDimens.grid * 2.5),
+        const SizedBox(height: AppDimens.grid * 3),
         Row(
           children: [
             Expanded(
@@ -435,8 +512,52 @@ class _OnBreak extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: AppDimens.grid * 1.5),
-        _ApplyLeaveLink(restrictToFuture: true, isBusy: state.isMarkingLeave),
+      ],
+    );
+  }
+}
+
+class _OnLeave extends StatelessWidget {
+  const _OnLeave({super.key, required this.state});
+  final AttendanceUiState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppDimens.grid),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: colors.statusIdle.withValues(alpha: 0.16),
+              ),
+              child: Icon(Icons.beach_access_rounded,
+                  size: 22, color: colors.statusIdle),
+            ),
+            const SizedBox(width: AppDimens.grid * 1.5),
+            Expanded(
+              child: Text(
+                'On leave',
+                style: AppTextStyles.heading.copyWith(color: scheme.onSurface),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppDimens.grid * 2),
+        Text(
+          'You marked today as a leave day.',
+          style: AppTextStyles.body.copyWith(color: colors.textSecondary),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
       ],
     );
   }
@@ -513,8 +634,6 @@ class _Ended extends ConsumerWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ],
-        const SizedBox(height: AppDimens.grid * 2),
-        _ApplyLeaveLink(restrictToFuture: true, isBusy: state.isMarkingLeave),
       ],
     );
   }

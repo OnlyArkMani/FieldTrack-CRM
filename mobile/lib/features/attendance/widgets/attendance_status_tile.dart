@@ -97,24 +97,41 @@ class AttendanceStatusTile extends ConsumerWidget {
           ),
         ),
       MachineState.started || MachineState.resumed || MachineState.onBreak =>
-        AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppCard(
+              child: Row(
                 children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          'Checked in',
-                          style: AppTextStyles.caption.copyWith(
-                            color: colors.textSecondary,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.3,
-                          ),
+                        Row(
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: ui.state == MachineState.onBreak
+                                    ? colors.statusIdle
+                                    : colors.statusActive,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              ui.state == MachineState.onBreak ? 'On break' : 'Checked in',
+                              style: AppTextStyles.caption.copyWith(
+                                color: ui.state == MachineState.onBreak
+                                    ? colors.statusIdle
+                                    : colors.statusActive,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 4),
                         AttendanceTimer(
@@ -136,19 +153,19 @@ class AttendanceStatusTile extends ConsumerWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: AppDimens.grid),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: ui.isMarkingLeave
-                      ? null
-                      : () => _markLeave(context, ref, restrictToFuture: true),
-                  icon: const Icon(Icons.beach_access_rounded, size: 18),
-                  label: const Text('Apply leave for a future day'),
-                ),
+            ),
+            const SizedBox(height: AppDimens.grid),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: ui.isMarkingLeave
+                    ? null
+                    : () => _markLeave(context, ref, restrictToFuture: true),
+                icon: const Icon(Icons.beach_access_rounded, size: 18),
+                label: const Text('Apply leave for a future day'),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       MachineState.ended => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
