@@ -377,7 +377,7 @@ class EmployeeService:
             raise not_found("Employee not found")
 
         records = await self.repo.attendance_for_month(user_id, year, month)
-        present = half = absent = 0
+        present = half = absent = leave = 0
         total_minutes = 0
         total_distance = 0.0
         for r in records:
@@ -387,6 +387,8 @@ class EmployeeService:
                 half += 1
             elif r.status == AttendanceStatus.ABSENT:
                 absent += 1
+            elif r.status == AttendanceStatus.ON_LEAVE:
+                leave += 1
             total_minutes += r.total_duration_minutes
             total_distance += r.total_distance_meters
 
@@ -398,6 +400,7 @@ class EmployeeService:
             days_present=present,
             days_half=half,
             days_absent=absent,
+            days_leave=leave,
             days_recorded=recorded,
             total_work_minutes=total_minutes,
             total_distance_meters=round(total_distance, 2),

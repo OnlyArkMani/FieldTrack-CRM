@@ -144,6 +144,7 @@ class AttendanceSummaryOut(BaseModel):
     days_present: int
     days_half: int
     days_absent: int
+    days_leave: int
     days_recorded: int  # rows that exist (present + half + explicit absent)
     total_work_minutes: int
     total_distance_meters: float

@@ -41,6 +41,7 @@ const STATUS_COLOR = {
   PRESENT: 'var(--ft-status-active)',
   ABSENT: 'var(--ft-status-danger)',
   HALF_DAY: 'var(--ft-status-battery)',
+  ON_LEAVE: 'var(--ft-secondary)',
 };
 
 function AttendanceCalendar({ summary, cursor }) {
@@ -90,6 +91,7 @@ function AttendanceCalendar({ summary, cursor }) {
           ['Present', STATUS_COLOR.PRESENT],
           ['Half day', STATUS_COLOR.HALF_DAY],
           ['Absent', STATUS_COLOR.ABSENT],
+          ['On leave', STATUS_COLOR.ON_LEAVE],
         ].map(([label, color]) => (
           <span key={label} className="flex items-center gap-1.5 text-text-secondary">
             <span className="h-3 w-3 rounded" style={{ background: color }} />
@@ -215,10 +217,11 @@ export default function EmployeeDetailPage() {
             <Spinner label="Loading…" className="py-10" />
           ) : (
             <>
-              <div className="mb-4 grid grid-cols-3 gap-3">
+              <div className="mb-4 grid grid-cols-4 gap-3">
                 <Mini label="Present" value={summaryQ.data?.days_present ?? 0} color={STATUS_COLOR.PRESENT} />
                 <Mini label="Half day" value={summaryQ.data?.days_half ?? 0} color={STATUS_COLOR.HALF_DAY} />
                 <Mini label="Absent" value={summaryQ.data?.days_absent ?? 0} color={STATUS_COLOR.ABSENT} />
+                <Mini label="On leave" value={summaryQ.data?.days_leave ?? 0} color={STATUS_COLOR.ON_LEAVE} />
               </div>
               <AttendanceCalendar summary={summaryQ.data} cursor={cursor} />
             </>
