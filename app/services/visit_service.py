@@ -123,6 +123,42 @@ class VisitService:
         if visit.employee_id != user.id:
             raise forbidden("This visit isn't yours")
 
+    # ── team dashboard aggregate ─────────────────────────────────────────
+    async def team_visit_summary(
+        self, user: User, date_from: date_type, date_to: date_type
+    ) -> dict[str, int]:
+        """Count visits in the caller's scope between two dates (inclusive).
+
+        ADMIN → all visits. MANAGER → visits by members of their own team.
+        Employees have no team-wide view (dashboard is web-only).
+        """
+        if user.role not in (UserRole.ADMIN, UserRole.MANAGER):
+            raise forbidden("Not permitted")
+
+        zero = {"total": 0, "completed": 0, "checked_in": 0}
+        conds = [func.date(Visit.check_in_at).between(date_from, date_to)]
+
+        if user.role == UserRole.MANAGER:
+            if not user.team_id:
+                return zero
+            member_ids = (
+                await self.db.execute(
+                    select(User.id).where(User.team_id == user.team_id)
+                )
+            ).scalars().all()
+            if not member_ids:
+                return zero
+            conds.append(Visit.employee_id.in_(member_ids))
+
+        statuses = (
+            await self.db.execute(select(Visit.status).where(*conds))
+        ).scalars().all()
+        return {
+            "total": len(statuses),
+            "completed": sum(1 for s in statuses if s == "COMPLETED"),
+            "checked_in": sum(1 for s in statuses if s == "CHECKED_IN"),
+        }
+
     async def _load_owned_visit(self, visit_id: int, user: User) -> Visit:
         visit = await self.repo.get_visit(visit_id)
         if visit is None:
