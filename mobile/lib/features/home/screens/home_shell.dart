@@ -36,8 +36,15 @@ class HomeShell extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
     final index = navigationShell.currentIndex;
 
-    return Scaffold(
-      body: navigationShell,
+    return PopScope(
+      canPop: index == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && index != 0) {
+          navigationShell.goBranch(0);
+        }
+      },
+      child: Scaffold(
+        body: navigationShell,
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: colors.card,
@@ -145,6 +152,7 @@ class HomeShell extends ConsumerWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/theme/app_text_styles.dart';
@@ -32,11 +33,29 @@ class EmployeeDetailScreen extends ConsumerWidget {
     final role = ref.watch(authProvider).user?.role;
     final canEdit = role == UserRole.admin || role == UserRole.supervisor;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Employee',
-            maxLines: 1, overflow: TextOverflow.ellipsis),
-      ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/home/dashboard');
+          }
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: context.canPop()
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.home_rounded),
+                  tooltip: 'Home',
+                  onPressed: () => context.go('/home/dashboard'),
+                ),
+          title: const Text('Employee',
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
       floatingActionButton: detail.maybeWhen(
         data: (employee) => canEdit
             ? FloatingActionButton.extended(
@@ -110,8 +129,9 @@ class EmployeeDetailScreen extends ConsumerWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _HeaderCard extends StatelessWidget {

@@ -53,19 +53,35 @@ class VisitPlanScreen extends ConsumerWidget {
     // — undismissed, timer still running — on whatever screen the user
     // navigates to next. Popping this route now tears the messenger (and any
     // pending SnackBar/timer) down with it instead of leaking it forward.
-    return ScaffoldMessenger(
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Visit plan',
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-          actions: [
-            IconButton(
-              tooltip: 'Map view',
-              icon: const Icon(Icons.map_rounded),
-              onPressed: () => context.push('/planning/map'),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/home/dashboard');
+          }
+        }
+      },
+      child: ScaffoldMessenger(
+        child: Scaffold(
+          appBar: AppBar(
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () =>
+                  context.canPop() ? context.pop() : context.go('/home/dashboard'),
             ),
-          ],
-        ),
+            title: const Text('Visit plan',
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+            actions: [
+              IconButton(
+                tooltip: 'Map view',
+                icon: const Icon(Icons.map_rounded),
+                onPressed: () => context.push('/planning/map'),
+              ),
+            ],
+          ),
         body: SafeArea(
           child: Column(
             children: [
@@ -84,8 +100,9 @@ class VisitPlanScreen extends ConsumerWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _body(
     BuildContext context,

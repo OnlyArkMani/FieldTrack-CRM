@@ -17,28 +17,40 @@ class NotificationsScreen extends ConsumerWidget {
     final state = ref.watch(notificationsProvider);
     final notifier = ref.read(notificationsProvider.notifier);
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () =>
-              context.canPop() ? context.pop() : context.go('/home/dashboard'),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/home/dashboard');
+          }
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () =>
+                context.canPop() ? context.pop() : context.go('/home/dashboard'),
+          ),
+          title: const Text(
+            'Notifications',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          actions: [
+            if (state.unread > 0)
+              TextButton(
+                onPressed: notifier.markAllRead,
+                child: const Text('Mark all read'),
+              ),
+          ],
         ),
-        title: const Text(
-          'Notifications',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        body: SafeArea(
+          child: _body(context, ref, state, notifier),
         ),
-        actions: [
-          if (state.unread > 0)
-            TextButton(
-              onPressed: notifier.markAllRead,
-              child: const Text('Mark all read'),
-            ),
-        ],
-      ),
-      body: SafeArea(
-        child: _body(context, ref, state, notifier),
       ),
     );
   }
@@ -112,7 +124,7 @@ class NotificationsScreen extends ConsumerWidget {
   ) {
     notifier.markRead(item.id);
     final route = item.type.inAppRoute;
-    if (route != null) context.go(route);
+    if (route != null) context.push(route);
   }
 }
 
