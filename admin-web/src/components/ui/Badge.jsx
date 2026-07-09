@@ -8,6 +8,7 @@ const STATUS = {
   PRESENT: { color: 'var(--ft-status-active)', label: 'Present' },
   ABSENT: { color: 'var(--ft-status-danger)', label: 'Absent' },
   HALF_DAY: { color: 'var(--ft-status-battery)', label: 'Half day' },
+  ON_LEAVE: { color: 'var(--ft-secondary)', label: 'On leave' },
 };
 
 /** Colored pill. Pass `status` for a known status, or `color`+`children`. */

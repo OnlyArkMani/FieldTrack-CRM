@@ -18,6 +18,7 @@ import '../models/attendance.dart';
 import '../providers/attendance_provider.dart';
 import '../providers/attendance_history_provider.dart';
 import '../widgets/attendance_timer.dart';
+import '../widgets/leave_action.dart';
 import '../widgets/session_timeline.dart';
 import '../widgets/work_summary_sheet.dart';
 
@@ -295,6 +296,8 @@ class _NotStarted extends ConsumerWidget {
           isLoading: starting,
           onPressed: starting ? null : onStart,
         ),
+        const SizedBox(height: AppDimens.grid * 1.5),
+        _ApplyLeaveLink(restrictToFuture: false, isBusy: state.isMarkingLeave),
       ],
     );
   }
@@ -350,6 +353,8 @@ class _Working extends ConsumerWidget {
             ),
           ],
         ),
+        const SizedBox(height: AppDimens.grid * 1.5),
+        _ApplyLeaveLink(restrictToFuture: true, isBusy: state.isMarkingLeave),
       ],
     );
   }
@@ -430,17 +435,19 @@ class _OnBreak extends ConsumerWidget {
             ),
           ],
         ),
+        const SizedBox(height: AppDimens.grid * 1.5),
+        _ApplyLeaveLink(restrictToFuture: true, isBusy: state.isMarkingLeave),
       ],
     );
   }
 }
 
-class _Ended extends StatelessWidget {
+class _Ended extends ConsumerWidget {
   const _Ended({super.key, required this.state});
   final AttendanceUiState state;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.appColors;
     final scheme = Theme.of(context).colorScheme;
     final a = state.attendance!;
@@ -506,7 +513,32 @@ class _Ended extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ],
+        const SizedBox(height: AppDimens.grid * 2),
+        _ApplyLeaveLink(restrictToFuture: true, isBusy: state.isMarkingLeave),
       ],
+    );
+  }
+}
+
+/// Text-button link to the shared leave-application flow. `restrictToFuture`
+/// must be true whenever today already has an attendance row — today is not
+/// a selectable leave date once claimed by check-in/checkout/leave.
+class _ApplyLeaveLink extends ConsumerWidget {
+  const _ApplyLeaveLink({required this.restrictToFuture, required this.isBusy});
+  final bool restrictToFuture;
+  final bool isBusy;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        onPressed: isBusy
+            ? null
+            : () => applyForLeave(context, ref, restrictToFuture: restrictToFuture),
+        icon: const Icon(Icons.beach_access_rounded, size: 18),
+        label: Text(restrictToFuture ? 'Apply leave for a future day' : 'Apply for leave'),
+      ),
     );
   }
 }
