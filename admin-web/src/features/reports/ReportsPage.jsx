@@ -244,8 +244,10 @@ export default function ReportsPage() {
   const [previewSheets, setPreviewSheets] = useState([]); // [{ name, rows }]
   const [activeSheet, setActiveSheet] = useState(0);
   const previewPdfUrlRef = useRef(null);
+  const previewAbortRef = useRef(null);
 
   useEffect(() => () => {
+    previewAbortRef.current?.abort();
     if (previewPdfUrlRef.current) URL.revokeObjectURL(previewPdfUrlRef.current);
   }, []);
 
@@ -390,6 +392,8 @@ export default function ReportsPage() {
   };
 
   const closePreview = () => {
+    previewAbortRef.current?.abort();
+    previewAbortRef.current = null;
     setPreviewOpen(false);
     setPreviewError(null);
     setPreviewSheets([]);
@@ -403,11 +407,20 @@ export default function ReportsPage() {
 
   const openPreview = async () => {
     if (!reportId) return;
+    previewAbortRef.current?.abort();
+    const controller = new AbortController();
+    previewAbortRef.current = controller;
     setPreviewOpen(true);
     setPreviewLoading(true);
     setPreviewError(null);
     try {
-      const resp = await api.get(`/reports/${reportId}/download`, { responseType: 'blob' });
+      const resp = await api.get(`/reports/${reportId}/download`, {
+        responseType: 'blob',
+        signal: controller.signal,
+      });
+      // Closed/aborted while the request was in flight — drop the result
+      // instead of creating a blob URL nothing will ever revoke.
+      if (controller.signal.aborted) return;
       if (format === 'PDF') {
         const url = URL.createObjectURL(resp.data);
         previewPdfUrlRef.current = url;
@@ -430,9 +443,10 @@ export default function ReportsPage() {
         );
       }
     } catch (err) {
+      if (controller.signal.aborted) return;
       setPreviewError(apiErrorMessage(err));
     } finally {
-      setPreviewLoading(false);
+      if (!controller.signal.aborted) setPreviewLoading(false);
     }
   };
 

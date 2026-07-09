@@ -22,7 +22,7 @@ export default function Badge({ status, color, children, dot = true, className }
         'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
         className,
       )}
-      style={{ backgroundColor: `${c}24`, color: c }}
+      style={{ backgroundColor: `color-mix(in srgb, ${c} 14%, transparent)`, color: c }}
     >
       {dot && (
         <span
