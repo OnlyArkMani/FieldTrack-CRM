@@ -19,6 +19,7 @@ from app.schemas.crm import (
     MyPlanResponse,
     PendingSubmissionView,
     PlanItemStatusUpdate,
+    PlanItemUpdate,
     TeamPlansResponse,
     VisitPlanCreate,
 )
@@ -89,6 +90,18 @@ async def update_item_status(
     return await VisitPlanService(db).update_item_status(
         user, plan_id, item_id, body
     )
+
+
+@router.patch("/items/{item_id}", response_model=MyPlanResponse)
+async def update_item(
+    item_id: int,
+    body: PlanItemUpdate,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MyPlanResponse:
+    """Edit a still-PLANNED stop's time, purpose, target bags, or day.
+    Rejected once the item has been checked in (COMPLETED/SKIPPED)."""
+    return await VisitPlanService(db).update_item(user, item_id, body)
 
 
 @router.post("/items/{item_id}/carry-over", response_model=MyPlanResponse)

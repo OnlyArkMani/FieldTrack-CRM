@@ -31,6 +31,10 @@ class VisitPlanState {
   /// Saved == a submitted plan exists AND there are no unsaved edits.
   bool get isSaved => plan != null && plan!.isSubmitted && !dirty;
 
+  /// The employee is on leave for the selected [date] — mirrors the
+  /// server-side guard that blocks planning visits for a leave day.
+  bool get isOnLeave => plan?.isOnLeave ?? false;
+
   VisitPlanState copyWith({
     DateTime? date,
     MyPlan? plan,
@@ -178,6 +182,32 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
     final moved = active.removeAt(oldIndex);
     active.insert(newIndex, moved);
     state = state.copyWith(items: [...active, ...completedItems], dirty: true);
+  }
+
+  /// Edit a still-PLANNED item's time/purpose/target bags/day. Reloads the
+  /// currently viewed date afterward — if [planDate] moved the item to a
+  /// different day, it simply drops out of this list.
+  Future<bool> editItem(
+    PlanItem item, {
+    String? timeSlot,
+    String? purpose,
+    int? targetOrderBags,
+    DateTime? planDate,
+  }) async {
+    try {
+      await _repo.updateItem(
+        item.id,
+        timeSlot: timeSlot,
+        purpose: purpose,
+        targetOrderBags: targetOrderBags,
+        planDate: planDate,
+      );
+      await load();
+      return true;
+    } on ApiException catch (e) {
+      state = state.copyWith(error: e.message);
+      return false;
+    }
   }
 
   Future<bool> save() async {

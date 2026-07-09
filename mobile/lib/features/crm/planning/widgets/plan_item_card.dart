@@ -40,7 +40,8 @@ class PlanItemCard extends StatelessWidget {
     this.trailing,
     this.onTap,
     this.onStartVisit,
-    this.visitDisabled = false,
+    this.disabledReason,
+    this.onEdit,
   });
 
   final PlanItem item;
@@ -53,9 +54,15 @@ class PlanItemCard extends StatelessWidget {
   /// When set, a "Start Visit" button is shown that launches the visit flow.
   final VoidCallback? onStartVisit;
 
-  /// True when attendance blocks starting a visit right now (checked out /
-  /// on leave) — the button stays visible but greyed out and unclickable.
-  final bool visitDisabled;
+  /// Non-null when something blocks starting a visit right now (checked out
+  /// for today, on leave today, or this day is a leave day) — the button
+  /// stays visible but greyed out, and this explains why via a tooltip.
+  final String? disabledReason;
+
+  /// When set, a pencil icon is shown to edit time/day/purpose/target bags.
+  /// The caller only passes this for still-PLANNED, non-follow-up,
+  /// non-carry-over stops — once checked in, editing is no longer offered.
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -119,6 +126,18 @@ class PlanItemCard extends StatelessWidget {
                       Icon(Icons.notifications_active_rounded,
                           size: 16, color: scheme.secondary),
                     ],
+                    if (onEdit != null) ...[
+                      const SizedBox(width: AppDimens.grid * 0.5),
+                      InkWell(
+                        onTap: onEdit,
+                        borderRadius: BorderRadius.circular(999),
+                        child: Padding(
+                          padding: const EdgeInsets.all(2),
+                          child: Icon(Icons.edit_rounded,
+                              size: 16, color: colors.textSecondary),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: AppDimens.grid * 0.75),
@@ -172,17 +191,7 @@ class PlanItemCard extends StatelessWidget {
                   const SizedBox(height: AppDimens.grid * 0.5),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: visitDisabled ? null : onStartVisit,
-                      icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                      label: const Text('Start Visit'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: scheme.primary,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: AppDimens.grid),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ),
+                    child: _startVisitButton(scheme),
                   ),
                 ],
               ],
@@ -195,6 +204,21 @@ class PlanItemCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _startVisitButton(ColorScheme scheme) {
+    final button = TextButton.icon(
+      onPressed: disabledReason != null ? null : onStartVisit,
+      icon: const Icon(Icons.play_arrow_rounded, size: 18),
+      label: const Text('Start Visit'),
+      style: TextButton.styleFrom(
+        foregroundColor: scheme.primary,
+        padding: const EdgeInsets.symmetric(horizontal: AppDimens.grid),
+        visualDensity: VisualDensity.compact,
+      ),
+    );
+    if (disabledReason == null) return button;
+    return Tooltip(message: disabledReason!, child: button);
   }
 
   Widget _chip(BuildContext context, String label, Color color) {

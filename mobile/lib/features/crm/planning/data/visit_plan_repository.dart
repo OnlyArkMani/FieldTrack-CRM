@@ -47,6 +47,27 @@ class VisitPlanRepository {
     return MyPlan.fromJson(data);
   }
 
+  /// Edit a still-PLANNED item's time, purpose, target bags, or day. Only the
+  /// fields passed are changed; a non-null [planDate] moves it onto that day's
+  /// plan. Rejected server-side once the item's been checked in.
+  Future<MyPlan> updateItem(
+    int itemId, {
+    String? timeSlot, // "HH:MM:SS"
+    String? purpose,
+    String? notes,
+    int? targetOrderBags,
+    DateTime? planDate,
+  }) async {
+    final data = await _api.patch('/visit-plans/items/$itemId', body: {
+      if (timeSlot != null) 'time_slot': timeSlot,
+      if (purpose != null) 'purpose': purpose,
+      if (notes != null) 'notes': notes,
+      if (targetOrderBags != null) 'target_order_bags': targetOrderBags,
+      if (planDate != null) 'plan_date': ymd(planDate),
+    });
+    return MyPlan.fromJson(data);
+  }
+
   /// Reschedule a missed (carried-over) item onto [targetDate] with an optional
   /// time. The source item is skipped server-side. Returns the target plan.
   Future<MyPlan> carryOver(

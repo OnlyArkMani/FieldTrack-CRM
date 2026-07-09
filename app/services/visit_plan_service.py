@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.exceptions import conflict, forbidden, not_found
+from app.core.exceptions import bad_request, conflict, forbidden, not_found
 from app.models.crm import VisitPlan, VisitPlanItem
 from app.models.enums import AttendanceStatus, UserRole
 from app.models.user import User
@@ -29,6 +29,7 @@ from app.schemas.crm import (
     MyPlanResponse,
     PendingSubmissionView,
     PlanItemStatusUpdate,
+    PlanItemUpdate,
     PlanItemView,
     TeamPlanEmployeeView,
     TeamPlansResponse,
@@ -154,12 +155,20 @@ class VisitPlanService:
                 continue  # already a planned stop — don't double-list
             items.append(self._follow_up_view(r))
 
+        attendance = await AttendanceRepository(self.db).get_for_user_date(
+            employee_id, plan_date
+        )
+        is_on_leave = (
+            attendance is not None and attendance.status == AttendanceStatus.ON_LEAVE
+        )
+
         return MyPlanResponse(
             id=plan.id if plan else None,
             plan_date=plan_date,
             status=plan.status if plan else "DRAFT",
             submitted_at=plan.submitted_at if plan else None,
             items=items,
+            is_on_leave=is_on_leave,
         )
 
     # ── public: my plan ──────────────────────────────────────────────────
@@ -250,6 +259,54 @@ class VisitPlanService:
             self.repo.add(plan)
         await self.db.commit()
         return await self._build_my_plan(plan.employee_id, plan.plan_date)
+
+    # ── public: edit a still-planned item (time/day/purpose/target bags) ──
+    async def update_item(
+        self, user: User, item_id: int, payload: PlanItemUpdate
+    ) -> MyPlanResponse:
+        item = await self.repo.get_item(item_id)
+        if item is None:
+            raise not_found("Plan item not found")
+        plan = await self.repo.get_plan_by_id(item.plan_id)
+        if plan is None:
+            raise not_found("Plan not found")
+        is_privileged = user.role in (UserRole.ADMIN, UserRole.MANAGER)
+        if plan.employee_id != user.id and not is_privileged:
+            raise forbidden("This plan isn't yours")
+
+        if item.status != "PLANNED":
+            raise conflict(
+                "This visit has already been checked in and can no longer be edited"
+            )
+
+        fields = payload.model_dump(exclude_unset=True)
+        new_date = fields.pop("plan_date", None)
+        result_date = plan.plan_date
+
+        if new_date is not None and new_date != plan.plan_date:
+            if new_date < self._today_business():
+                raise bad_request("Cannot move a visit to a past date")
+            await self._assert_not_on_leave(plan.employee_id, new_date)
+            target_plan = await self.repo.get_plan(plan.employee_id, new_date)
+            if target_plan is None:
+                target_plan = VisitPlan(
+                    employee_id=plan.employee_id,
+                    plan_date=new_date,
+                    status="SUBMITTED",
+                    submitted_at=datetime.now(timezone.utc),
+                )
+                self.repo.add(target_plan)
+                await self.db.flush()
+            item.plan_id = target_plan.id
+            result_date = new_date
+
+        for key in ("time_slot", "purpose", "notes", "target_order_bags"):
+            if key in fields:
+                setattr(item, key, fields[key])
+
+        self.repo.add(item)
+        await self.db.commit()
+        return await self._build_my_plan(plan.employee_id, result_date)
 
     # ── team scope helper ────────────────────────────────────────────────
     async def _scope_team_ids(self, user: User) -> list[int] | None:

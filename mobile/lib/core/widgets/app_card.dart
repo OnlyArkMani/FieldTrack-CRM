@@ -31,7 +31,10 @@ class AppCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppDimens.cardRadius),
         boxShadow: AppDimens.shadow(Theme.of(context).brightness),
       ),
-      child: child,
+      // A Material ancestor for the child: without it, ink splashes from any
+      // ListTile/InkWell inside paint on the outer ambient Material — which
+      // this card's own opaque background then paints over, hiding them.
+      child: Material(color: Colors.transparent, child: child),
     );
 
     if (onTap == null) return card;
