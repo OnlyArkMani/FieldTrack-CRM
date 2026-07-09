@@ -4,10 +4,12 @@ Module 3. Thin HTTP layer; all logic + authorization live in VisitService.
 Route order matters: the static /active and /check-in paths are declared before
 the dynamic /{visit_id} so they're never swallowed by the id matcher.
 """
+from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import CurrentUser, get_db
@@ -33,9 +35,37 @@ from app.services.visit_service import VisitService
 router = APIRouter(prefix="/visits", tags=["visits"])
 
 
+class TeamVisitsResponse(BaseModel):
+    """Aggregate visit counts for the admin CRM dashboard."""
+
+    total: int
+    completed: int
+    checked_in: int
+
+
 @router.get("/ping")
 async def ping() -> dict:
     return {"status": "ok", "module": "visits"}
+
+
+@router.get("/team", response_model=TeamVisitsResponse)
+async def team_visits(
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+) -> TeamVisitsResponse:
+    """Aggregate visit counts for the caller's scope over a date range.
+
+    ADMIN sees all visits; SUPERVISOR sees only their team's. Powers the admin
+    CRM dashboard's "Today's visits" card. Declared before the dynamic
+    /{visit_id} route so "team" is never parsed as an id.
+    """
+    today = date.today()
+    summary = await VisitService(db).team_visit_summary(
+        user, date_from or today, date_to or today
+    )
+    return TeamVisitsResponse(**summary)
 
 
 @router.get("/active", response_model=VisitDetailResponse | None)
