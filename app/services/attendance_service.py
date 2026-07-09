@@ -297,14 +297,34 @@ class AttendanceService:
             attendance=self._to_out(attendance, state),
         )
 
-    async def mark_leave(self, *, user: User, ip: str | None) -> AttendanceOut:
-        """Self-service: mark today as leave. Only valid before any check-in
-        (no attendance row yet) — once STARTED/ON_LEAVE/ENDED exists for the
-        day, the UNIQUE(user_id, date) row is already claimed."""
-        day = self._today()
+    async def mark_leave(
+        self, *, user: User, ip: str | None, leave_date: date_type | None = None
+    ) -> AttendanceOut:
+        """Self-service: mark today (default) or a future `leave_date` as
+        leave. Only valid before any attendance row exists for that day —
+        once STARTED/ON_LEAVE/ENDED exists, the UNIQUE(user_id, date) row is
+        already claimed. A future date already carrying PLANNED visit-plan
+        items is rejected until the employee reschedules or skips them
+        (VisitPlanService.carry_over_item / skip_missed_item) — leave can't
+        silently strand a planned visit."""
+        day = leave_date if leave_date is not None else self._today()
+        if day < self._today():
+            raise bad_request("Cannot mark leave for a past date")
+
+        from app.repositories.visit_plan_repository import VisitPlanRepository
+
+        pending = await VisitPlanRepository(self.db).planned_farmer_names_for_date(
+            user.id, day
+        )
+        if pending:
+            raise conflict(
+                f"Reschedule or skip {len(pending)} planned visit(s) for "
+                f"{day.isoformat()} before requesting leave: {', '.join(pending)}"
+            )
+
         existing = await self.repo.get_for_user_date(user.id, day)
         if existing is not None:
-            raise conflict("Attendance already recorded today")
+            raise conflict("Attendance already recorded for that date")
 
         attendance = Attendance(
             user_id=user.id,

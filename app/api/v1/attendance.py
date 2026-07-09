@@ -24,6 +24,7 @@ from app.schemas.attendance import (
     AttendanceEndRequest,
     AttendanceOut,
     AttendanceStatusOverride,
+    LeaveRequest,
     ManualSessionRequest,
     TodayAttendanceOut,
 )
@@ -108,14 +109,21 @@ async def end(
     return result
 
 
-# ── Leave (self-service, only before any check-in today) ─────────────────
+# ── Leave (self-service; today or a future date, before any check-in) ────
 @router.post("/leave", response_model=AttendanceOut)
 async def mark_leave(
     request: Request,
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
+    body: LeaveRequest | None = None,
 ) -> AttendanceOut:
-    return await AttendanceService(db).mark_leave(user=user, ip=_client_ip(request))
+    """Mark today (default) or a future `date` as leave. A future date with
+    planned visits already on it is rejected until those are rescheduled or
+    skipped (see VisitPlanService.carry_over_item / skip_missed_item)."""
+    leave_date = body.date if body else None
+    return await AttendanceService(db).mark_leave(
+        user=user, ip=_client_ip(request), leave_date=leave_date
+    )
 
 
 # ── Personal reads ───────────────────────────────────────────────────────

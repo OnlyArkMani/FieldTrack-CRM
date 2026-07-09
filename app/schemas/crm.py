@@ -30,7 +30,7 @@ def _validate_phone(v: str | None) -> str | None:
 
 
 # Shared literal vocabularies (kept here so clients share one source of truth).
-CustomerType = Literal["FARMER", "FPO", "VLCC", "RETAILER"]
+CustomerType = Literal["FARMER_MEET", "FPO", "VLCC", "RETAILER", "DISTRIBUTOR"]
 LeadStatus = Literal["HOT", "WARM", "COLD"]
 VisitStatus = Literal["CHECKED_IN", "COMPLETED", "ABANDONED"]
 VisitPurpose = Literal["FIRST_VISIT", "FOLLOW_UP", "ORDER_COLLECTION", "RELATIONSHIP_VISIT"]
@@ -43,7 +43,7 @@ ReportStatus = Literal["DRAFT", "SUBMITTED"]
 # ── Farmers (Module 1) ───────────────────────────────────────────────────
 class FarmerCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    customer_type: CustomerType = "FARMER"
+    customer_type: CustomerType = "FARMER_MEET"
     phone: str | None = Field(default=None, max_length=20)
     village: str | None = Field(default=None, max_length=200)
     district: str | None = Field(default=None, max_length=200)
@@ -132,6 +132,8 @@ class VisitPlanItemCreate(BaseModel):
     time_slot: time | None = None
     purpose: VisitPurpose | None = None
     notes: str | None = None
+    # Bags the executive is targeting to sell/collect an order for at this stop.
+    target_order_bags: int | None = Field(default=None, ge=0)
 
 
 class VisitPlanItemResponse(BaseModel):
@@ -144,6 +146,7 @@ class VisitPlanItemResponse(BaseModel):
     time_slot: time | None
     purpose: str | None
     notes: str | None
+    target_order_bags: int | None = None
     status: str
     created_at: datetime
 
@@ -324,7 +327,7 @@ class FarmerListItem(BaseModel):
 
     id: int
     name: str
-    customer_type: CustomerType = "FARMER"
+    customer_type: CustomerType = "FARMER_MEET"
     phone: str | None = None
     village: str | None = None
     district: str | None = None
@@ -401,7 +404,7 @@ class FarmerDetailResponse(BaseModel):
 
     # base
     id: int
-    customer_type: CustomerType = "FARMER"
+    customer_type: CustomerType = "FARMER_MEET"
     team_id: int | None
     team_name: str | None = None
     created_by: int | None
@@ -450,7 +453,7 @@ class PlanItemView(BaseModel):
     id: int  # plan_item id, or the follow_up id when is_follow_up
     farmer_id: int
     farmer_name: str
-    customer_type: CustomerType = "FARMER"
+    customer_type: CustomerType = "FARMER_MEET"
     village: str | None = None
     lat: float | None = None
     lng: float | None = None
@@ -461,6 +464,7 @@ class PlanItemView(BaseModel):
     time_slot: time | None = None
     purpose: str | None = None
     notes: str | None = None
+    target_order_bags: int | None = None
     status: str = "PLANNED"  # PLANNED/COMPLETED/SKIPPED (PENDING for follow-ups)
     is_follow_up: bool = False
     follow_up_id: int | None = None
@@ -640,7 +644,7 @@ class VetRequestItem(BaseModel):
     visit_id: int
     farmer_id: int | None = None
     farmer_name: str
-    customer_type: CustomerType = "FARMER"
+    customer_type: CustomerType = "FARMER_MEET"
     village: str | None = None
     phone: str | None = None
     employee_id: int | None = None
@@ -733,7 +737,7 @@ class VisitDetailResponse(BaseModel):
     employee_id: int | None
     farmer_id: int | None
     farmer_name: str | None = None
-    customer_type: CustomerType = "FARMER"
+    customer_type: CustomerType = "FARMER_MEET"
     plan_item_id: int | None
     check_in_at: datetime | None
     check_out_at: datetime | None
@@ -768,7 +772,7 @@ class LeadListItem(BaseModel):
 
     farmer_id: int
     farmer_name: str
-    customer_type: CustomerType = "FARMER"
+    customer_type: CustomerType = "FARMER_MEET"
     village: str | None = None
     lead_status: str
     last_visit_at: datetime | None = None

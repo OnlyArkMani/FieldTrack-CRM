@@ -126,6 +126,11 @@ class PlanItemCard extends StatelessWidget {
                   children: [
                     _chip(context, purposeLabel(item.purpose),
                         scheme.secondary),
+                    if (item.targetOrderBags != null) ...[
+                      const SizedBox(width: AppDimens.grid * 0.75),
+                      _chip(context, 'Target ${item.targetOrderBags} bags',
+                          colors.statusActive),
+                    ],
                     const SizedBox(width: AppDimens.grid * 0.75),
                     if (item.leadStatus != null)
                       LeadStatusBadge(status: item.leadStatus),

@@ -32,10 +32,11 @@ enum LeadStatus {
 /// guided livestock flow; FPO, VLCC and Retailer share the 5-question org
 /// form (Retailer reuses the FPO/VLCC form as-is — no dedicated fields).
 enum CustomerType {
-  farmer('FARMER'),
+  farmer('FARMER_MEET'),
   fpo('FPO'),
   vlcc('VLCC'),
-  retailer('RETAILER');
+  retailer('RETAILER'),
+  distributor('DISTRIBUTOR');
 
   const CustomerType(this.wire);
   final String wire;
@@ -48,14 +49,15 @@ enum CustomerType {
   }
 
   String get label => switch (this) {
-        CustomerType.farmer => 'Farmer',
+        CustomerType.farmer => 'Farmer Meet',
         CustomerType.fpo => 'FPO',
         CustomerType.vlcc => 'VLCC',
         CustomerType.retailer => 'Retailer',
+        CustomerType.distributor => 'Distributor',
       };
 
-  /// FPO, VLCC and Retailer answer the shared organisation form instead of
-  /// livestock.
+  /// FPO, VLCC, Retailer and Distributor answer the shared organisation form
+  /// instead of livestock.
   bool get isOrg => this != CustomerType.farmer;
 }
 

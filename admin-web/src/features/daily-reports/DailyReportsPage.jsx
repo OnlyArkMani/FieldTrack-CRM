@@ -576,7 +576,7 @@ function RowItem({ children }) {
 
 // Small inline customer-type chip (only shown for FPO/VLCC to avoid noise).
 function TypeTag({ type }) {
-  if (!type || type === 'FARMER') return null;
+  if (!type || type === 'FARMER_MEET') return null;
   return (
     <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
       {type}

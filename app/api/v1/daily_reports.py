@@ -61,7 +61,7 @@ class VisitSummaryItem(BaseModel):
     farmer_name: str
     village: str | None = None
     district: str | None = None
-    customer_type: str = "FARMER"
+    customer_type: str = "FARMER_MEET"
     purpose: str | None
     check_in_at: Any
     check_out_at: Any
@@ -84,7 +84,7 @@ class VisitSummaryItem(BaseModel):
 class OrderSummaryItem(BaseModel):
     id: int
     farmer_name: str
-    customer_type: str = "FARMER"
+    customer_type: str = "FARMER_MEET"
     bags_count: int
     delivery_date: date
     payment_mode: str | None
@@ -657,7 +657,7 @@ def _dsr_csv_response(
         w.writerow(
             [
                 v["farmer_name"],
-                v.get("customer_type", "FARMER"),
+                v.get("customer_type", "FARMER_MEET"),
                 v.get("purpose") or "",
                 v.get("check_in_at") or "",
                 v.get("check_out_at") or "",
@@ -672,7 +672,7 @@ def _dsr_csv_response(
         w.writerow(
             [
                 o["farmer_name"],
-                o.get("customer_type", "FARMER"),
+                o.get("customer_type", "FARMER_MEET"),
                 o["bags_count"],
                 o["delivery_date"].isoformat() if o.get("delivery_date") else "",
                 o.get("payment_mode") or "",

@@ -43,7 +43,7 @@ class Customer(Base, TimestampMixin):
     """Customer master record (the CRM's central entity).
 
     Renamed from ``farmers`` in migration 0008 and given a ``customer_type``
-    discriminator (FARMER / FPO / VLCC / RETAILER). Child tables still carry a
+    discriminator (FARMER_MEET / FPO / VLCC / RETAILER / DISTRIBUTOR). Child tables still carry a
     ``farmer_id`` FK column that now references ``customers.id`` — the column
     name is kept for wire/DB compatibility; ``Farmer`` remains an alias of this
     class at the bottom of the module."""
@@ -52,16 +52,18 @@ class Customer(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     # Native PG enum ``customertype`` (created in migration 0008, RETAILER
-    # added in migration 0016). Mapped with plain string members (not the
-    # Python enum class) so reads return "FARMER"/"FPO"/"VLCC"/"RETAILER"
-    # strings — matching the rest of the CRM's string discriminators and the
-    # Pydantic Literal wire types. create_type=False: Alembic owns the type's
-    # lifecycle, never metadata.create_all.
+    # added in migration 0016, DISTRIBUTOR added in migration 0021, FARMER
+    # renamed to FARMER_MEET in migration 0023). Mapped with plain string
+    # members (not the Python enum class) so reads return
+    # "FARMER_MEET"/"FPO"/"VLCC"/"RETAILER"/"DISTRIBUTOR" strings — matching
+    # the rest of the CRM's string discriminators and the Pydantic Literal
+    # wire types. create_type=False: Alembic owns the type's lifecycle, never
+    # metadata.create_all.
     customer_type: Mapped[str] = mapped_column(
-        SAEnum("FARMER", "FPO", "VLCC", "RETAILER", name="customertype"),
+        SAEnum("FARMER_MEET", "FPO", "VLCC", "RETAILER", "DISTRIBUTOR", name="customertype"),
         nullable=False,
-        default="FARMER",
-        server_default=text("'FARMER'"),
+        default="FARMER_MEET",
+        server_default=text("'FARMER_MEET'"),
     )
     team_id: Mapped[int | None] = mapped_column(
         ForeignKey("teams.id", ondelete="SET NULL")
@@ -141,6 +143,9 @@ class VisitPlanItem(Base):
     purpose: Mapped[str | None] = mapped_column(String(50))
     # FIRST_VISIT / FOLLOW_UP / ORDER_COLLECTION / RELATIONSHIP_VISIT
     notes: Mapped[str | None] = mapped_column(Text)
+    # Bags the executive is targeting to sell/collect an order for at this
+    # stop, set when the plan is created (migration 0022).
+    target_order_bags: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="PLANNED", server_default=text("'PLANNED'")
     )  # PLANNED / COMPLETED / SKIPPED

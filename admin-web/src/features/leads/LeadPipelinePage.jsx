@@ -57,7 +57,7 @@ export default function LeadPipelinePage() {
   const allLeads = Array.isArray(leads) ? leads : (leads?.items || []);
   // Customer-type filter is applied client-side (the list already carries it).
   const leadList = typeFilter
-    ? allLeads.filter((l) => (l.customer_type || 'FARMER') === typeFilter)
+    ? allLeads.filter((l) => (l.customer_type || 'FARMER_MEET') === typeFilter)
     : allLeads;
 
   // Counts come from the same filtered /leads/team response as the table
@@ -200,10 +200,11 @@ export default function LeadPipelinePage() {
               aria-label="Customer type"
             >
               <option value="">All types</option>
-              <option value="FARMER">Farmers</option>
+              <option value="FARMER_MEET">Farmer Meets</option>
               <option value="FPO">FPOs</option>
               <option value="VLCC">VLCCs</option>
               <option value="RETAILER">Retailers</option>
+              <option value="DISTRIBUTOR">Distributors</option>
             </Select>
           </div>
         </div>
@@ -239,7 +240,7 @@ export default function LeadPipelinePage() {
                       <td className="px-4 py-3 font-medium text-text-primary">
                         <div className="flex items-center gap-1.5">
                           <span className="truncate max-w-[150px]">{lead.farmer_name ?? '—'}</span>
-                          {lead.customer_type && lead.customer_type !== 'FARMER' && (
+                          {lead.customer_type && lead.customer_type !== 'FARMER_MEET' && (
                             <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
                               {lead.customer_type}
                             </span>

@@ -53,7 +53,7 @@ class VisitPlanService:
             id=item.id,
             farmer_id=item.farmer_id,
             farmer_name=name or "Unknown",
-            customer_type=customer_type.value if hasattr(customer_type, 'value') else (customer_type or "FARMER"),
+            customer_type=customer_type.value if hasattr(customer_type, 'value') else (customer_type or "FARMER_MEET"),
             village=village,
             lat=lat,
             lng=lng,
@@ -64,6 +64,7 @@ class VisitPlanService:
             time_slot=item.time_slot,
             purpose=item.purpose,
             notes=item.notes,
+            target_order_bags=item.target_order_bags,
             status=item.status,
             is_follow_up=False,
         )
@@ -75,7 +76,7 @@ class VisitPlanService:
             id=item.id,
             farmer_id=item.farmer_id,
             farmer_name=name or "Unknown",
-            customer_type=customer_type.value if hasattr(customer_type, 'value') else (customer_type or "FARMER"),
+            customer_type=customer_type.value if hasattr(customer_type, 'value') else (customer_type or "FARMER_MEET"),
             village=village,
             lat=lat,
             lng=lng,
@@ -86,6 +87,7 @@ class VisitPlanService:
             time_slot=item.time_slot,
             purpose=item.purpose,
             notes=item.notes,
+            target_order_bags=item.target_order_bags,
             status=item.status,
             is_follow_up=False,
             is_carry_over=True,
@@ -99,7 +101,7 @@ class VisitPlanService:
             id=fu.id,
             farmer_id=fu.farmer_id,
             farmer_name=name or "Unknown",
-            customer_type=customer_type.value if hasattr(customer_type, 'value') else (customer_type or "FARMER"),
+            customer_type=customer_type.value if hasattr(customer_type, 'value') else (customer_type or "FARMER_MEET"),
             village=village,
             lat=lat,
             lng=lng,
@@ -197,6 +199,7 @@ class VisitPlanService:
                     time_slot=it.time_slot,
                     purpose=it.purpose,
                     notes=it.notes,
+                    target_order_bags=it.target_order_bags,
                     status="PLANNED",
                 )
             )
@@ -357,6 +360,7 @@ class VisitPlanService:
                 time_slot=time_slot if time_slot is not None else item.time_slot,
                 purpose=item.purpose,
                 notes=item.notes,
+                target_order_bags=item.target_order_bags,
                 status="PLANNED",
             )
         )

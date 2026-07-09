@@ -25,6 +25,7 @@ class PlanItem {
     this.timeSlot,
     this.purpose,
     this.notes,
+    this.targetOrderBags,
     this.status = 'PLANNED',
     this.isFollowUp = false,
     this.followUpId,
@@ -48,6 +49,9 @@ class PlanItem {
   final String? timeSlot;
   final String? purpose;
   final String? notes;
+
+  /// Bags the executive is targeting to sell/collect an order for at this stop.
+  final int? targetOrderBags;
   final String status; // PLANNED / COMPLETED / SKIPPED / PENDING (follow-up)
   final bool isFollowUp;
   final int? followUpId;
@@ -70,6 +74,7 @@ class PlanItem {
     String? timeSlot,
     String? purpose,
     String? notes,
+    int? targetOrderBags,
     String? status,
   }) =>
       PlanItem(
@@ -87,6 +92,7 @@ class PlanItem {
         timeSlot: timeSlot ?? this.timeSlot,
         purpose: purpose ?? this.purpose,
         notes: notes ?? this.notes,
+        targetOrderBags: targetOrderBags ?? this.targetOrderBags,
         status: status ?? this.status,
         isFollowUp: isFollowUp,
         followUpId: followUpId,
@@ -109,6 +115,7 @@ class PlanItem {
         timeSlot: json['time_slot'] as String?,
         purpose: json['purpose'] as String?,
         notes: json['notes'] as String?,
+        targetOrderBags: json['target_order_bags'] as int?,
         status: (json['status'] as String?) ?? 'PLANNED',
         isFollowUp: (json['is_follow_up'] as bool?) ?? false,
         followUpId: json['follow_up_id'] as int?,
@@ -123,6 +130,7 @@ class PlanItem {
         if (timeSlot != null) 'time_slot': timeSlot,
         if (purpose != null) 'purpose': purpose,
         if (notes != null && notes!.isNotEmpty) 'notes': notes,
+        if (targetOrderBags != null) 'target_order_bags': targetOrderBags,
       };
 }
 

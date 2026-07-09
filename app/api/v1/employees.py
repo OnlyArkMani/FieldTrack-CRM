@@ -162,7 +162,7 @@ class CrmPerformanceOut(_BaseModel):
     visits_planned: int
     visits_completed: int
     # Checklist A7 — visits completed broken down by counterparty type
-    # (FARMER / FPO / VLCC today; any future customer_type value, e.g.
+    # (FARMER_MEET / FPO / VLCC today; any future customer_type value, e.g.
     # Retailer, appears automatically once it exists).
     visits_completed_by_type: dict[str, int]
     # Checklist A8 — vet requests raised by this employee in range, broken
@@ -180,7 +180,7 @@ class CrmPerformanceOut(_BaseModel):
     dsrs_total: int
     unique_farmers_visited: int
     visits_with_remarks: int
-    # Order count/bags per customer_type (FARMER / FPO / VLCC). Always has an
+    # Order count/bags per customer_type (FARMER_MEET / FPO / VLCC). Always has an
     # entry for every current CustomerType value, 0 when there's no data.
     orders_by_type: dict[str, int]
     bags_by_type: dict[str, int]

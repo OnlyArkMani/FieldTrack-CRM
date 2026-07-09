@@ -51,7 +51,7 @@ class LeadService:
         return LeadListItem(
             farmer_id=lead.farmer_id,
             farmer_name=name or "Unknown",
-            customer_type=customer_type or "FARMER",
+            customer_type=customer_type or "FARMER_MEET",
             village=village,
             lead_status=lead.status,
             last_visit_at=last_visit,

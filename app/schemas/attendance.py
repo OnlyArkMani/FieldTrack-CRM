@@ -41,6 +41,15 @@ class AttendanceEndRequest(GpsPoint):
     work_summary: str | None = Field(default=None, min_length=10, max_length=500)
 
 
+class LeaveRequest(BaseModel):
+    """Body for POST /attendance/leave. `date` defaults to today; a future
+    date is allowed but a past date is rejected by the service. If planned
+    visits already exist for that date, the service rejects the request
+    until they're rescheduled or skipped."""
+
+    date: date_type | None = None
+
+
 class AttendanceStatusOverride(BaseModel):
     """Admin override of the day's classification."""
 

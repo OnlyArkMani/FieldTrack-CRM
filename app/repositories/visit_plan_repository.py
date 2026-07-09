@@ -125,6 +125,26 @@ class VisitPlanRepository:
     async def get_item(self, item_id: int) -> VisitPlanItem | None:
         return await self.db.get(VisitPlanItem, item_id)
 
+    async def planned_farmer_names_for_date(
+        self, employee_id: int, plan_date: date_type
+    ) -> list[str]:
+        """Farmer names of still-PLANNED stops on `employee_id`'s plan for
+        `plan_date`. Used to gate leave requests for that date — the employee
+        must reschedule/skip these first (see VisitPlanService.carry_over_item
+        / skip_missed_item)."""
+        stmt = (
+            select(func.coalesce(Farmer.name, "Unknown"))
+            .select_from(VisitPlanItem)
+            .join(VisitPlan, VisitPlan.id == VisitPlanItem.plan_id)
+            .outerjoin(Farmer, Farmer.id == VisitPlanItem.farmer_id)
+            .where(
+                VisitPlan.employee_id == employee_id,
+                VisitPlan.plan_date == plan_date,
+                VisitPlanItem.status == "PLANNED",
+            )
+        )
+        return list((await self.db.execute(stmt)).scalars().all())
+
     async def missed_plan_items_joined(
         self, employee_id: int, before_date: date_type
     ) -> list:

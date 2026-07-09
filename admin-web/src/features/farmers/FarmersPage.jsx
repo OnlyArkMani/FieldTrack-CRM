@@ -21,13 +21,14 @@ import Button from '@/components/ui/Button';
 import { Select } from '@/components/ui/Input';
 import FarmerDetailPanel, { LeadBadge, CustomerTypeBadge } from './FarmerDetailPanel';
 
-// [All] [Farmers] [FPOs] [VLCCs] [Retailers] — value '' means no customer_type filter.
+// [All] [Farmer Meets] [FPOs] [VLCCs] [Retailers] [Distributors] — value '' means no customer_type filter.
 const TYPE_TABS = [
   { value: '', label: 'All' },
-  { value: 'FARMER', label: 'Farmers' },
+  { value: 'FARMER_MEET', label: 'Farmer Meets' },
   { value: 'FPO', label: 'FPOs' },
   { value: 'VLCC', label: 'VLCCs' },
   { value: 'RETAILER', label: 'Retailers' },
+  { value: 'DISTRIBUTOR', label: 'Distributors' },
 ];
 
 export default function FarmersPage() {
@@ -269,7 +270,7 @@ function ImportModal({ onClose }) {
           <>
             <p className="text-sm text-text-secondary">
               Upload a CSV or Excel file with a <code>customer_type</code> column
-              (FARMER / FPO / VLCC). We validate first, then you confirm the insert.
+              (FARMER_MEET / FPO / VLCC / RETAILER / DISTRIBUTOR). We validate first, then you confirm the insert.
             </p>
 
             <button
