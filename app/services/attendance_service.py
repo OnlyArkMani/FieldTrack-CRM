@@ -351,6 +351,18 @@ class AttendanceService:
         refreshed = await self.repo.get_for_user_date(user.id, day)
         return self._to_out(refreshed, "ON_LEAVE")
 
+    async def revoke_leave(self, user_id: int, attendance_id: int) -> None:
+        attendance = await self.repo.get_by_id(attendance_id)
+        if attendance is None or attendance.user_id != user_id:
+            raise not_found("Leave record not found")
+        if attendance.status != AttendanceStatus.ON_LEAVE:
+            raise bad_request("Only leaves can be revoked")
+        if attendance.date < self._today():
+            raise bad_request("Cannot revoke past leaves")
+
+        await self.db.delete(attendance)
+        await self.db.commit()
+
     async def get_history(
         self,
         user_id: int,

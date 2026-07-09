@@ -17,6 +17,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../models/attendance.dart';
 import '../providers/attendance_provider.dart';
 import '../providers/attendance_history_provider.dart';
+import '../providers/upcoming_leaves_provider.dart';
 import '../widgets/attendance_timer.dart';
 import '../widgets/leave_action.dart';
 import '../widgets/session_timeline.dart';
@@ -116,6 +117,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
             await Future.wait([
               ref.read(attendanceProvider.notifier).load(),
               ref.read(attendanceHistoryProvider.notifier).load(),
+              ref.read(upcomingLeavesProvider.notifier).load(),
             ]);
           },
           child: ListView(
@@ -149,6 +151,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
               ],
               const SizedBox(height: AppDimens.grid * 3),
               if (!state.isLoading) ...[
+                const _UpcomingLeavesSection(),
+                const SizedBox(height: AppDimens.grid * 3),
                 Text(
                   'Today',
                   style: AppTextStyles.caption.copyWith(
@@ -1248,5 +1252,312 @@ class _HistoryCardState extends State<_HistoryCard> {
         ],
       ),
     );
+  }
+}
+
+class _UpcomingLeavesSection extends ConsumerWidget {
+  const _UpcomingLeavesSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(upcomingLeavesProvider);
+    final scheme = Theme.of(context).colorScheme;
+
+    if (state.leaves.isEmpty && !state.isLoading) {
+      return const SizedBox.shrink();
+    }
+
+    final displayedLeaves = state.leaves.take(3).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Upcoming Leaves',
+              style: AppTextStyles.heading.copyWith(fontSize: 18),
+            ),
+            if (state.isLoading)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppDimens.grid * 1.5),
+        if (state.error != null) ...[
+          Text(
+            state.error!,
+            style: AppTextStyles.bodyMedium.copyWith(color: scheme.error),
+          ),
+          const SizedBox(height: AppDimens.grid),
+        ],
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: displayedLeaves.length,
+          separatorBuilder: (context, index) =>
+              const SizedBox(height: AppDimens.grid),
+          itemBuilder: (context, index) {
+            final leave = displayedLeaves[index];
+            final isThisRevoking = state.revokingId == leave.id;
+
+            return AppCard(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimens.grid * 2,
+                vertical: AppDimens.grid * 1.5,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          DateFormat('EEE, d MMM yyyy').format(leave.date),
+                          style: AppTextStyles.body.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: scheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            'On Leave',
+                            style: AppTextStyles.caption.copyWith(
+                              color: Colors.blue.shade700,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppDimens.grid * 2),
+                  if (isThisRevoking)
+                    const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    TextButton.icon(
+                      onPressed: () => _confirmRevoke(context, ref, leave),
+                      style: TextButton.styleFrom(
+                        foregroundColor: scheme.error,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppDimens.grid * 1.5,
+                          vertical: AppDimens.grid,
+                        ),
+                      ),
+                      icon: const Icon(Icons.cancel_outlined, size: 16),
+                      label: const Text('Cancel'),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+        if (state.leaves.length > 3) ...[
+          const SizedBox(height: AppDimens.grid),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const UpcomingLeavesScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+              label: const Text('View All'),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _confirmRevoke(
+      BuildContext context, WidgetRef ref, Attendance leave) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Leave'),
+        content: Text(
+          'Are you sure you want to cancel your leave for '
+          '${DateFormat('EEEE, d MMMM').format(leave.date)}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('No'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Yes, Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      await ref.read(upcomingLeavesProvider.notifier).revokeLeave(leave.id);
+    }
+  }
+}
+
+class UpcomingLeavesScreen extends ConsumerWidget {
+  const UpcomingLeavesScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(upcomingLeavesProvider);
+    final scheme = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('All Upcoming Leaves'),
+      ),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: () => ref.read(upcomingLeavesProvider.notifier).load(),
+          child: state.leaves.isEmpty && !state.isLoading
+              ? const Center(child: Text('No upcoming leaves'))
+              : ListView(
+                  padding: const EdgeInsets.all(AppDimens.grid * 2),
+                  children: [
+                    if (state.error != null) ...[
+                      Text(
+                        state.error!,
+                        style: AppTextStyles.bodyMedium.copyWith(color: scheme.error),
+                      ),
+                      const SizedBox(height: AppDimens.grid),
+                    ],
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: state.leaves.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(height: AppDimens.grid),
+                      itemBuilder: (context, index) {
+                        final leave = state.leaves[index];
+                        final isThisRevoking = state.revokingId == leave.id;
+
+                        return AppCard(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppDimens.grid * 2,
+                            vertical: AppDimens.grid * 1.5,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      DateFormat('EEE, d MMM yyyy').format(leave.date),
+                                      style: AppTextStyles.body.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        color: scheme.onSurface,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.shade50,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        'On Leave',
+                                        style: AppTextStyles.caption.copyWith(
+                                          color: Colors.blue.shade700,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: AppDimens.grid * 2),
+                              if (isThisRevoking)
+                                const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              else
+                                TextButton.icon(
+                                  onPressed: () => _confirmRevoke(context, ref, leave),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: scheme.error,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppDimens.grid * 1.5,
+                                      vertical: AppDimens.grid,
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.cancel_outlined, size: 16),
+                                  label: const Text('Cancel'),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmRevoke(
+      BuildContext context, WidgetRef ref, Attendance leave) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Leave'),
+        content: Text(
+          'Are you sure you want to cancel your leave for '
+          '${DateFormat('EEEE, d MMMM').format(leave.date)}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('No'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Yes, Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      await ref.read(upcomingLeavesProvider.notifier).revokeLeave(leave.id);
+    }
   }
 }

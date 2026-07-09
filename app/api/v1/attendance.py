@@ -131,6 +131,16 @@ async def mark_leave(
     )
 
 
+@router.delete("/leave/{id}")
+async def revoke_leave(
+    user: CurrentUser,
+    id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, str]:
+    await AttendanceService(db).revoke_leave(user.id, id)
+    return {"status": "success", "message": "Leave revoked successfully"}
+
+
 # ── Personal reads ───────────────────────────────────────────────────────
 @router.get("/today", response_model=TodayAttendanceOut)
 async def today(

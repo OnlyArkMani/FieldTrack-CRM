@@ -97,6 +97,10 @@ class AttendanceRepository {
     );
   }
 
+  Future<void> revokeLeave(int attendanceId) async {
+    await _api.delete('/attendance/leave/$attendanceId');
+  }
+
   Future<Attendance> _transition(String action, double lat, double lng) async {
     final data =
         await _api.post('/attendance/$action', body: {'lat': lat, 'lng': lng});
