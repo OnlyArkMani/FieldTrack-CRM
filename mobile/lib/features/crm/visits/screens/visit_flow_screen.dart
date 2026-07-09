@@ -284,8 +284,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
           if (!mounted) return;
           _enterStep(3);
         case 3:
-          final shouldSave = _isSpecialOrg ? _orgInterested : _orderEnabled;
-          if (shouldSave) await _saveOrder();
+          _validateOrder();
           await _saveNotes(step: 3, silent: true);
           if (!mounted) return;
           _enterStep(4);
@@ -409,6 +408,32 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
     );
   }
 
+  void _validateOrder() {
+    if (_isSpecialOrg) {
+      if (!_orgInterested) return;
+      final bags = int.tryParse(_orgInterestedBags.text.trim()) ?? 0;
+      if (bags < 1) {
+        throw const ValidationException('Enter at least 1 bag for the order.');
+      }
+      if (_deliveryDate == null) {
+        throw const ValidationException('Pick a delivery date.');
+      }
+      if (_payMode == null) {
+        throw const ValidationException('Pick a payment mode.');
+      }
+      return;
+    }
+
+    if (!_orderEnabled) return;
+    final bags = int.tryParse(_bagsCount.text.trim()) ?? 0;
+    if (bags < 1) {
+      throw const ValidationException('Enter at least 1 bag for the order.');
+    }
+    if (_deliveryDate == null) {
+      throw const ValidationException('Pick a delivery date.');
+    }
+  }
+
   Future<void> _saveOrder() async {
     if (_isSpecialOrg) {
       if (!_orgInterested) return;
@@ -416,14 +441,19 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       if (bags < 1) {
         throw const ValidationException('Enter at least 1 bag for the order.');
       }
-      final delivery = DateTime.now().add(const Duration(days: 7));
+      if (_deliveryDate == null) {
+        throw const ValidationException('Pick a delivery date.');
+      }
+      if (_payMode == null) {
+        throw const ValidationException('Pick a payment mode.');
+      }
       await _repo.createOrder(
         _visitId!,
         bagsCount: bags,
-        deliveryDate: delivery,
+        deliveryDate: _deliveryDate!,
         deliveryAddress: '',
-        paymentMode: 'CASH',
-        specialNotes: 'Auto-captured from FPO/VLCC/Distributor supply interest',
+        paymentMode: _payMode!,
+        specialNotes: 'Auto-captured from FPO/VLCC/Distributor/Retailer supply interest',
         pricePerBag: null,
       );
       return;
@@ -475,6 +505,11 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       _error = null;
     });
     try {
+      final shouldSave = _isSpecialOrg ? _orgInterested : _orderEnabled;
+      if (shouldSave) {
+        await _saveOrder();
+      }
+
       final time = _followUpTime == null
           ? null
           : '${_followUpTime!.hour.toString().padLeft(2, '0')}:'
@@ -1047,6 +1082,56 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
           if (_orgInterested) ...[
             const SizedBox(height: AppDimens.grid * 2),
             _numField(_orgInterestedBags, 'Bags they want to order'),
+            const SizedBox(height: AppDimens.grid * 2),
+            InkWell(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _deliveryDate ?? _earliestDelivery,
+                  firstDate: _earliestDelivery,
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                );
+                if (picked != null) setState(() => _deliveryDate = picked);
+              },
+              child: Container(
+                padding: const EdgeInsets.all(AppDimens.grid * 1.5),
+                decoration: BoxDecoration(
+                  color: scheme.surface,
+                  border: Border.all(
+                      color: colors.textSecondary.withValues(alpha: 0.25)),
+                  borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.event_rounded,
+                        size: 18, color: colors.textSecondary),
+                    const SizedBox(width: AppDimens.grid),
+                    Text(
+                      _deliveryDate == null
+                          ? 'Pick delivery date'
+                          : shortDate(_deliveryDate),
+                      style: AppTextStyles.body.copyWith(
+                          color: _deliveryDate == null
+                              ? colors.textSecondary
+                              : scheme.onSurface),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text('Earliest delivery: ${shortDate(_earliestDelivery)}',
+                style: AppTextStyles.caption
+                    .copyWith(color: colors.textSecondary)),
+            const SizedBox(height: AppDimens.grid * 2),
+            _chipsField(
+                'Payment mode',
+                _payModes.map((e) => e.$2).toList(),
+                _payMode == null
+                    ? null
+                    : _payModes.firstWhere((e) => e.$1 == _payMode).$2,
+                (label) => setState(() => _payMode =
+                    _payModes.firstWhere((e) => e.$2 == label).$1)),
           ],
         ],
       );
