@@ -129,16 +129,16 @@ class VisitService:
     ) -> dict[str, int]:
         """Count visits in the caller's scope between two dates (inclusive).
 
-        ADMIN → all visits. SUPERVISOR → visits by members of their own team.
+        ADMIN → all visits. MANAGER → visits by members of their own team.
         Employees have no team-wide view (dashboard is web-only).
         """
-        if user.role not in (UserRole.ADMIN, UserRole.SUPERVISOR):
+        if user.role not in (UserRole.ADMIN, UserRole.MANAGER):
             raise forbidden("Not permitted")
 
         zero = {"total": 0, "completed": 0, "checked_in": 0}
         conds = [func.date(Visit.check_in_at).between(date_from, date_to)]
 
-        if user.role == UserRole.SUPERVISOR:
+        if user.role == UserRole.MANAGER:
             if not user.team_id:
                 return zero
             member_ids = (

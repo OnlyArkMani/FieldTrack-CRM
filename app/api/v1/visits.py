@@ -57,7 +57,7 @@ async def team_visits(
 ) -> TeamVisitsResponse:
     """Aggregate visit counts for the caller's scope over a date range.
 
-    ADMIN sees all visits; SUPERVISOR sees only their team's. Powers the admin
+    ADMIN sees all visits; MANAGER sees only their team's. Powers the admin
     CRM dashboard's "Today's visits" card. Declared before the dynamic
     /{visit_id} route so "team" is never parsed as an id.
     """
