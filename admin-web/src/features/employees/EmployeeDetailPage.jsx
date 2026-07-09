@@ -26,6 +26,7 @@ import {
 } from '@/hooks/useEmployees';
 import { useTeams } from '@/hooks/useTeams';
 import { api, apiErrorMessage } from '@/services/api/client';
+import { CUSTOMER_TYPE_META } from '@/features/farmers/FarmerDetailPanel';
 
 import Card, { CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -674,11 +675,9 @@ function Row({ label, value }) {
   );
 }
 
-const TYPE_COLORS = {
-  FARMER: 'var(--ft-status-active)',
-  FPO: 'var(--ft-primary)',
-  VLCC: 'var(--ft-secondary)',
-};
+const TYPE_COLORS = Object.fromEntries(
+  Object.entries(CUSTOMER_TYPE_META).map(([type, meta]) => [type, meta.color])
+);
 
 function Mini({ label, value, color }) {
   return (
@@ -776,16 +775,21 @@ function CrmScorecard({ employeeId }) {
           </div>
           <div className="col-span-2 rounded-btn border border-border p-3">
             <div className="mb-2 text-xs text-text-secondary">Orders by type</div>
-            <div className="flex gap-4">
-              <span className="text-sm font-bold" style={{ color: 'var(--ft-status-active)' }}>
-                {data.orders_by_type?.FARMER ?? 0} Farmer
-              </span>
-              <span className="text-sm font-bold" style={{ color: 'var(--ft-primary)' }}>
-                {data.orders_by_type?.FPO ?? 0} FPO
-              </span>
-              <span className="text-sm font-bold" style={{ color: 'var(--ft-secondary)' }}>
-                {data.orders_by_type?.VLCC ?? 0} VLCC
-              </span>
+            <div className="flex flex-wrap gap-4">
+              {Object.entries(data.orders_by_type || {})
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([type, count]) => {
+                  const meta = CUSTOMER_TYPE_META[type];
+                  return (
+                    <span
+                      key={type}
+                      className="text-sm font-bold"
+                      style={{ color: meta?.color || 'var(--ft-status-battery)' }}
+                    >
+                      {count} {meta?.label || type}
+                    </span>
+                  );
+                })}
             </div>
           </div>
           <div className="col-span-2 rounded-btn border border-border p-3">
