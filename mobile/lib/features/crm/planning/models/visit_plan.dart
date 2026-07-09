@@ -141,6 +141,7 @@ class MyPlan {
     this.status = 'DRAFT',
     this.submittedAt,
     this.items = const [],
+    this.isOnLeave = false,
   });
 
   final int? id;
@@ -148,6 +149,10 @@ class MyPlan {
   final String status; // DRAFT / SUBMITTED / IN_PROGRESS / COMPLETED
   final DateTime? submittedAt;
   final List<PlanItem> items;
+
+  /// True when the employee is marked on leave for [planDate] — visits can't
+  /// be planned for this day (mirrors the server-side guard).
+  final bool isOnLeave;
 
   bool get isSubmitted =>
       status == 'SUBMITTED' || status == 'IN_PROGRESS' || status == 'COMPLETED';
@@ -160,5 +165,6 @@ class MyPlan {
         items: ((json['items'] as List<dynamic>?) ?? [])
             .map((e) => PlanItem.fromJson(e as Map<String, dynamic>))
             .toList(),
+        isOnLeave: (json['is_on_leave'] as bool?) ?? false,
       );
 }

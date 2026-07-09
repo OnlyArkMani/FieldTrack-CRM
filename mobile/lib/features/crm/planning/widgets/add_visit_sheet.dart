@@ -19,7 +19,7 @@ import '../models/visit_plan.dart';
 import '../providers/visit_plan_provider.dart';
 import 'plan_item_card.dart' show purposeLabel;
 
-const _purposes = [
+const visitPurposes = [
   'FIRST_VISIT',
   'FOLLOW_UP',
   'ORDER_COLLECTION',
@@ -259,7 +259,7 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
           spacing: AppDimens.grid,
           runSpacing: AppDimens.grid,
           children: [
-            for (final p in _purposes)
+            for (final p in visitPurposes)
               GestureDetector(
                 onTap: () => setState(() => _purpose = p),
                 child: Container(

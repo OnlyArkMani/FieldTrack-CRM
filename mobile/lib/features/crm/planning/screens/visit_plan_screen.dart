@@ -11,6 +11,7 @@ import '../../../attendance/providers/attendance_provider.dart';
 import '../models/visit_plan.dart';
 import '../providers/visit_plan_provider.dart';
 import '../widgets/add_visit_sheet.dart';
+import '../widgets/edit_visit_sheet.dart';
 import '../widgets/plan_item_card.dart';
 
 /// Pre-day visit planning. Date selector, save-status bar, reorderable visit
@@ -43,10 +44,19 @@ class VisitPlanScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(visitPlanProvider);
     final notifier = ref.read(visitPlanProvider.notifier);
-    // Checked out / on leave for the day => can't start a visit right now.
+    // Checked out / on leave today, or the selected plan day itself is a
+    // leave day => can't start (or plan) a visit for it. Kept as a reason
+    // string (not just a bool) so the disabled Start Visit button can say
+    // *why* instead of just going grey with no explanation.
     final attendanceState = ref.watch(attendanceProvider).state;
-    final visitBlocked =
-        attendanceState.isEnded || attendanceState.isOnLeave;
+    final onLeaveThisDay = !state.isLoading && state.isOnLeave;
+    final visitBlockedReason = onLeaveThisDay
+        ? 'This day is marked as leave'
+        : attendanceState.isEnded
+            ? "You've checked out for today"
+            : attendanceState.isOnLeave
+                ? "You're on leave today"
+                : null;
 
     // Scoped ScaffoldMessenger: without this, "removed"/"saved" SnackBars are
     // hosted by the app-root messenger (above the Navigator) and keep showing
@@ -91,11 +101,15 @@ class VisitPlanScreen extends ConsumerWidget {
                 onPrev: notifier.prevDay,
                 onNext: notifier.nextDay,
               ),
-              _StatusBar(state: state),
+              if (onLeaveThisDay)
+                const _LeaveBanner()
+              else
+                _StatusBar(state: state),
               Expanded(
-                  child:
-                      _body(context, ref, state, notifier, visitBlocked)),
-              _BottomBar(state: state, notifier: notifier),
+                  child: _body(context, ref, state, notifier,
+                      visitBlockedReason, onLeaveThisDay)),
+              _BottomBar(
+                  state: state, notifier: notifier, blocked: onLeaveThisDay),
             ],
           ),
         ),
@@ -109,7 +123,8 @@ class VisitPlanScreen extends ConsumerWidget {
     WidgetRef ref,
     VisitPlanState state,
     VisitPlanNotifier notifier,
-    bool visitBlocked,
+    String? visitBlockedReason,
+    bool onLeaveThisDay,
   ) {
     if (state.isLoading) return const ShimmerList(count: 4);
 
@@ -121,21 +136,28 @@ class VisitPlanScreen extends ConsumerWidget {
 
     if (state.items.isEmpty) {
       return EmptyStateView(
-        icon: Icons.event_note_rounded,
-        title: 'No visits planned',
-        message: 'Add the farmers you intend to visit on this day.',
-        actionLabel: 'Add Visit',
-        onAction: () => AddVisitSheet.show(context),
+        icon: onLeaveThisDay
+            ? Icons.event_busy_rounded
+            : Icons.event_note_rounded,
+        title: onLeaveThisDay ? "You're on leave this day" : 'No visits planned',
+        message: onLeaveThisDay
+            ? "Visits can't be planned for a leave day."
+            : 'Add the farmers you intend to visit on this day.',
+        actionLabel: onLeaveThisDay ? null : 'Add Visit',
+        onAction: onLeaveThisDay ? null : () => AddVisitSheet.show(context),
       );
     }
 
-    final main = _mainList(context, ref, notifier, carryOver, visitBlocked);
+    final main = _mainList(context, ref, notifier, carryOver,
+        visitBlockedReason, state.date, onLeaveThisDay);
     if (carryOver.isEmpty) return main;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _CarryOverSection(
-            items: carryOver, notifier: notifier, blocked: visitBlocked),
+            items: carryOver,
+            notifier: notifier,
+            blockedReason: visitBlockedReason),
         Expanded(child: main),
       ],
     );
@@ -146,7 +168,9 @@ class VisitPlanScreen extends ConsumerWidget {
     WidgetRef ref,
     VisitPlanNotifier notifier,
     List<PlanItem> carryOver,
-    bool visitBlocked,
+    String? visitBlockedReason,
+    DateTime planDate,
+    bool onLeaveThisDay,
   ) {
     final active = notifier.activeItems;
     final completed = notifier.completedItems;
@@ -183,7 +207,8 @@ class VisitPlanScreen extends ConsumerWidget {
                 item: item,
                 index: index,
                 onStartVisit: () => _startVisit(context, item, completed),
-                visitDisabled: visitBlocked,
+                disabledReason: visitBlockedReason,
+                onEdit: _editCallback(context, item, planDate, onLeaveThisDay),
                 trailing: ReorderableDragStartListener(
                   index: index,
                   child: Icon(Icons.drag_handle_rounded,
@@ -214,7 +239,9 @@ class VisitPlanScreen extends ConsumerWidget {
                 item: active[i],
                 index: i,
                 onStartVisit: () => _startVisit(context, active[i], completed),
-                visitDisabled: visitBlocked,
+                disabledReason: visitBlockedReason,
+                onEdit:
+                    _editCallback(context, active[i], planDate, onLeaveThisDay),
               ),
             ),
         ],
@@ -249,6 +276,25 @@ class VisitPlanScreen extends ConsumerWidget {
         overflow: TextOverflow.ellipsis,
       ),
     );
+  }
+
+  /// Pencil-icon callback for a plan item, or null to hide it. Only a real,
+  /// still-PLANNED saved stop is editable — follow-ups aren't backed by a
+  /// visit-plan-item id, and a checked-in/skipped stop is locked server-side
+  /// anyway, so there's no point offering the pencil for either.
+  VoidCallback? _editCallback(
+    BuildContext context,
+    PlanItem item,
+    DateTime planDate,
+    bool onLeaveThisDay,
+  ) {
+    if (item.isFollowUp ||
+        item.isCarryOver ||
+        VisitPlanNotifier.isDone(item) ||
+        onLeaveThisDay) {
+      return null;
+    }
+    return () => EditVisitSheet.show(context, item, planDate);
   }
 
   /// Same-day revisit guard: if this farmer was already completed today, warn
@@ -326,13 +372,14 @@ class _CarryOverSection extends StatelessWidget {
   const _CarryOverSection({
     required this.items,
     required this.notifier,
-    required this.blocked,
+    this.blockedReason,
   });
   final List<PlanItem> items;
   final VisitPlanNotifier notifier;
 
-  /// Checked out / on leave for the day — the Start action is disabled.
-  final bool blocked;
+  /// Non-null when the Start action is disabled — checked out for today, on
+  /// leave today, or this day is a leave day. Doubles as the tooltip text.
+  final String? blockedReason;
 
   Future<void> _reschedule(BuildContext context, PlanItem item) async {
     final picked = await showDatePicker(
@@ -429,10 +476,10 @@ class _CarryOverSection extends StatelessWidget {
                     ),
                   ),
                   IconButton(
-                    tooltip: 'Start',
+                    tooltip: blockedReason ?? 'Start',
                     visualDensity: VisualDensity.compact,
                     icon: Icon(Icons.play_arrow_rounded, color: scheme.primary),
-                    onPressed: blocked
+                    onPressed: blockedReason != null
                         ? null
                         : () => context.push(
                             '/visit/start/${item.farmerId}?plan_item=${item.id}'),
@@ -517,6 +564,42 @@ class _DateSelector extends StatelessWidget {
   }
 }
 
+/// Shown instead of the save-status bar when the selected day is marked
+/// leave — visits can't be planned for it (mirrors the server-side guard).
+class _LeaveBanner extends StatelessWidget {
+  const _LeaveBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: AppDimens.grid * 2),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppDimens.grid * 1.5, vertical: AppDimens.grid),
+      decoration: BoxDecoration(
+        color: scheme.error.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.event_busy_rounded, size: 16, color: scheme.error),
+          const SizedBox(width: AppDimens.grid),
+          Expanded(
+            child: Text(
+              "You're on leave this day — visits can't be planned",
+              style: AppTextStyles.caption
+                  .copyWith(color: scheme.error, fontWeight: FontWeight.w600),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _StatusBar extends StatelessWidget {
   const _StatusBar({required this.state});
   final VisitPlanState state;
@@ -560,9 +643,16 @@ class _StatusBar extends StatelessWidget {
 }
 
 class _BottomBar extends StatelessWidget {
-  const _BottomBar({required this.state, required this.notifier});
+  const _BottomBar({
+    required this.state,
+    required this.notifier,
+    this.blocked = false,
+  });
   final VisitPlanState state;
   final VisitPlanNotifier notifier;
+
+  /// The selected day is a leave day — Add/Save are disabled.
+  final bool blocked;
 
   Future<void> _save(BuildContext context) async {
     final ok = await notifier.save();
@@ -590,7 +680,8 @@ class _BottomBar extends StatelessWidget {
               label: 'Add Visit',
               icon: Icons.add_rounded,
               variant: AppButtonVariant.secondary,
-              onPressed: () => AddVisitSheet.show(context),
+              onPressed:
+                  blocked ? null : () => AddVisitSheet.show(context),
             ),
           ),
           const SizedBox(width: AppDimens.grid * 1.5),
@@ -599,8 +690,9 @@ class _BottomBar extends StatelessWidget {
               label: 'Save Plan',
               icon: Icons.check_rounded,
               isLoading: state.isSaving,
-              onPressed: state.items.any(
-                      (i) => !i.isFollowUp && !VisitPlanNotifier.isDone(i))
+              onPressed: !blocked &&
+                      state.items.any((i) =>
+                          !i.isFollowUp && !VisitPlanNotifier.isDone(i))
                   ? () => _save(context)
                   : null,
             ),

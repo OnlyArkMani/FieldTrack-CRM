@@ -492,10 +492,24 @@ class MyPlanResponse(BaseModel):
     status: str = "DRAFT"
     submitted_at: datetime | None = None
     items: list[PlanItemView] = Field(default_factory=list)
+    is_on_leave: bool = False
 
 
 class PlanItemStatusUpdate(BaseModel):
     status: Literal["PLANNED", "COMPLETED", "SKIPPED"]
+
+
+class PlanItemUpdate(BaseModel):
+    """PATCH /visit-plans/items/{item_id}. Edit a still-PLANNED stop's time,
+    purpose, target bags, or day — every field is optional so only the ones
+    the caller actually sent are changed (see `model_fields_set`). Once the
+    item is COMPLETED/SKIPPED (checked in) it can no longer be edited."""
+
+    time_slot: time | None = None
+    purpose: VisitPurpose | None = None
+    notes: str | None = None
+    target_order_bags: int | None = Field(default=None, ge=0)
+    plan_date: date | None = None
 
 
 class TeamPlanEmployeeView(BaseModel):
