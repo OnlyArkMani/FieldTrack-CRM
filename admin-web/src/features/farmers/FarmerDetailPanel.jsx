@@ -36,16 +36,17 @@ function OrderStatusBadge({ status }) {
   return <Badge color={m.color}>{m.label}</Badge>;
 }
 
-// Customer type discriminator (FARMER / FPO / VLCC / RETAILER).
+// Customer type discriminator (FARMER_MEET / FPO / VLCC / RETAILER / DISTRIBUTOR).
 export const CUSTOMER_TYPE_META = {
-  FARMER: { color: 'var(--ft-secondary)', label: 'Farmer' },
+  FARMER_MEET: { color: 'var(--ft-secondary)', label: 'Farmer Meet' },
   FPO: { color: 'var(--ft-primary)', label: 'FPO' },
   VLCC: { color: 'var(--ft-status-active, #2E9E6B)', label: 'VLCC' },
   RETAILER: { color: 'var(--ft-status-battery, #D4A72C)', label: 'Retailer' },
+  DISTRIBUTOR: { color: 'var(--ft-status-inactive, #7C6FD4)', label: 'Distributor' },
 };
 
 export function CustomerTypeBadge({ type }) {
-  const m = CUSTOMER_TYPE_META[type] || CUSTOMER_TYPE_META.FARMER;
+  const m = CUSTOMER_TYPE_META[type] || CUSTOMER_TYPE_META.FARMER_MEET;
   return <Badge color={m.color}>{m.label}</Badge>;
 }
 

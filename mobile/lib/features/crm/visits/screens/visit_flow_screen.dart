@@ -675,6 +675,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
                     CustomerType.retailer => _retailerAnswersStep(),
                     CustomerType.fpo => _fpoAnswersStep(),
                     CustomerType.vlcc => _orgAnswersStep(),
+                    CustomerType.distributor => _orgAnswersStep(),
                     CustomerType.farmer => _livestockStep(),
                   },
                 3 => _orderStep(),

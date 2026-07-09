@@ -64,7 +64,8 @@ async def list_farmers(
     limit: int = Query(default=20, ge=1, le=100),
     team_id: int | None = Query(default=None, description="Admin-only team filter"),
     customer_type: str | None = Query(
-        default=None, description="Filter by type: FARMER | FPO | VLCC | RETAILER"
+        default=None,
+        description="Filter by type: FARMER_MEET | FPO | VLCC | RETAILER | DISTRIBUTOR",
     ),
     lead_status: str | None = Query(
         default=None, description="Filter by current lead status: HOT | WARM | COLD"
@@ -77,8 +78,10 @@ async def list_farmers(
     Supervisor/employee see only their team's customers; admin sees all.
     Optional customer_type filter powers the [All][Farmers][FPOs][VLCCs] tabs."""
     ct = customer_type.strip().upper() if customer_type else None
-    if ct and ct not in ("FARMER", "FPO", "VLCC", "RETAILER"):
-        raise bad_request("customer_type must be FARMER, FPO, VLCC or RETAILER")
+    if ct and ct not in ("FARMER_MEET", "FPO", "VLCC", "RETAILER", "DISTRIBUTOR"):
+        raise bad_request(
+            "customer_type must be FARMER_MEET, FPO, VLCC, RETAILER or DISTRIBUTOR"
+        )
     return await FarmerService(db).list_farmers(
         user=user,
         cursor=cursor,
@@ -96,12 +99,13 @@ async def import_template(
     admin: Annotated[User, Depends(get_current_admin)],
 ) -> StreamingResponse:
     """Download the blank customer-import spreadsheet (CSV). Fill it and upload
-    it to POST /farmers/import. customer_type must be FARMER, FPO or VLCC."""
+    it to POST /farmers/import. customer_type must be FARMER_MEET, FPO, VLCC,
+    RETAILER or DISTRIBUTOR."""
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(IMPORT_COLUMNS)
     writer.writerow(
-        ["Ramesh Patil", "FARMER", "9876543210", "Shirur", "Pune", "", "8", "AmulFeed", "", ""]
+        ["Ramesh Patil", "FARMER_MEET", "9876543210", "Shirur", "Pune", "", "8", "AmulFeed", "", ""]
     )
     writer.writerow(
         ["Shirur Dairy FPO", "FPO", "9876500000", "Shirur", "Pune", "", "", "", "", ""]

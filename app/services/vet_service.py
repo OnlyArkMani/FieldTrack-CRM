@@ -77,7 +77,7 @@ class VetService:
                 visit_id=r.Visit.id,
                 farmer_id=r.Visit.farmer_id,
                 farmer_name=r.farmer_name or "Unknown",
-                customer_type=r.customer_type or "FARMER",
+                customer_type=r.customer_type or "FARMER_MEET",
                 village=r.village,
                 phone=r.phone,
                 employee_id=r.Visit.employee_id,

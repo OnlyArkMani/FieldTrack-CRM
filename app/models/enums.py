@@ -11,17 +11,19 @@ class UserRole(str, enum.Enum):
 
 
 class CustomerType(str, enum.Enum):
-    """Kind of CRM customer. FARMER is the historical default (all pre-0008
-    rows). FPO = Farmer Producer Organization, VLCC = Village Level Collection
-    Centre, RETAILER = feed/product retail outlet (added migration 0016).
-    Retailer visits reuse the same FPO/VLCC org-answers guided form — no
-    dedicated Retailer fields exist. Stored on the ``customers`` table
-    (formerly ``farmers``)."""
+    """Kind of CRM customer. FARMER_MEET (renamed from FARMER in migration
+    0023) is the historical default (all pre-0008 rows). FPO = Farmer
+    Producer Organization, VLCC = Village Level Collection Centre, RETAILER =
+    feed/product retail outlet (added migration 0016), DISTRIBUTOR = feed
+    distributor (added migration 0021). Retailer and Distributor visits reuse
+    the same FPO/VLCC org-answers guided form — no dedicated fields exist for
+    either. Stored on the ``customers`` table (formerly ``farmers``)."""
 
-    FARMER = "FARMER"
+    FARMER_MEET = "FARMER_MEET"
     FPO = "FPO"
     VLCC = "VLCC"
     RETAILER = "RETAILER"
+    DISTRIBUTOR = "DISTRIBUTOR"
 
 
 class AttendanceStatus(str, enum.Enum):

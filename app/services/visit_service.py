@@ -638,7 +638,7 @@ class VisitService:
     async def _build_detail(self, visit: Visit) -> VisitDetailResponse:
         farmer = await self.repo.get_farmer(visit.farmer_id)
         farmer_name = farmer.name if farmer else None
-        customer_type = getattr(farmer, "customer_type", "FARMER") or "FARMER"
+        customer_type = getattr(farmer, "customer_type", "FARMER_MEET") or "FARMER_MEET"
         note = await self.repo.notes_for(visit.id)
         livestock = await self.repo.livestock_for_visit(visit.id)
         orders = await self.repo.orders_for(visit.id)

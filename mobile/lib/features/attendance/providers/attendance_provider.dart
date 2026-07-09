@@ -157,45 +157,58 @@ class AttendanceNotifier extends Notifier<AttendanceUiState> {
         call: (lat, lng) => _repo.end(lat, lng, workSummary: workSummary),
       );
 
-  /// Mark today as leave. No GPS involved (unlike the session transitions),
-  /// so this bypasses `_run` and drives its own submitting flag.
-  Future<void> markLeave() async {
+  /// Mark a day as leave — today by default, or a future `date`. No GPS
+  /// involved (unlike the session transitions), so this bypasses `_run` and
+  /// drives its own submitting flag. The optimistic "today" state update only
+  /// applies when the leave date IS today; a future-dated leave doesn't
+  /// change what the app shows for today.
+  Future<void> markLeave({DateTime? date}) async {
     if (state.isSubmitting || state.isMarkingLeave) return;
+    final now = DateTime.now();
+    final isToday = date == null ||
+        (date.year == now.year && date.month == now.month && date.day == now.day);
     final snapshot = state.today;
 
-    final now = DateTime.now();
-    final synthetic = Attendance(
-      id: -1,
-      userId: 0,
-      date: now,
-      status: AttendanceStatusValue.onLeave,
-      totalDurationMinutes: 0,
-      totalDistanceMeters: 0,
-      currentState: MachineState.onLeave,
-      sessions: const [],
-    );
-    state = state.copyWith(
-      today: TodayAttendance(
-        hasAttendance: true,
+    if (isToday) {
+      final synthetic = Attendance(
+        id: -1,
+        userId: 0,
+        date: now,
+        status: AttendanceStatusValue.onLeave,
+        totalDurationMinutes: 0,
+        totalDistanceMeters: 0,
         currentState: MachineState.onLeave,
-        attendance: synthetic,
-      ),
-      isMarkingLeave: true,
-      clearError: true,
-    );
-
-    try {
-      final updated = await _repo.markLeave();
-      final newToday = TodayAttendance(
-        hasAttendance: true,
-        currentState: updated.currentState,
-        attendance: updated,
+        sessions: const [],
       );
       state = state.copyWith(
-        today: newToday,
-        isMarkingLeave: false,
+        today: TodayAttendance(
+          hasAttendance: true,
+          currentState: MachineState.onLeave,
+          attendance: synthetic,
+        ),
+        isMarkingLeave: true,
         clearError: true,
       );
+    } else {
+      state = state.copyWith(isMarkingLeave: true, clearError: true);
+    }
+
+    try {
+      final updated = await _repo.markLeave(date: date);
+      if (isToday) {
+        final newToday = TodayAttendance(
+          hasAttendance: true,
+          currentState: updated.currentState,
+          attendance: updated,
+        );
+        state = state.copyWith(
+          today: newToday,
+          isMarkingLeave: false,
+          clearError: true,
+        );
+      } else {
+        state = state.copyWith(isMarkingLeave: false, clearError: true);
+      }
       unawaited(HapticFeedback.lightImpact());
     } on ApiException catch (e) {
       unawaited(HapticFeedback.lightImpact());

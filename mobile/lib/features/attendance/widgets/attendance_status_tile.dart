@@ -48,12 +48,29 @@ class AttendanceStatusTile extends ConsumerWidget {
   }
 
   Future<void> _markLeave(BuildContext context, WidgetRef ref) async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: today,
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 90)),
+      helpText: 'Select leave date',
+    );
+    if (picked == null || !context.mounted) return;
+    final isToday = picked == today;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Mark today as on leave?'),
-        content: const Text(
-          "You won't be able to check in today after marking leave.",
+        title: Text(isToday
+            ? 'Mark today as on leave?'
+            : 'Mark ${picked.day}/${picked.month}/${picked.year} as on leave?'),
+        content: Text(
+          isToday
+              ? "You won't be able to check in today after marking leave."
+              : "If you have planned visits on that date you'll need to "
+                  'reschedule or skip them first.',
         ),
         actions: [
           TextButton(
@@ -68,7 +85,9 @@ class AttendanceStatusTile extends ConsumerWidget {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    await ref.read(attendanceProvider.notifier).markLeave();
+    await ref
+        .read(attendanceProvider.notifier)
+        .markLeave(date: isToday ? null : picked);
   }
 
   @override

@@ -59,6 +59,7 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
   FarmerListItem? _selected;
   TimeOfDay? _time;
   String _purpose = 'FIRST_VISIT';
+  final _targetBagsController = TextEditingController();
 
   @override
   void initState() {
@@ -70,6 +71,7 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
   void dispose() {
     _debounce?.cancel();
     _searchController.dispose();
+    _targetBagsController.dispose();
     super.dispose();
   }
 
@@ -107,6 +109,7 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
         ? null
         : '${_time!.hour.toString().padLeft(2, '0')}:'
             '${_time!.minute.toString().padLeft(2, '0')}:00';
+    final targetBags = int.tryParse(_targetBagsController.text.trim());
     ref.read(visitPlanProvider.notifier).addItem(
           PlanItem(
             id: id,
@@ -118,6 +121,7 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
             sequenceOrder: 9999,
             timeSlot: slot,
             purpose: _purpose,
+            targetOrderBags: targetBags,
             status: 'PLANNED',
           ),
         );
@@ -284,6 +288,20 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
                 ),
               ),
           ],
+        ),
+        const SizedBox(height: AppDimens.grid * 2),
+        Text('Target order (bags)',
+            style:
+                AppTextStyles.bodyMedium.copyWith(color: scheme.onSurface)),
+        const SizedBox(height: AppDimens.grid),
+        TextField(
+          controller: _targetBagsController,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          style: AppTextStyles.body.copyWith(color: scheme.onSurface),
+          decoration: const InputDecoration(
+            hintText: 'e.g. 10 (optional)',
+          ),
         ),
         const SizedBox(height: AppDimens.grid * 2.5),
         AppButton(

@@ -270,15 +270,18 @@ class FarmerService:
         """Validate (and optionally commit) a batch of customer rows.
 
         Admin-only (enforced in the router). Each row must have a name; type
-        defaults to FARMER and must be one of FARMER/FPO/VLCC. team_id, when
-        given, must reference an active team. Validation runs for every row so
-        the caller sees all problems at once; when dry_run is False the valid
-        rows are inserted in a single transaction (all-or-nothing)."""
+        defaults to FARMER_MEET and must be one of FARMER_MEET/FPO/VLCC/
+        RETAILER/DISTRIBUTOR. team_id, when given, must reference an active
+        team. Validation runs for every row so the caller sees all problems
+        at once; when dry_run is False the valid rows are inserted in a
+        single transaction (all-or-nothing)."""
         from app.schemas.crm import CustomerImportError, CustomerImportResult
 
-        valid_types = {"FARMER", "FPO", "VLCC", "RETAILER"}
+        valid_types = {"FARMER_MEET", "FPO", "VLCC", "RETAILER", "DISTRIBUTOR"}
         errors: list[CustomerImportError] = []
-        by_type: dict[str, int] = {"FARMER": 0, "FPO": 0, "VLCC": 0, "RETAILER": 0}
+        by_type: dict[str, int] = {
+            "FARMER_MEET": 0, "FPO": 0, "VLCC": 0, "RETAILER": 0, "DISTRIBUTOR": 0,
+        }
         staged: list[Farmer] = []
         team_cache: dict[int, bool] = {}
 
@@ -305,7 +308,7 @@ class FarmerService:
                 )
                 continue
 
-            ctype = str(row.get("customer_type") or row.get("type") or "FARMER").strip().upper()
+            ctype = str(row.get("customer_type") or row.get("type") or "FARMER_MEET").strip().upper()
             if ctype not in valid_types:
                 errors.append(
                     CustomerImportError(

@@ -89,6 +89,11 @@ function PlanRow({ plan }) {
                       {item.farmer_name ?? `FPO #${item.farmer_id}`}
                     </span>
                     <span className="text-xs" style={{ color: vcfg.color }}>{vcfg.label}</span>
+                    {item.target_order_bags != null && (
+                      <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                        Target {item.target_order_bags} bags
+                      </span>
+                    )}
                     {item.notes && (
                       <span className="max-w-[200px] truncate text-xs text-text-secondary">
                         {item.notes}

@@ -33,8 +33,21 @@ class AttendanceRepository {
   Future<Attendance> start(double lat, double lng) =>
       _transition('start', lat, lng);
 
-  Future<Attendance> markLeave() async {
-    final data = await _api.post('/attendance/leave');
+  /// `date` defaults to today; pass a future date to request leave ahead of
+  /// time. The server rejects a date that still has planned visits on it
+  /// (409) until they're rescheduled or skipped.
+  Future<Attendance> markLeave({DateTime? date}) async {
+    final data = await _api.post(
+      '/attendance/leave',
+      body: date == null
+          ? null
+          : {
+              'date':
+                  '${date.year.toString().padLeft(4, '0')}-'
+                  '${date.month.toString().padLeft(2, '0')}-'
+                  '${date.day.toString().padLeft(2, '0')}',
+            },
+    );
     return Attendance.fromJson(data);
   }
 
