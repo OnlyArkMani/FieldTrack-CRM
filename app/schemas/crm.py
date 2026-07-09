@@ -522,7 +522,7 @@ class PendingSubmissionView(BaseModel):
     employee_id: int
     employee_name: str
     team_name: str | None = None
-    supervisor_id: int | None = None
+    manager_id: int | None = None
 
 
 # ── Visit execution (Module 3) ───────────────────────────────────────────

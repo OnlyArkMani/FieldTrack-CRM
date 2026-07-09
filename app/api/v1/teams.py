@@ -1,7 +1,7 @@
 """Team router — thin HTTP layer; logic lives in TeamService.
 
 AUTHZ:
-- GET list/detail: any authenticated active user (supervisors see their team
+- GET list/detail: any authenticated active user (managers see their team
   on mobile; admins manage on web). create/update/delete/membership are
   ADMIN-only per the project's role matrix.
 """

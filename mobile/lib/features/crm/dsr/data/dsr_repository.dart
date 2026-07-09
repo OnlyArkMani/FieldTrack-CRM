@@ -15,8 +15,7 @@ class DsrRepository {
   DsrRepository(this._api);
   final ApiClient _api;
 
-  static String _ymd(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
+  static String _ymd(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
 
@@ -37,7 +36,7 @@ class DsrRepository {
     return DsrDetail.fromJson(data);
   }
 
-  /// Supervisor: team DSR status for a date. Scope is auto-filtered to the
+  /// Manager: team DSR status for a date. Scope is auto-filtered to the
   /// caller's team on the backend.
   Future<List<TeamDsrItem>> teamDsrs(DateTime date) async {
     final data = await _api.getList('/daily-reports/team', query: {
@@ -48,7 +47,7 @@ class DsrRepository {
         .toList();
   }
 
-  /// Supervisor: read-only DSR detail for one team member on a date.
+  /// Manager: read-only DSR detail for one team member on a date.
   Future<DsrDetail> teamMemberDsr(int employeeId, DateTime date) async {
     final data =
         await _api.get('/daily-reports/team/$employeeId/${_ymd(date)}');
@@ -68,7 +67,7 @@ class DsrRepository {
     return file.path;
   }
 
-  /// Download a team member's DSR for [date] as CSV (supervisor).
+  /// Download a team member's DSR for [date] as CSV (manager).
   Future<String> downloadTeamDsrCsv(int employeeId, DateTime date) async {
     final res = await _api.dio.get<List<int>>(
       '/daily-reports/team/$employeeId/${_ymd(date)}/download',

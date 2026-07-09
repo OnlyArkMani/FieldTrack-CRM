@@ -78,7 +78,7 @@ class AttendanceRepository:
     ) -> list[tuple[User, Attendance | None]]:
         """Every member of a team paired with their attendance for `day`
         (None if they have none yet). Left-join keeps absentees in the list —
-        a supervisor needs to see who HASN'T checked in too."""
+        a manager needs to see who HASN'T checked in too."""
         stmt = (
             select(User, Attendance)
             .outerjoin(

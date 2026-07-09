@@ -20,7 +20,7 @@ import '../providers/map_provider.dart';
 import '../widgets/employee_marker.dart';
 import '../widgets/geofence_layer.dart';
 
-/// Tab 3. Role-aware: employees see their own route + distance; supervisors see
+/// Tab 3. Role-aware: employees see their own route + distance; managers see
 /// their team's live positions. flutter_map + OpenStreetMap, offline-cached.
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -42,20 +42,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   @override
   Widget build(BuildContext context) {
     final role = ref.watch(authProvider).user?.role;
-    final isSupervisor = role == UserRole.supervisor;
+    final isManager = role == UserRole.manager;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isSupervisor ? 'Team Map' : 'My Route',
+        title: Text(isManager ? 'Team Map' : 'My Route',
             maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
-          if (!isSupervisor) const _ModeToggle(),
+          if (!isManager) const _ModeToggle(),
           const SizedBox(width: AppDimens.grid),
         ],
       ),
       body: SafeArea(
-        child: isSupervisor
-            ? _SupervisorMap(controller: _controller)
+        child: isManager
+            ? _ManagerMap(controller: _controller)
             : _EmployeeMap(controller: _controller),
       ),
     );
@@ -77,7 +77,8 @@ class _ModeToggle extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(
               horizontal: AppDimens.grid * 1.5, vertical: AppDimens.grid * 0.5),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.16),
+            color:
+                Theme.of(context).colorScheme.primary.withValues(alpha: 0.16),
             borderRadius: BorderRadius.circular(999),
           ),
           child: Row(
@@ -124,7 +125,8 @@ class _TodayRoute extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final routeAsync = ref.watch(todayRouteProvider);
     final device = ref.watch(deviceLocationProvider).valueOrNull;
-    final geofences = ref.watch(geofencesProvider).valueOrNull ?? const <Geofence>[];
+    final geofences =
+        ref.watch(geofencesProvider).valueOrNull ?? const <Geofence>[];
     final showZones = ref.watch(showZonesProvider);
 
     return routeAsync.when(
@@ -142,7 +144,8 @@ class _TodayRoute extends ConsumerWidget {
         final hasRoute = points.length >= 2;
         final start = points.isNotEmpty ? points.first : null;
         final current = points.isNotEmpty ? points.last : null;
-        final center = device ?? current ?? start ?? const LatLng(20.5937, 78.9629);
+        final center =
+            device ?? current ?? start ?? const LatLng(20.5937, 78.9629);
         final distance = MapService.totalDistanceMeters(points);
 
         return Stack(
@@ -177,14 +180,18 @@ class _TodayRoute extends ConsumerWidget {
                         point: start,
                         width: 28,
                         height: 28,
-                        child: const _Dot(color: AppPalette.statusActive, icon: Icons.flag_rounded),
+                        child: const _Dot(
+                            color: AppPalette.statusActive,
+                            icon: Icons.flag_rounded),
                       ),
                     if (current != null)
                       Marker(
                         point: current,
                         width: 30,
                         height: 30,
-                        child: const _Dot(color: AppPalette.amber, icon: Icons.navigation_rounded),
+                        child: const _Dot(
+                            color: AppPalette.amber,
+                            icon: Icons.navigation_rounded),
                       ),
                     if (device != null)
                       Marker(
@@ -203,8 +210,8 @@ class _TodayRoute extends ConsumerWidget {
                 right: AppDimens.grid * 2,
                 child: _ZoneToggle(
                   visible: showZones,
-                  onTap: () => ref.read(showZonesProvider.notifier).state =
-                      !showZones,
+                  onTap: () =>
+                      ref.read(showZonesProvider.notifier).state = !showZones,
                 ),
               ),
             Positioned(
@@ -251,7 +258,8 @@ class _WeekHeatmap extends ConsumerWidget {
         final center = points.first;
         return FlutterMap(
           mapController: controller,
-          options: MapOptions(initialCenter: center, initialZoom: 13, minZoom: 3, maxZoom: 18),
+          options: MapOptions(
+              initialCenter: center, initialZoom: 13, minZoom: 3, maxZoom: 18),
           children: [
             MapService.tileLayer(),
             CircleLayer(
@@ -273,24 +281,25 @@ class _WeekHeatmap extends ConsumerWidget {
   }
 }
 
-// ── Supervisor view ──────────────────────────────────────────────────────────
-class _SupervisorMap extends ConsumerWidget {
-  const _SupervisorMap({required this.controller});
+// ── Manager view ──────────────────────────────────────────────────────────
+class _ManagerMap extends ConsumerWidget {
+  const _ManagerMap({required this.controller});
   final MapController controller;
 
   // Centre of India — the map always opens here when there are no located
-  // members, so supervisors see tiles (not a blank screen) from the first frame.
+  // members, so managers see tiles (not a blank screen) from the first frame.
   static const _indiaCenter = LatLng(20.5937, 78.9629);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final teamAsync = ref.watch(teamLiveProvider);
-    final geofences = ref.watch(geofencesProvider).valueOrNull ?? const <Geofence>[];
+    final geofences =
+        ref.watch(geofencesProvider).valueOrNull ?? const <Geofence>[];
     final showZones = ref.watch(showZonesProvider);
 
     // The map renders in EVERY state — loading, error and empty just change the
     // overlay drawn on top of it. (Previously these returned a non-map widget,
-    // so the supervisor saw a blank/empty screen with no tiles at all.)
+    // so the manager saw a blank/empty screen with no tiles at all.)
     final members = teamAsync.valueOrNull ?? const <TeamLiveMember>[];
     final located = members.where((m) => m.hasPosition).toList();
     final error = teamAsync.hasError ? teamAsync.error : null;
@@ -333,14 +342,13 @@ class _SupervisorMap extends ConsumerWidget {
             onTap: (_, latlng) {
               if (!showZones) return;
               final g = _hitGeofence(geofences, latlng);
-              if (g != null) _showSupervisorZoneSheet(context, g, teamSize);
+              if (g != null) _showManagerZoneSheet(context, g, teamSize);
             },
           ),
           children: [
             // TileLayer must be the first child or nothing renders.
             MapService.tileLayer(),
-            if (showZones && geofences.isNotEmpty)
-              ...geofenceLayers(geofences),
+            if (showZones && geofences.isNotEmpty) ...geofenceLayers(geofences),
             MarkerLayer(
               markers: [
                 for (final m in located)
@@ -380,8 +388,12 @@ class _SupervisorMap extends ConsumerWidget {
           )
         else if (located.isEmpty)
           _MapOverlay(
-            icon: isLoading ? Icons.my_location_rounded : Icons.location_off_rounded,
-            title: isLoading ? 'Locating your team…' : 'No team members are currently active',
+            icon: isLoading
+                ? Icons.my_location_rounded
+                : Icons.location_off_rounded,
+            title: isLoading
+                ? 'Locating your team…'
+                : 'No team members are currently active',
             message: isLoading
                 ? null
                 : 'They appear on the map as soon as they start sharing location.',
@@ -491,8 +503,8 @@ class StatusBadgeFor extends StatelessWidget {
       LiveStatusValue.offline => (colors.statusOffline, 'Offline'),
     };
     return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppDimens.grid, vertical: 2),
+      padding:
+          const EdgeInsets.symmetric(horizontal: AppDimens.grid, vertical: 2),
       decoration: BoxDecoration(
         color: c.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(999),
@@ -505,7 +517,8 @@ class StatusBadgeFor extends StatelessWidget {
 }
 
 class _SheetRow extends StatelessWidget {
-  const _SheetRow({required this.icon, required this.label, required this.value});
+  const _SheetRow(
+      {required this.icon, required this.label, required this.value});
   final IconData icon;
   final String label;
   final String value;
@@ -576,13 +589,17 @@ class _DistanceCard extends StatelessWidget {
                       : km >= 1
                           ? '${km.toStringAsFixed(2)} km today'
                           : '${distanceMeters.round()} m today',
-                  style: AppTextStyles.bodyMedium.copyWith(color: scheme.onSurface),
+                  style: AppTextStyles.bodyMedium
+                      .copyWith(color: scheme.onSurface),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  empty ? 'Start attendance to begin tracking' : '$pointCount points recorded',
-                  style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+                  empty
+                      ? 'Start attendance to begin tracking'
+                      : '$pointCount points recorded',
+                  style: AppTextStyles.caption
+                      .copyWith(color: colors.textSecondary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -700,7 +717,8 @@ class _AnimatedRouteLayerState extends State<_AnimatedRouteLayer> {
       duration: const Duration(milliseconds: 1500),
       curve: Curves.easeInOutCubic,
       builder: (context, t, _) {
-        final count = (widget.points.length * t).clamp(2, widget.points.length).toInt();
+        final count =
+            (widget.points.length * t).clamp(2, widget.points.length).toInt();
         final drawn = widget.points.sublist(0, count);
         return PolylineLayer(
           polylines: [
@@ -739,12 +757,14 @@ String _zoneDuration(double minutes) {
   final m = minutes.round();
   final h = m ~/ 60;
   final rem = m % 60;
-  if (h > 0) return '$h hour${h == 1 ? '' : 's'} $rem minute${rem == 1 ? '' : 's'}';
+  if (h > 0)
+    return '$h hour${h == 1 ? '' : 's'} $rem minute${rem == 1 ? '' : 's'}';
   return '$rem minute${rem == 1 ? '' : 's'}';
 }
 
-String _zoneRadius(double m) =>
-    m >= 1000 ? '${(m / 1000).toStringAsFixed(m % 1000 == 0 ? 0 : 1)} km' : '${m.round()} m';
+String _zoneRadius(double m) => m >= 1000
+    ? '${(m / 1000).toStringAsFixed(m % 1000 == 0 ? 0 : 1)} km'
+    : '${m.round()} m';
 
 String _zoneArea(double? sqm) {
   if (sqm == null || sqm <= 0) return '—';
@@ -760,12 +780,12 @@ void _showEmployeeZoneSheet(BuildContext context, WidgetRef ref, Geofence g) {
   );
 }
 
-void _showSupervisorZoneSheet(BuildContext context, Geofence g, int teamSize) {
+void _showManagerZoneSheet(BuildContext context, Geofence g, int teamSize) {
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
-    builder: (_) => _SupervisorZoneSheet(geofence: g, teamSize: teamSize),
+    builder: (_) => _ManagersZoneSheet(geofence: g, teamSize: teamSize),
   );
 }
 
@@ -789,16 +809,20 @@ class _ZoneToggle extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(
-              horizontal: AppDimens.grid * 1.25, vertical: AppDimens.grid * 0.75),
+              horizontal: AppDimens.grid * 1.25,
+              vertical: AppDimens.grid * 0.75),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 250),
-                transitionBuilder: (child, anim) =>
-                    FadeTransition(opacity: anim, child: ScaleTransition(scale: anim, child: child)),
+                transitionBuilder: (child, anim) => FadeTransition(
+                    opacity: anim,
+                    child: ScaleTransition(scale: anim, child: child)),
                 child: Icon(
-                  visible ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+                  visible
+                      ? Icons.visibility_rounded
+                      : Icons.visibility_off_rounded,
                   key: ValueKey(visible),
                   size: 16,
                   color: scheme.primary,
@@ -807,8 +831,8 @@ class _ZoneToggle extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 visible ? 'Hide Zones' : 'Show Zones',
-                style: AppTextStyles.caption
-                    .copyWith(color: scheme.primary, fontWeight: FontWeight.w600),
+                style: AppTextStyles.caption.copyWith(
+                    color: scheme.primary, fontWeight: FontWeight.w600),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -874,7 +898,8 @@ class _ZoneSheetHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(name,
-                  style: AppTextStyles.heading.copyWith(color: scheme.onSurface),
+                  style:
+                      AppTextStyles.heading.copyWith(color: scheme.onSurface),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis),
               const SizedBox(height: 2),
@@ -959,8 +984,8 @@ class _EmployeeZoneSheet extends ConsumerWidget {
   }
 }
 
-class _SupervisorZoneSheet extends ConsumerWidget {
-  const _SupervisorZoneSheet({required this.geofence, required this.teamSize});
+class _ManagersZoneSheet extends ConsumerWidget {
+  const _ManagersZoneSheet({required this.geofence, required this.teamSize});
   final Geofence geofence;
   final int teamSize;
 
@@ -988,7 +1013,8 @@ class _SupervisorZoneSheet extends ConsumerWidget {
             ),
             data: (list) {
               // Aggregate dwell per member; null duration => still inside.
-              final byUser = <int, ({String name, double minutes, bool inside})>{};
+              final byUser =
+                  <int, ({String name, double minutes, bool inside})>{};
               for (final p in list) {
                 final cur = byUser[p.userId];
                 final add = p.durationMinutes ?? 0;
@@ -1012,11 +1038,13 @@ class _SupervisorZoneSheet extends ConsumerWidget {
                         vertical: AppDimens.grid),
                     decoration: BoxDecoration(
                       color: scheme.primary.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+                      borderRadius:
+                          BorderRadius.circular(AppDimens.buttonRadius),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.groups_rounded, size: 18, color: scheme.primary),
+                        Icon(Icons.groups_rounded,
+                            size: 18, color: scheme.primary),
                         const SizedBox(width: AppDimens.grid),
                         Expanded(
                           child: Text(
@@ -1067,7 +1095,7 @@ class _SupervisorZoneSheet extends ConsumerWidget {
 }
 
 /// A compact, centred card drawn ON TOP of the live map (the map keeps its
-/// tiles visible behind it). Used for the supervisor map's empty / loading /
+/// tiles visible behind it). Used for the manager map's empty / loading /
 /// error states so the screen is never blank.
 class _MapOverlay extends StatelessWidget {
   const _MapOverlay({
@@ -1101,7 +1129,8 @@ class _MapOverlay extends StatelessWidget {
                 const SizedBox(height: AppDimens.grid),
                 Text(
                   title,
-                  style: AppTextStyles.bodyMedium.copyWith(color: scheme.onSurface),
+                  style: AppTextStyles.bodyMedium
+                      .copyWith(color: scheme.onSurface),
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -1110,7 +1139,8 @@ class _MapOverlay extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     message!,
-                    style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+                    style: AppTextStyles.caption
+                        .copyWith(color: colors.textSecondary),
                     textAlign: TextAlign.center,
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,

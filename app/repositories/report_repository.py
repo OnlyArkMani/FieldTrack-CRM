@@ -228,8 +228,8 @@ class ReportRepository:
         )
         return list((await self.db.execute(stmt)).scalars().all())
 
-    async def supervised_team_ids(self, supervisor_id: int) -> set[int]:
-        stmt = select(Team.id).where(Team.supervisor_id == supervisor_id)
+    async def managed_team_ids(self, manager_id: int) -> set[int]:
+        stmt = select(Team.id).where(Team.manager_id == manager_id)
         return set((await self.db.execute(stmt)).scalars().all())
 
     async def get_user(self, user_id: int) -> User | None:

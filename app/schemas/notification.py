@@ -34,10 +34,10 @@ class NotificationType(str, Enum):
     STATIONARY_ALERT = "STATIONARY_ALERT"    # exec not moving 90+ min in field hours
     WEEKLY_REPORT = "WEEKLY_REPORT"          # Monday auto team report ready
     MONTHLY_REPORT = "MONTHLY_REPORT"        # 1st-of-month auto team report ready
-    ORDER_CAPTURED = "ORDER_CAPTURED"        # employee -> their supervisor(s)
+    ORDER_CAPTURED = "ORDER_CAPTURED"        # employee -> their manager(s)
     ORDER_APPROVED = "ORDER_APPROVED"        # manager decision -> the employee
     ORDER_REJECTED = "ORDER_REJECTED"        # manager decision -> the employee
-    DSR_LATE_EMPLOYEE = "DSR_LATE_EMPLOYEE"  # 19:30 per-employee late flag -> their supervisor(s)
+    DSR_LATE_MANAGER = "DSR_LATE_MANAGER"    # 19:30 per-employee late flag -> their manager(s)
     VISIT_REMINDER = "VISIT_REMINDER"        # planned visit ~1h away -> the employee
 
 
@@ -69,7 +69,7 @@ class MarkReadResult(BaseModel):
 class AnnouncementIn(BaseModel):
     title: str = Field(min_length=2, max_length=200)
     body: str = Field(min_length=1, max_length=2000)
-    # Target: a specific team, or every employee/supervisor when null. Mutually
+    # Target: a specific team, or every employee/manager when null. Mutually
     # exclusive in practice — team_id null == broadcast.
     team_id: int | None = Field(
         default=None,

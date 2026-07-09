@@ -177,10 +177,10 @@ class NotificationRepository:
 
     async def absent_field_users_today(self, day: date) -> list[User]:
         """Active EMPLOYEES (field executives) with NO attendance row for `day`.
-        Feeds the 09:30 manager absentee alert — supervisors are notified ABOUT
-        their team's absent executives, so we scope to EMPLOYEE role (supervisors
+        Feeds the 09:30 manager absentee alert — managers are notified ABOUT
+        their team's absent executives, so we scope to EMPLOYEE role (managers
         and admins are excluded here). team_id is loaded so the caller can map
-        each absentee to their team's supervisor."""
+        each absentee to their team's manager."""
         has_today = (
             select(Attendance.user_id)
             .where(Attendance.date == day)

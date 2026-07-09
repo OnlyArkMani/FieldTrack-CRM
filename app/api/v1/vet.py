@@ -2,7 +2,7 @@
 
 Lists visits where a veterinary visit was requested during the meeting, and
 lets a manager/employee advance the request status. Scope handled in the
-service (employee=own, supervisor=team, admin=all)."""
+service (employee=own, manager=team, admin=all)."""
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -25,11 +25,11 @@ async def list_vet_requests(
     team_id: int | None = Query(default=None, description="Admin-only team filter"),
     employee_id: int | None = Query(
         default=None,
-        description="Supervisor/admin filter — a single employee's vet requests",
+        description="Manager/admin filter — a single employee's vet requests",
     ),
 ) -> list[VetRequestItem]:
     """Customers who requested a vet, newest first. Employee sees their own,
-    supervisor their team, admin everything."""
+    manager their team, admin everything."""
     return await VetService(db).list_requests(
         user, status=status, team_id=team_id, employee_id=employee_id
     )

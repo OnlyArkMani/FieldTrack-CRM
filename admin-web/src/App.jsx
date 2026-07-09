@@ -75,7 +75,7 @@ function Protected({ children }) {
             Admin access only
           </h1>
           <p className="mt-2 text-text-secondary">
-            The FieldTrack web dashboard is for administrators. Supervisors and
+            The FieldTrack web dashboard is for administrators. Managers and
             employees use the mobile app.
           </p>
         </div>

@@ -7,9 +7,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import CurrentUser, get_current_supervisor, get_db
+from app.core.dependencies import CurrentUser, get_current_manager, get_db
 from app.models.user import User
-from app.schemas.crm import FollowUpCompleteRequest, FollowUpListItem
+from app.schemas.crm import FollowUpListItem, FollowUpCompleteRequest
 from app.services.follow_up_service import FollowUpService
 
 router = APIRouter(prefix="/follow-ups", tags=["follow-ups"])
@@ -39,16 +39,16 @@ async def my_follow_ups(
 
 @router.get("/team", response_model=list[FollowUpListItem])
 async def team_follow_ups(
-    supervisor: Annotated[User, Depends(get_current_supervisor)],
+    manager: Annotated[User, Depends(get_current_manager)],
     db: Annotated[AsyncSession, Depends(get_db)],
     employee_id: int | None = Query(default=None),
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
     status: str | None = Query(default=None),
 ) -> list[FollowUpListItem]:
-    """Team's follow-ups (supervisor: their teams; admin: all)."""
+    """Team's follow-ups (manager: their teams; admin: all)."""
     return await FollowUpService(db).get_team(
-        supervisor,
+        manager,
         employee_id=employee_id,
         date_from=date_from,
         date_to=date_to,

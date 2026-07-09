@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import (
     CurrentUser,
-    get_current_supervisor,
+    get_current_manager,
     get_db,
     per_user_rate_limit,
 )
@@ -103,9 +103,9 @@ async def trail_summary(
 
 @router.get("/team-live", response_model=list[TeamLivePoint])
 async def team_live(
-    supervisor: Annotated[User, Depends(get_current_supervisor)],
+    manager: Annotated[User, Depends(get_current_manager)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[TeamLivePoint]:
-    """Live positions of every member of the teams this supervisor manages.
+    """Live positions of every member of the teams this manager manages.
     Redis live-cache first, last DB record as fallback (shown as OFFLINE)."""
-    return await LocationService(db).team_live(supervisor)
+    return await LocationService(db).team_live(manager)

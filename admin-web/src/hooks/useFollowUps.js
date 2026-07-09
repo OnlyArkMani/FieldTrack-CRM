@@ -3,7 +3,7 @@ import { api } from '@/services/api/client';
 
 const KEY = 'follow-ups';
 
-/** Team follow-ups (supervisor: their teams; admin: all) in a date window. */
+/** Team follow-ups (manager: their teams; admin: all) in a date window. */
 export function useTeamFollowUps({ dateFrom, dateTo, employeeId } = {}) {
   return useQuery({
     queryKey: [KEY, 'team', { dateFrom, dateTo, employeeId }],

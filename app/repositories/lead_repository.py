@@ -155,6 +155,6 @@ class LeadRepository:
     async def get_farmer(self, farmer_id: int) -> Farmer | None:
         return await self.db.get(Farmer, farmer_id)
 
-    async def supervised_team_ids(self, supervisor_id: int) -> list[int]:
-        stmt = select(Team.id).where(Team.supervisor_id == supervisor_id)
+    async def managed_team_ids(self, manager_id: int) -> list[int]:
+        stmt = select(Team.id).where(Team.manager_id == manager_id)
         return list((await self.db.execute(stmt)).scalars().all())

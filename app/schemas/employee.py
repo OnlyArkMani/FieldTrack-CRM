@@ -2,7 +2,7 @@
 
 DESIGN:
 - An "employee" is a row in `users` (any role). These schemas are the
-  admin/supervisor-facing CRUD surface over that table — distinct from
+  admin/manager-facing CRUD surface over that table — distinct from
   auth's UserOut (which is the self-view returned at login).
 - EmployeeDetailOut embeds a LiveStatus block enriched from Redis at read
   time (never persisted) — see employee_service for the derivation rules.
@@ -191,7 +191,7 @@ class GpsIntegrityOut(BaseModel):
 
     `flagged_today` drives the employee-list warning badge; `detections` is the
     window total; `points` is the (capped) flagged timeline for the detail
-    page. EMPLOYEE-INVISIBLE by design — this endpoint is supervisor/admin
+    page. EMPLOYEE-INVISIBLE by design — this endpoint is manager/admin
     only; the employee never learns they were flagged (anti-gaming)."""
 
     user_id: int

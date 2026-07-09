@@ -8,6 +8,7 @@ const STATUS = {
   PRESENT: { color: 'var(--ft-status-active)', label: 'Present' },
   ABSENT: { color: 'var(--ft-status-danger)', label: 'Absent' },
   HALF_DAY: { color: 'var(--ft-status-battery)', label: 'Half day' },
+  ON_LEAVE: { color: 'var(--ft-secondary)', label: 'On leave' },
 };
 
 /** Colored pill. Pass `status` for a known status, or `color`+`children`. */
@@ -21,7 +22,7 @@ export default function Badge({ status, color, children, dot = true, className }
         'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
         className,
       )}
-      style={{ backgroundColor: `${c}24`, color: c }}
+      style={{ backgroundColor: `color-mix(in srgb, ${c} 14%, transparent)`, color: c }}
     >
       {dot && (
         <span

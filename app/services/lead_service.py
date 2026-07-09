@@ -1,7 +1,7 @@
 """Lead (CRM Module 4) business logic. Routers stay thin.
 
-Team scope mirrors the farmer module: ADMIN sees everything, SUPERVISOR sees the
-teams they supervise, EMPLOYEE sees their own team (or, with no team, the farmers
+Team scope mirrors the farmer module: ADMIN sees everything, MANAGER sees the
+teams they manage, EMPLOYEE sees their own team (or, with no team, the farmers
 they created)."""
 import logging
 from collections import defaultdict
@@ -68,8 +68,8 @@ class LeadService:
     ) -> list[LeadListItem]:
         if user.role == UserRole.ADMIN:
             scope = {}
-        elif user.role == UserRole.SUPERVISOR:
-            team_ids = await self.repo.supervised_team_ids(user.id)
+        elif user.role == UserRole.MANAGER:
+            team_ids = await self.repo.managed_team_ids(user.id)
             scope = {"team_ids": team_ids}
         elif user.team_id is not None:
             scope = {"team_ids": [user.team_id]}
@@ -78,7 +78,7 @@ class LeadService:
         rows = await self.repo.latest_lead_rows(status=status, **scope)
         return [self._item(r, team_view=False) for r in rows]
 
-    # ── team leads (supervisor/admin) ────────────────────────────────────
+    # ── team leads (manager/admin) ────────────────────────────────────
     async def get_team_leads(
         self,
         user: User,
@@ -112,13 +112,13 @@ class LeadService:
             if team_id is not None:
                 return [team_id]
             return None
-        if user.role == UserRole.SUPERVISOR:
-            supervised = await self.repo.supervised_team_ids(user.id)
+        if user.role == UserRole.MANAGER:
+            managed = await self.repo.managed_team_ids(user.id)
             if team_id is not None:
-                # Never let a supervisor narrow to a team they don't own.
-                return [team_id] if team_id in supervised else []
-            return supervised
-        raise forbidden("Team leads are supervisor/admin only")
+                # Never let a manager narrow to a team they don't own.
+                return [team_id] if team_id in managed else []
+            return managed
+        raise forbidden("Team leads are manager/admin only")
 
     # ── pipeline (admin) ─────────────────────────────────────────────────
     async def get_pipeline(self) -> PipelineResponse:
@@ -189,7 +189,7 @@ class LeadService:
         return LeadResponse.model_validate(lead)
 
     def _assert_can_access(self, farmer, user: User) -> None:
-        if user.role in (UserRole.ADMIN, UserRole.SUPERVISOR):
+        if user.role in (UserRole.ADMIN, UserRole.MANAGER):
             return
         if user.team_id is not None and farmer.team_id == user.team_id:
             return

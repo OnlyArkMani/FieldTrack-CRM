@@ -69,13 +69,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (loc == '/splash' || loc == '/login') return '/home/dashboard';
 
       // Role guard: the team-management surfaces (employee directory, an
-      // employee's detail, and teams) are supervisor-only on mobile (admins
+      // employee's detail, and teams) are manager-only on mobile (admins
       // are web-only per the role matrix). '/employees' (list) is distinct
       // from '/employee/' (detail) — both are covered here.
       final isTeamMgmt = loc == '/employees' ||
           loc == '/teams' ||
           loc.startsWith('/employee/');
-      if (isTeamMgmt && auth.user?.role != UserRole.supervisor) {
+      if (isTeamMgmt && auth.user?.role != UserRole.manager) {
         return '/home/dashboard';
       }
 
@@ -104,7 +104,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               path: '/home/dashboard',
               pageBuilder: (context, state) => WaterPage(
                   key: state.pageKey,
-                  // Role-aware INSIDE the screen: supervisor gets the team
+                  // Role-aware INSIDE the screen: manager gets the team
                   // view, employee the personal view — one route, no fork.
                   child: const DashboardScreen()),
             ),
@@ -123,12 +123,12 @@ final routerProvider = Provider<GoRouter>((ref) {
                   WaterPage(key: state.pageKey, child: const MapScreen()),
             ),
           ]),
-          // Farmers (CRM) — visible to every field user (employees + supervisors).
+          // Farmers (CRM) — visible to every field user (employees + managers).
           StatefulShellBranch(routes: [
             GoRoute(
               path: '/home/farmers',
-              pageBuilder: (context, state) =>
-                  WaterPage(key: state.pageKey, child: const FarmerListScreen()),
+              pageBuilder: (context, state) => WaterPage(
+                  key: state.pageKey, child: const FarmerListScreen()),
             ),
           ]),
           StatefulShellBranch(routes: [
@@ -196,8 +196,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) => WaterPage(
           key: state.pageKey,
           child: VisitFlowScreen(
-            farmerId:
-                int.tryParse(state.pathParameters['farmerId'] ?? '') ?? 0,
+            farmerId: int.tryParse(state.pathParameters['farmerId'] ?? '') ?? 0,
             planItemId:
                 int.tryParse(state.uri.queryParameters['plan_item'] ?? ''),
           ),
@@ -231,8 +230,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/orders/approvals',
-        pageBuilder: (context, state) => WaterPage(
-            key: state.pageKey, child: const OrderApprovalsScreen()),
+        pageBuilder: (context, state) =>
+            WaterPage(key: state.pageKey, child: const OrderApprovalsScreen()),
       ),
 
       GoRoute(
@@ -286,7 +285,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             WaterPage(key: state.pageKey, child: const DsrHistoryScreen()),
       ),
 
-      // Team DSR (supervisor only — reached from the dashboard)
+      // Team DSR (manager only — reached from the dashboard)
       GoRoute(
         path: '/dsr/team',
         pageBuilder: (context, state) =>

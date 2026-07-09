@@ -66,7 +66,7 @@ export function useSetEmployeeStatus() {
   });
 }
 
-/** Mock-GPS integrity for one employee (7-day window). Admin/supervisor only;
+/** Mock-GPS integrity for one employee (7-day window). Admin/manager only;
  *  this anti-gaming data is never shown to the employee. Refetched on an
  *  interval so the detail page stays current without a manual reload. */
 export function useGpsIntegrity(id) {

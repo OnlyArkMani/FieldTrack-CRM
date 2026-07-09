@@ -274,11 +274,10 @@ class AttendanceService:
         await self.db.refresh(attendance, attribute_names=["sessions"])
 
     # ── Reads ─────────────────────────────────────────────────────────────
-    async def current_state_today(self, user_id: int) -> str:
-        """Raw today state (STARTED|ON_BREAK|RESUMED|ENDED|ON_LEAVE|NULL).
-        Lets callers distinguish "on leave" from "never started" so they can
-        surface a specific message instead of the generic attendance-required
-        one."""
+    async def is_active_today(self, user_id: int) -> bool:
+        """True once the user has started attendance today and hasn't ended
+        it yet (STARTED/ON_BREAK/RESUMED). Used to gate field-work actions
+        (checklist A15) for employees — managers/admins are exempt."""
         day = self._today()
         attendance = await self.repo.get_for_user_date(user_id, day)
         return await self._current_state(user_id, attendance)
@@ -369,10 +368,10 @@ class AttendanceService:
         return [self._to_out(a, self._state_of(a)) for a in rows], total
 
     async def get_team_for_date(
-        self, *, supervisor: User, team_id: int, day: date_type
+        self, *, manager: User, team_id: int, day: date_type
     ) -> list[AttendanceOut]:
-        # Supervisors are scoped to their own team; admins see any.
-        if supervisor.role == UserRole.SUPERVISOR and supervisor.team_id != team_id:
+        # Managers are scoped to their own team; admins see any.
+        if manager.role == UserRole.MANAGER and manager.team_id != team_id:
             raise forbidden("You can only view your own team's attendance")
 
         pairs = await self.repo.team_for_date(team_id, day)

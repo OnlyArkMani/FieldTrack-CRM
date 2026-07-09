@@ -22,8 +22,8 @@ enum ReportType {
   bool get requiresTeam =>
       this == ReportType.team || this == ReportType.compliance;
 
-  /// Supervisor-only report types (employees don't see these chips).
-  bool get supervisorOnly =>
+  /// Manager-only report types (employees don't see these chips).
+  bool get managerOnly =>
       this == ReportType.team || this == ReportType.compliance;
 }
 

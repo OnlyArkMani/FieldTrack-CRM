@@ -8,7 +8,7 @@ import { api } from '@/services/api/client';
 
 const KEY = 'daily-reports';
 
-/** Team DSRs for a given date (supervisor/admin). Admin may pass a teamId. */
+/** Team DSRs for a given date (manager/admin). Admin may pass a teamId. */
 export function useTeamDsrs(date, teamId) {
   return useQuery({
     queryKey: [KEY, 'team', date, teamId ?? null],
@@ -37,7 +37,7 @@ export function useDsrDetail(employeeId, date) {
   });
 }
 
-/** Paginated DSR archive (admin: all/team; supervisor: own team). Pass
+/** Paginated DSR archive (admin: all/team; manager: own team). Pass
  *  { enabled, ...filters } — `enabled` gates the query and is not sent. */
 export function useDsrArchive({ enabled = true, ...filters } = {}) {
   return useQuery({
@@ -70,7 +70,7 @@ export async function downloadTeamDsr(employeeId, date, employeeName = 'employee
 }
 
 /** Download the granular per-visit Excel export for a date range (admin: all
- *  or filtered by team; supervisor: own team). One row per completed visit. */
+ *  or filtered by team; manager: own team). One row per completed visit. */
 export async function downloadVisitsExport({ dateFrom, dateTo, teamId } = {}) {
   const { data } = await api.get('/daily-reports/visits-export', {
     params: {

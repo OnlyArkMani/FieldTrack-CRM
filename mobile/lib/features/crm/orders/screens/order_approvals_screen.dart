@@ -12,7 +12,7 @@ import '../../../../core/widgets/state_views.dart';
 import '../data/order_repository.dart';
 import '../models/pending_order.dart';
 
-/// Supervisor/admin approval queue for orders captured in the field. Approve
+/// Manager/admin approval queue for orders captured in the field. Approve
 /// inline; Reject asks for a reason (min 10 chars, enforced server-side too).
 class OrderApprovalsScreen extends ConsumerStatefulWidget {
   const OrderApprovalsScreen({super.key});
@@ -180,14 +180,16 @@ class _OrderApprovalsScreenState extends ConsumerState<OrderApprovalsScreen> {
                 if (o.paymentMode != null) o.paymentMode!,
                 'Value ${_money(o.totalValue)}',
               ].join('  ·  '),
-              style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+              style:
+                  AppTextStyles.caption.copyWith(color: colors.textSecondary),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
             if (o.specialNotes != null && o.specialNotes!.isNotEmpty) ...[
               const SizedBox(height: AppDimens.grid * 0.5),
               Text(o.specialNotes!,
-                  style: AppTextStyles.caption.copyWith(color: scheme.onSurface),
+                  style:
+                      AppTextStyles.caption.copyWith(color: scheme.onSurface),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis),
             ],

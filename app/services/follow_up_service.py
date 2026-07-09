@@ -61,10 +61,10 @@ class FollowUpService:
     ) -> list[FollowUpListItem]:
         if user.role == UserRole.ADMIN:
             team_ids = None  # all teams
-        elif user.role == UserRole.SUPERVISOR:
-            team_ids = await self.repo.supervised_team_ids(user.id)
+        elif user.role == UserRole.MANAGER:
+            team_ids = await self.repo.managed_team_ids(user.id)
         else:
-            raise forbidden("Team follow-ups are supervisor/admin only")
+            raise forbidden("Team follow-ups are manager/admin only")
         rows = await self.repo.list_for_team(
             team_ids,
             employee_id=employee_id,
@@ -99,7 +99,7 @@ class FollowUpService:
         fu = await self.repo.get(follow_up_id)
         if fu is None:
             raise not_found("Follow-up not found")
-        privileged = user.role in (UserRole.ADMIN, UserRole.SUPERVISOR)
+        privileged = user.role in (UserRole.ADMIN, UserRole.MANAGER)
         if fu.employee_id != user.id and not privileged:
             raise forbidden("This follow-up isn't yours")
         return fu

@@ -2,10 +2,10 @@
 
 Lists visits flagged with vet_required=true, scope-aware:
 - EMPLOYEE   → only their own raised requests.
-- SUPERVISOR → their team's requests.
+- MANAGER    → their team's requests.
 - ADMIN      → everything (optional team_id filter).
 
-Also lets a manager (admin/supervisor) or the raising employee move a request
+Also lets a manager (admin/manager) or the raising employee move a request
 through REQUESTED → SCHEDULED → DONE.
 """
 from __future__ import annotations
@@ -51,7 +51,7 @@ class VetService:
 
         if user.role == UserRole.EMPLOYEE:
             q = q.where(Visit.employee_id == user.id)
-        elif user.role == UserRole.SUPERVISOR:
+        elif user.role == UserRole.MANAGER:
             if not user.team_id:
                 return []
             q = q.where(User.team_id == user.team_id)
@@ -63,7 +63,7 @@ class VetService:
 
         if employee_id is not None:
             # Composes safely with the role scoping above (AND'ed): a
-            # supervisor passing another team's employee_id just gets an
+            # manager passing another team's employee_id just gets an
             # empty result, not a cross-team leak.
             q = q.where(Visit.employee_id == employee_id)
 
@@ -100,12 +100,12 @@ class VetService:
         if not visit.vet_required:
             raise bad_request("This visit has no vet request")
 
-        # Scope: admin anywhere; supervisor within their team; employee only
+        # Scope: admin anywhere; manager within their team; employee only
         # their own raised request.
         if user.role == UserRole.EMPLOYEE:
             if visit.employee_id != user.id:
                 raise forbidden("This request isn't yours")
-        elif user.role == UserRole.SUPERVISOR:
+        elif user.role == UserRole.MANAGER:
             emp = await self.db.get(User, visit.employee_id) if visit.employee_id else None
             if emp is None or emp.team_id != user.team_id:
                 raise forbidden("This request isn't on your team")

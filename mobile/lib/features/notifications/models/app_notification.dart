@@ -19,7 +19,7 @@ enum AppNotificationType {
   followUpEscalated('FOLLOW_UP_ESCALATED'),
   dsrSubmitted('DSR_SUBMITTED'),
   dsrLate('DSR_LATE'),
-  dsrLateSupervisor('DSR_LATE_SUPERVISOR'),
+  dsrLateManager('DSR_LATE_MANAGER'),
   dsrComment('DSR_COMMENT'),
   orderCaptured('ORDER_CAPTURED'),
   visitReminder('VISIT_REMINDER'),
@@ -58,7 +58,7 @@ enum AppNotificationType {
           '/followups',
         AppNotificationType.dsrSubmitted ||
         AppNotificationType.dsrLate ||
-        AppNotificationType.dsrLateSupervisor ||
+        AppNotificationType.dsrLateManager ||
         AppNotificationType.dsrComment =>
           '/dsr/history',
         AppNotificationType.orderCaptured ||
@@ -84,7 +84,7 @@ enum AppNotificationType {
         AppNotificationType.followUpEscalated => Icons.warning_amber_rounded,
         AppNotificationType.dsrSubmitted => Icons.assignment_turned_in_rounded,
         AppNotificationType.dsrLate => Icons.schedule_rounded,
-        AppNotificationType.dsrLateSupervisor => Icons.report_problem_rounded,
+        AppNotificationType.dsrLateManager => Icons.report_problem_rounded,
         AppNotificationType.dsrComment => Icons.comment_rounded,
         AppNotificationType.orderCaptured => Icons.shopping_bag_rounded,
         AppNotificationType.visitReminder => Icons.event_note_rounded,
@@ -100,7 +100,7 @@ enum AppNotificationType {
         AppNotificationType.followUpEscalated ||
         AppNotificationType.planNotSubmitted ||
         AppNotificationType.dsrLate ||
-        AppNotificationType.dsrLateSupervisor =>
+        AppNotificationType.dsrLateManager =>
           const Color(0xFFE8645A), // coral — needs attention
         _ => null,
       };

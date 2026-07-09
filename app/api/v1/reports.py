@@ -9,7 +9,7 @@ FLOW:
 
 AUTHZ: every endpoint is scoped to the report's OWNER (the user who generated
 it) or an admin. The generate step additionally clamps the data scope to the
-caller's role (employee=self, supervisor=their team) inside ReportService.
+caller's role (employee=self, manager=their team) inside ReportService.
 """
 import asyncio
 from datetime import date, datetime

@@ -20,8 +20,8 @@ class FollowUpRepository:
     async def get(self, follow_up_id: int) -> FollowUp | None:
         return await self.db.get(FollowUp, follow_up_id)
 
-    async def supervised_team_ids(self, supervisor_id: int) -> list[int]:
-        stmt = select(Team.id).where(Team.supervisor_id == supervisor_id)
+    async def managed_team_ids(self, manager_id: int) -> list[int]:
+        stmt = select(Team.id).where(Team.manager_id == manager_id)
         return list((await self.db.execute(stmt)).scalars().all())
 
     # ── list views ───────────────────────────────────────────────────────
@@ -166,10 +166,10 @@ class FollowUpRepository:
     async def escalation_candidates(
         self, today: date_type, cutoff_time: time_type
     ) -> list:
-        """(FollowUp, farmer_name, employee_name, supervisor_id) today, still
+        """(FollowUp, farmer_name, employee_name, manager_id) today, still
         PENDING, 24h sent, whose time is >2h past (scheduled_time < cutoff)."""
         stmt = (
-            select(FollowUp, Farmer.name, User.name, Team.supervisor_id)
+            select(FollowUp, Farmer.name, User.name, Team.manager_id)
             .outerjoin(Farmer, Farmer.id == FollowUp.farmer_id)
             .outerjoin(User, User.id == FollowUp.employee_id)
             .outerjoin(Team, Team.id == User.team_id)

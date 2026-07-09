@@ -14,9 +14,9 @@ DESIGN:
   already set (they may have typed something before re-generation).
 - is_late: set at generation time if the current wall-clock hour ≥ 19:30 in the
   business timezone. The APScheduler job at 19:30 also marks surviving DRAFTs.
-- submit_dsr sends FCM to the supervisor and (if late) back to the employee.
-  The supervisor FCM target is: team's supervisor_id (from users.team_id via
-  the supervisors join table). If multiple supervisors exist for the team we
+- submit_dsr sends FCM to the manager and (if late) back to the employee.
+  The manager FCM target is: team's manager_id (from users.team_id via
+  the managers join table). If multiple managers exist for the team we
   notify all; if none, we skip gracefully.
 """
 from __future__ import annotations
@@ -330,7 +330,7 @@ async def submit_dsr(
     employee_id: int,
     end_of_day_note: str | None,
 ) -> DailyReport:
-    """Mark the DSR as SUBMITTED. Sends FCM to supervisor (and employee if late).
+    """Mark the DSR as SUBMITTED. Sends FCM to manager (and employee if late).
 
     Validates:
     - Report must exist and belong to `employee_id`.
@@ -367,9 +367,9 @@ async def submit_dsr(
 
     svc = NotificationService(db)
 
-    # Notify supervisor(s) of this employee's team
+    # Notify manager(s) of this employee's team
     if emp and emp.team_id:
-        sup_ids = await _supervisor_ids_for_team(db, emp.team_id)
+        sup_ids = await _manager_ids_for_team(db, emp.team_id)
         for sup_id in sup_ids:
             await svc.send_fcm(
                 sup_id,
@@ -401,18 +401,18 @@ async def add_manager_comment(
     db: AsyncSession,
     *,
     report_id: int,
-    supervisor_id: int,
+    manager_id: int,
     comment: str,
 ) -> DailyReport:
-    """Supervisor adds a comment to any DSR they can see."""
+    """Manager adds a comment to any DSR they can see."""
     report = await db.get(DailyReport, report_id)
     if report is None:
         raise not_found("Daily report not found")
 
-    # Load supervisor to verify team scope
-    sup = await db.get(User, supervisor_id)
+    # Load manager to verify team scope
+    sup = await db.get(User, manager_id)
     if sup is None:
-        raise not_found("Supervisor not found")
+        raise not_found("Manager not found")
 
     report.manager_comment = comment  # type: ignore[attr-defined]
     await db.flush()
@@ -436,7 +436,7 @@ async def add_manager_comment(
 async def mark_late_reports(report_date: date_type) -> list[tuple[int, str, int | None]]:
     """APScheduler job body: mark DRAFT reports for today as is_late=True.
     Returns (employee_id, employee_name, team_id) for each newly-late report,
-    so the scheduler can notify supervisors with an individual per-employee
+    so the scheduler can notify managers with an individual per-employee
     flag instead of just an aggregate count (checklist #53).
     Called by the 19:30 scheduler job.
     """
@@ -470,27 +470,27 @@ async def mark_late_reports(report_date: date_type) -> list[tuple[int, str, int 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-async def _supervisor_ids_for_team(db: AsyncSession, team_id: int) -> list[int]:
-    """Returns user IDs of supervisors assigned to this team.
+async def _manager_ids_for_team(db: AsyncSession, team_id: int) -> list[int]:
+    """Returns user IDs of managers assigned to this team.
 
-    A team's supervisor is `Team.supervisor_id` — the FK `TeamService.create`/
+    A team's manager is `Team.manager_id` — the FK `TeamService.create`/
     `update` actually maintain — NOT `User.team_id`. `User.team_id` is only
     ever set via `TeamService.add_member`/`remove_member`, which is for
-    employees joining a team; the supervisor's own `team_id` is never
+    employees joining a team; the manager's own `team_id` is never
     populated by the app. Fixed: this used to filter on `User.team_id`,
-    which silently returned zero supervisors for any team assigned through
+    which silently returned zero managers for any team assigned through
     the normal admin API — it only ever worked in this session's own testing
-    because `scripts/seed_users.py` happens to also set the supervisor's
+    because `scripts/seed_users.py` happens to also set the manager's
     `team_id` as a seeding convenience, masking the bug."""
     from app.models.user import Team
     from app.models.enums import UserRole
 
     q = await db.execute(
         select(User.id)
-        .join(Team, Team.supervisor_id == User.id)
+        .join(Team, Team.manager_id == User.id)
         .where(
             Team.id == team_id,
-            User.role == UserRole.SUPERVISOR,
+            User.role == UserRole.MANAGER,
             User.is_active.is_(True),
         )
     )
@@ -717,8 +717,8 @@ async def visits_export_rows(
     """One dict per COMPLETED visit across the caller's scope in [date_from,
     date_to] — powers the granular per-visit Excel export (checklist: each
     employee's each visit detail). ADMIN sees all (optional team/employee
-    filter); SUPERVISOR is pinned to their own team; EMPLOYEE forbidden."""
-    if user.role not in (UserRole.ADMIN, UserRole.SUPERVISOR):
+    filter); MANAGER is pinned to their own team; EMPLOYEE forbidden."""
+    if user.role not in (UserRole.ADMIN, UserRole.MANAGER):
         raise bad_request("Not permitted")
 
     start, _ = _day_bounds_utc(date_from)
@@ -729,7 +729,7 @@ async def visits_export_rows(
         Visit.check_in_at >= start,
         Visit.check_in_at <= end,
     ]
-    if user.role == UserRole.SUPERVISOR:
+    if user.role == UserRole.MANAGER:
         if not user.team_id:
             return []
         filters.append(User.team_id == user.team_id)

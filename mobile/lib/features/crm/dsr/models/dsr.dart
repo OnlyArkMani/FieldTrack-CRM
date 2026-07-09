@@ -52,7 +52,7 @@ class DsrSummary {
       );
 }
 
-/// One team member's DSR status for a date (supervisor team view).
+/// One team member's DSR status for a date (manager team view).
 class TeamDsrItem {
   const TeamDsrItem({
     required this.employeeId,

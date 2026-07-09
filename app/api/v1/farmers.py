@@ -3,7 +3,7 @@ and team-scope authorization live in FarmerService.
 
 AUTHZ:
 - All endpoints require an authenticated active user. Team scoping is enforced
-  inside the service (ADMIN sees all; supervisor/employee see their team).
+  inside the service (ADMIN sees all; manager/employee see their team).
 - Create/update/lead-status are available to any field user for their own
   team's farmers; the service decides what team a new farmer lands in.
 """
@@ -75,7 +75,7 @@ async def list_farmers(
     ),
 ) -> CursorPage[FarmerListItem]:
     """Paginated customer list with the CURRENT lead status joined per row.
-    Supervisor/employee see only their team's customers; admin sees all.
+    Manager/employee see only their team's customers; admin sees all.
     Optional customer_type filter powers the [All][Farmers][FPOs][VLCCs] tabs."""
     ct = customer_type.strip().upper() if customer_type else None
     if ct and ct not in ("FARMER_MEET", "FPO", "VLCC", "RETAILER", "DISTRIBUTOR"):
@@ -187,7 +187,7 @@ async def create_farmer(
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> FarmerResponse:
-    """Create a farmer. Employees are pinned to their own team; admin/supervisor
+    """Create a farmer. Employees are pinned to their own team; admin/manager
     may set team_id explicitly."""
     return await FarmerService(db).create_farmer(body, user=user)
 

@@ -10,15 +10,15 @@ import '../../auth/models/user.dart';
 import '../../employees/data/employee_repository.dart';
 import '../providers/team_provider.dart';
 
-/// Candidate supervisors for the assign-supervisor picker: active employees
-/// whose role is SUPERVISOR or ADMIN. First page (≤100) covers this product's
+/// Candidate managers for the assign-manager picker: active employees
+/// whose role is MANAGER or ADMIN. First page (≤100) covers this product's
 /// scale without pagination.
-final _supervisorCandidatesProvider = FutureProvider.autoDispose((ref) async {
+final _managerCandidatesProvider = FutureProvider.autoDispose((ref) async {
   final page = await ref.watch(employeeRepositoryProvider).list(limit: 100);
   return page.items
       .where((e) =>
           e.isActive &&
-          (e.role == UserRole.supervisor || e.role == UserRole.admin))
+          (e.role == UserRole.manager || e.role == UserRole.admin))
       .toList();
 });
 
@@ -43,7 +43,7 @@ class _CreateTeamForm extends ConsumerStatefulWidget {
 class _CreateTeamFormState extends ConsumerState<_CreateTeamForm> {
   final _name = TextEditingController();
   final _description = TextEditingController();
-  int? _supervisorId;
+  int? _managerId;
 
   bool _saving = false;
   String? _error;
@@ -68,7 +68,7 @@ class _CreateTeamFormState extends ConsumerState<_CreateTeamForm> {
     final err = await ref.read(teamListProvider.notifier).create(
           name: name,
           description: _description.text.trim(),
-          supervisorId: _supervisorId,
+          managerId: _managerId,
         );
     if (!mounted) return;
     if (err == null) {
@@ -83,7 +83,7 @@ class _CreateTeamFormState extends ConsumerState<_CreateTeamForm> {
 
   @override
   Widget build(BuildContext context) {
-    final candidates = ref.watch(_supervisorCandidatesProvider);
+    final candidates = ref.watch(_managerCandidatesProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -103,7 +103,7 @@ class _CreateTeamFormState extends ConsumerState<_CreateTeamForm> {
           textInputAction: TextInputAction.done,
         ),
         const SizedBox(height: AppDimens.grid * 2),
-        Text('Supervisor',
+        Text('Manager',
             style: AppTextStyles.bodyMedium
                 .copyWith(color: Theme.of(context).colorScheme.onSurface)),
         const SizedBox(height: AppDimens.grid),
@@ -113,17 +113,17 @@ class _CreateTeamFormState extends ConsumerState<_CreateTeamForm> {
             child: LinearProgressIndicator(minHeight: 2),
           ),
           error: (_, __) => Text(
-            'Could not load supervisors',
+            'Could not load managers',
             style: AppTextStyles.caption
                 .copyWith(color: context.appColors.textSecondary),
           ),
           data: (list) => DropdownButtonFormField<int?>(
-            value: _supervisorId,
+            value: _managerId,
             isExpanded: true,
             decoration: const InputDecoration(),
             items: [
               const DropdownMenuItem<int?>(
-                  value: null, child: Text('No supervisor')),
+                  value: null, child: Text('No manager')),
               ...list.map(
                 (e) => DropdownMenuItem<int?>(
                   value: e.id,
@@ -133,7 +133,7 @@ class _CreateTeamFormState extends ConsumerState<_CreateTeamForm> {
               ),
             ],
             onChanged:
-                _saving ? null : (v) => setState(() => _supervisorId = v),
+                _saving ? null : (v) => setState(() => _managerId = v),
           ),
         ),
         if (_error != null) ...[

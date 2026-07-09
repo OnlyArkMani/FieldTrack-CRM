@@ -19,7 +19,7 @@ import '../providers/employee_provider.dart';
 import '../widgets/employee_avatar.dart';
 import '../widgets/employee_edit_sheet.dart';
 
-/// Supervisor/admin-facing employee detail. Hero avatar from the list, live
+/// Manager/admin-facing employee detail. Hero avatar from the list, live
 /// status, today's attendance phase timeline, and a mini map of the last
 /// known location.
 class EmployeeDetailScreen extends ConsumerWidget {
@@ -31,7 +31,7 @@ class EmployeeDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final detail = ref.watch(employeeDetailProvider(employeeId));
     final role = ref.watch(authProvider).user?.role;
-    final canEdit = role == UserRole.admin || role == UserRole.supervisor;
+    final canEdit = role == UserRole.admin || role == UserRole.manager;
 
     return PopScope(
       canPop: false,

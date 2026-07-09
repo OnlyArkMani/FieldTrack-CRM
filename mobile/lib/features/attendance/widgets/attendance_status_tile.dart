@@ -10,6 +10,7 @@ import '../../../services/permission/permission_service.dart';
 import '../models/attendance.dart';
 import '../providers/attendance_provider.dart';
 import '../widgets/attendance_timer.dart';
+import '../widgets/leave_action.dart';
 import '../widgets/work_summary_sheet.dart';
 
 /// Dashboard attendance control. Not checked in => Check In / On Leave
@@ -47,51 +48,23 @@ class AttendanceStatusTile extends ConsumerWidget {
     }
   }
 
-  Future<void> _markLeave(BuildContext context, WidgetRef ref) async {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: today,
-      firstDate: today,
-      lastDate: today.add(const Duration(days: 90)),
-      helpText: 'Select leave date',
-    );
-    if (picked == null || !context.mounted) return;
-    final isToday = picked == today;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(isToday
-            ? 'Mark today as on leave?'
-            : 'Mark ${picked.day}/${picked.month}/${picked.year} as on leave?'),
-        content: Text(
-          isToday
-              ? "You won't be able to check in today after marking leave."
-              : "If you have planned visits on that date you'll need to "
-                  'reschedule or skip them first.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Mark leave'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
-    await ref
-        .read(attendanceProvider.notifier)
-        .markLeave(date: isToday ? null : picked);
-  }
+  Future<void> _markLeave(BuildContext context, WidgetRef ref,
+          {bool restrictToFuture = false}) =>
+      applyForLeave(context, ref, restrictToFuture: restrictToFuture);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen<AttendanceUiState>(
+      attendanceProvider,
+      (prev, next) {
+        if (next.errorNonce != prev?.errorNonce && next.error != null) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(SnackBar(content: Text(next.error!)));
+        }
+      },
+    );
+
     final ui = ref.watch(attendanceProvider);
     final colors = context.appColors;
 
@@ -125,48 +98,80 @@ class AttendanceStatusTile extends ConsumerWidget {
         ),
       MachineState.started || MachineState.resumed || MachineState.onBreak =>
         AppCard(
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Checked in',
-                      style: AppTextStyles.caption.copyWith(
-                        color: colors.textSecondary,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.3,
-                      ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Checked in',
+                          style: AppTextStyles.caption.copyWith(
+                            color: colors.textSecondary,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        AttendanceTimer(
+                          start: ui.attendance?.startedAt ?? DateTime.now(),
+                          fontSize: 26,
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    AttendanceTimer(
-                      start: ui.attendance?.startedAt ?? DateTime.now(),
-                      fontSize: 26,
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: AppDimens.grid * 1.5),
+                  AppButton(
+                    label: 'Checkout',
+                    icon: Icons.logout_rounded,
+                    variant: AppButtonVariant.danger,
+                    expanded: false,
+                    isLoading: ui.isSubmitting,
+                    onPressed:
+                        ui.isSubmitting ? null : () => _checkOut(context, ref),
+                  ),
+                ],
               ),
-              const SizedBox(width: AppDimens.grid * 1.5),
-              AppButton(
-                label: 'Checkout',
-                icon: Icons.logout_rounded,
-                variant: AppButtonVariant.danger,
-                expanded: false,
-                isLoading: ui.isSubmitting,
-                onPressed:
-                    ui.isSubmitting ? null : () => _checkOut(context, ref),
+              const SizedBox(height: AppDimens.grid),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: ui.isMarkingLeave
+                      ? null
+                      : () => _markLeave(context, ref, restrictToFuture: true),
+                  icon: const Icon(Icons.beach_access_rounded, size: 18),
+                  label: const Text('Apply leave for a future day'),
+                ),
               ),
             ],
           ),
         ),
-      MachineState.ended => _BadgeCard(
-          icon: Icons.check_circle_rounded,
-          tint: colors.statusOffline,
-          label: 'Checked out',
-          subtitle:
-              'Total today: ${_fmtMinutes(ui.attendance?.totalDurationMinutes ?? 0)}',
+      MachineState.ended => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _BadgeCard(
+              icon: Icons.check_circle_rounded,
+              tint: colors.statusOffline,
+              label: 'Checked out',
+              subtitle:
+                  'Total today: ${_fmtMinutes(ui.attendance?.totalDurationMinutes ?? 0)}',
+            ),
+            const SizedBox(height: AppDimens.grid),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: ui.isMarkingLeave
+                    ? null
+                    : () => _markLeave(context, ref, restrictToFuture: true),
+                icon: const Icon(Icons.beach_access_rounded, size: 18),
+                label: const Text('Apply leave for a future day'),
+              ),
+            ),
+          ],
         ),
       MachineState.onLeave => _BadgeCard(
           icon: Icons.beach_access_rounded,

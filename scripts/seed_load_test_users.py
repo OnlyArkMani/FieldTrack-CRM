@@ -1,7 +1,7 @@
-"""Seed throwaway employee/supervisor accounts for load testing.
+"""Seed throwaway employee/manager accounts for load testing.
 
 Creates N employees split evenly across `--teams` teams, each team with its
-own supervisor, and writes the plain-text credentials k6 needs to
+own manager, and writes the plain-text credentials k6 needs to
 scripts/perf/load_test_users.json (gitignored — these are test-only accounts,
 never real ones).
 
@@ -51,7 +51,7 @@ async def cleanup() -> None:
 
 async def seed(count: int, teams: int) -> None:
     per_team = -(-count // teams)  # ceil
-    credentials = {"employees": [], "supervisors": []}
+    credentials = {"employees": [], "managers": []}
 
     async with async_session_factory() as session:
         for t in range(teams):
@@ -64,25 +64,25 @@ async def seed(count: int, teams: int) -> None:
                 session.add(team)
                 await session.flush()
 
-            sup_email = f"loadtest.supervisor{t + 1}@{EMAIL_DOMAIN}"
-            sup = (
-                await session.execute(select(User).where(User.email == sup_email))
+            mgr_email = f"loadtest.manager{t + 1}@{EMAIL_DOMAIN}"
+            mgr = (
+                await session.execute(select(User).where(User.email == mgr_email))
             ).scalar_one_or_none()
-            if sup is None:
-                sup = User(
-                    name=f"LoadTest Supervisor {t + 1}",
-                    email=sup_email,
+            if mgr is None:
+                mgr = User(
+                    name=f"LoadTest Manager {t + 1}",
+                    email=mgr_email,
                     phone=None,
                     password_hash=hash_password(PASSWORD),
-                    role=UserRole.SUPERVISOR,
+                    role=UserRole.MANAGER,
                     team_id=team.id,
                     is_active=True,
                 )
-                session.add(sup)
+                session.add(mgr)
                 await session.flush()
-            if team.supervisor_id != sup.id:
-                team.supervisor_id = sup.id
-            credentials["supervisors"].append({"email": sup_email, "password": PASSWORD})
+            if team.manager_id != mgr.id:
+                team.manager_id = mgr.id
+            credentials["managers"].append({"email": mgr_email, "password": PASSWORD})
 
             employees_in_team = per_team if t < teams - 1 else count - per_team * (teams - 1)
             for i in range(employees_in_team):
@@ -112,7 +112,7 @@ async def seed(count: int, teams: int) -> None:
         json.dump(credentials, f, indent=2)
 
     print(f"Seeded {len(credentials['employees'])} employees across {teams} teams "
-          f"({len(credentials['supervisors'])} supervisors).")
+          f"({len(credentials['managers'])} managers).")
     print(f"Credentials written to {OUT_PATH} for k6 to consume.")
 
 

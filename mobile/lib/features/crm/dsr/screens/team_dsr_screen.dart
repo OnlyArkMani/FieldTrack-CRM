@@ -10,7 +10,7 @@ import '../../../../core/widgets/state_views.dart';
 import '../data/dsr_repository.dart';
 import '../models/dsr.dart';
 
-/// Supervisor-only: their team's DSR status for a chosen date. Scope is
+/// Manager-only: their team's DSR status for a chosen date. Scope is
 /// auto-filtered to the caller's team on the backend. Tap a member with a DSR
 /// to see a read-only detail.
 class TeamDsrScreen extends ConsumerStatefulWidget {
@@ -70,8 +70,7 @@ class _TeamDsrScreenState extends ConsumerState<TeamDsrScreen> {
                   decoration: BoxDecoration(
                     border: Border.all(
                         color: colors.textSecondary.withValues(alpha: 0.25)),
-                    borderRadius:
-                        BorderRadius.circular(AppDimens.buttonRadius),
+                    borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
                   ),
                   child: Row(
                     children: [
@@ -83,8 +82,8 @@ class _TeamDsrScreenState extends ConsumerState<TeamDsrScreen> {
                               color: Theme.of(context).colorScheme.onSurface)),
                       const Spacer(),
                       Text('Change',
-                          style: AppTextStyles.caption
-                              .copyWith(color: Theme.of(context).colorScheme.primary)),
+                          style: AppTextStyles.caption.copyWith(
+                              color: Theme.of(context).colorScheme.primary)),
                     ],
                   ),
                 ),
@@ -170,9 +169,13 @@ class _MemberTile extends ConsumerWidget {
               if (item.isLate) ...[
                 const SizedBox(width: 6),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.error.withValues(alpha: 0.12),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .error
+                        .withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text('LATE',
@@ -250,7 +253,8 @@ class _MemberDsrSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.appColors;
-    final future = ref.read(dsrRepositoryProvider).teamMemberDsr(employeeId, date);
+    final future =
+        ref.read(dsrRepositoryProvider).teamMemberDsr(employeeId, date);
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.7,
@@ -273,11 +277,11 @@ class _MemberDsrSheet extends ConsumerWidget {
             padding: const EdgeInsets.all(AppDimens.grid * 2),
             children: [
               Text(employeeName,
-                  style: AppTextStyles.heading
-                      .copyWith(color: Theme.of(context).colorScheme.onSurface)),
+                  style: AppTextStyles.heading.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface)),
               Text(DateFormat('d MMMM yyyy').format(date),
-                  style:
-                      AppTextStyles.caption.copyWith(color: colors.textSecondary)),
+                  style: AppTextStyles.caption
+                      .copyWith(color: colors.textSecondary)),
               const SizedBox(height: AppDimens.grid * 1.5),
               Wrap(spacing: 12, runSpacing: 8, children: [
                 _stat(context, 'Visits', d.visitsCompleted.toString()),
@@ -308,7 +312,8 @@ class _MemberDsrSheet extends ConsumerWidget {
                 _sectionTitle(context, "Employee's note"),
                 Text(d.endOfDayNote!,
                     style: AppTextStyles.body.copyWith(
-                        fontStyle: FontStyle.italic, color: colors.textSecondary)),
+                        fontStyle: FontStyle.italic,
+                        color: colors.textSecondary)),
               ],
               const SizedBox(height: AppDimens.grid * 2),
             ],
@@ -409,7 +414,8 @@ class _TeamVisitTileState extends State<_TeamVisitTile> {
               const SizedBox(width: 8),
               Text(
                 '${v.purposeLabel}${v.leadStatus != null ? ' · ${v.leadStatus}' : ''}',
-                style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+                style:
+                    AppTextStyles.caption.copyWith(color: colors.textSecondary),
               ),
               if (v.hasDetail)
                 GestureDetector(
@@ -439,7 +445,8 @@ class _TeamVisitTileState extends State<_TeamVisitTile> {
                     _detail(context, 'Highlights', v.meetingHighlights!),
                   if (v.farmerConcerns != null && v.farmerConcerns!.isNotEmpty)
                     _detail(context, 'Concerns', v.farmerConcerns!),
-                  if (v.productInterest != null && v.productInterest!.isNotEmpty)
+                  if (v.productInterest != null &&
+                      v.productInterest!.isNotEmpty)
                     _detail(context, 'Product interest', v.productInterest!),
                   if (v.orderBags != null && v.orderBags! > 0)
                     _detail(context, 'Order',

@@ -1,4 +1,4 @@
-"""Seed an admin, a supervisor, and an employee for local testing.
+"""Seed an admin, a manager, and an employee for local testing.
 
 Run from the project root with the venv activated:
     python scripts/seed_users.py
@@ -17,8 +17,8 @@ from app.models.user import Team, User
 USERS = [
     dict(name="Admin User", email="admin@fieldtrack.com", phone="9000000001",
          password="Admin@123", role=UserRole.ADMIN),
-    dict(name="Supervisor One", email="supervisor@fieldtrack.com", phone="9000000002",
-         password="Super@123", role=UserRole.SUPERVISOR),
+    dict(name="Manager One", email="manager@fieldtrack.com", phone="9000000002",
+         password="Manager@123", role=UserRole.MANAGER),
     dict(name="Employee One", email="employee@fieldtrack.com", phone="9000000003",
          password="Employee@123", role=UserRole.EMPLOYEE),
 ]
@@ -26,7 +26,7 @@ USERS = [
 
 async def main() -> None:
     async with async_session_factory() as session:
-        # Ensure a team exists so the employee/supervisor can be linked.
+        # Ensure a team exists so the employee/manager can be linked.
         team = (await session.execute(select(Team).where(Team.name == "Field Team A"))).scalar_one_or_none()
         if team is None:
             team = Team(name="Field Team A", description="Default seed team")
@@ -54,10 +54,10 @@ async def main() -> None:
             created[u["role"]] = user
             print(f"created: {u['email']} / {u['password']} ({u['role'].value})")
 
-        # Assign supervisor to the team.
-        sup = created.get(UserRole.SUPERVISOR)
-        if sup and team.supervisor_id != sup.id:
-            team.supervisor_id = sup.id
+        # Assign manager to the team.
+        mgr = created.get(UserRole.MANAGER)
+        if mgr and team.manager_id != mgr.id:
+            team.manager_id = mgr.id
 
         await session.commit()
 

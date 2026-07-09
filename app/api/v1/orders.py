@@ -11,7 +11,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import CurrentUser, get_current_supervisor, get_db
+from app.core.dependencies import CurrentUser, get_current_manager, get_db
 from app.models.user import User
 from app.schemas.crm import OrderReviewRequest, VisitOrderResponse
 from app.services.order_service import OrderService
@@ -21,25 +21,25 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 
 @router.get("/pending", response_model=list[VisitOrderResponse])
 async def pending_orders(
-    supervisor: Annotated[User, Depends(get_current_supervisor)],
+    manager: Annotated[User, Depends(get_current_manager)],
     db: Annotated[AsyncSession, Depends(get_db)],
     team_id: int | None = Query(default=None),
 ) -> list[VisitOrderResponse]:
     """SUBMITTED orders awaiting approval. Admin sees all (optionally
-    filtered by team_id); supervisors are locked to their own team(s)."""
-    return await OrderService(db).list_pending(supervisor, team_id=team_id)
+    filtered by team_id); managers are locked to their own team(s)."""
+    return await OrderService(db).list_pending(manager, team_id=team_id)
 
 
 @router.post("/{order_id}/review", response_model=VisitOrderResponse)
 async def review_order(
     order_id: int,
     body: OrderReviewRequest,
-    supervisor: Annotated[User, Depends(get_current_supervisor)],
+    manager: Annotated[User, Depends(get_current_manager)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> VisitOrderResponse:
     """Approve or reject a SUBMITTED order. Notifies the capturing employee
     (best-effort) either way."""
-    return await OrderService(db).review(supervisor, order_id, body)
+    return await OrderService(db).review(manager, order_id, body)
 
 
 @router.get("/farmer/{farmer_id}", response_model=list[VisitOrderResponse])

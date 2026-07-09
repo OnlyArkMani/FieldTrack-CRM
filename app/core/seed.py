@@ -1,7 +1,7 @@
 """Production admin seed — creates the FIRST admin with a RANDOM password.
 
 WHY THIS EXISTS (separate from scripts/seed_users.py):
-    scripts/seed_users.py is for LOCAL DEV only — it creates admin/supervisor/
+    scripts/seed_users.py is for LOCAL DEV only — it creates admin/manager/
     employee with well-known passwords (Admin@123, …). Running that in
     production would ship a publicly-known admin credential: a critical
     security hole. This script instead generates a cryptographically random

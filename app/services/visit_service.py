@@ -106,7 +106,7 @@ class VisitService:
     # ── authz helpers ────────────────────────────────────────────────────
     @staticmethod
     def _is_privileged(user: User) -> bool:
-        return user.role in (UserRole.ADMIN, UserRole.SUPERVISOR)
+        return user.role in (UserRole.ADMIN, UserRole.MANAGER)
 
     def _assert_can_visit(self, farmer: Farmer, user: User) -> None:
         if self._is_privileged(user):
@@ -138,7 +138,7 @@ class VisitService:
         self._assert_can_visit(farmer, user)
 
         # A15: attendance must be active before an employee can check in to a
-        # visit. Supervisors/admins are exempt — attendance isn't mandatory
+        # visit. Managers/admins are exempt — attendance isn't mandatory
         # for them.
         if not self._is_privileged(user):
             state = await AttendanceService(self.db).current_state_today(user.id)
@@ -305,16 +305,16 @@ class VisitService:
         self.repo.add(order)
         await self.db.flush()
 
-        # Supervisor awareness: notify the employee's team supervisor(s) that an
+        # Manager awareness: notify the employee's team manager(s) that an
         # order was captured. Best-effort — never block or fail the order.
         try:
             if user.team_id is not None:
-                from app.services.dsr_service import _supervisor_ids_for_team
+                from app.services.dsr_service import _manager_ids_for_team
                 from app.services.notification_service import NotificationService
 
                 farmer = await self.repo.get_farmer(visit.farmer_id)
                 farmer_name = farmer.name if farmer else "a farmer"
-                sup_ids = await _supervisor_ids_for_team(self.db, user.team_id)
+                sup_ids = await _manager_ids_for_team(self.db, user.team_id)
                 if sup_ids:
                     notif = NotificationService(self.db)
                     for sup_id in sup_ids:
@@ -499,15 +499,15 @@ class VisitService:
 
         await self.db.flush()
 
-        # Supervisor awareness: notify the employee's team supervisor(s) that a
+        # Manager awareness: notify the employee's team manager(s) that a
         # visit was completed (mirrors ORDER_CAPTURED). Best-effort — never block.
         try:
             if user.team_id is not None:
-                from app.services.dsr_service import _supervisor_ids_for_team
+                from app.services.dsr_service import _manager_ids_for_team
                 from app.services.notification_service import NotificationService
 
                 farmer_name = farmer.name if farmer else "a farmer"
-                sup_ids = await _supervisor_ids_for_team(self.db, user.team_id)
+                sup_ids = await _manager_ids_for_team(self.db, user.team_id)
                 if sup_ids:
                     notif = NotificationService(self.db)
                     for sup_id in sup_ids:

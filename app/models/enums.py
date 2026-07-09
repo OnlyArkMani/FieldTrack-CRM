@@ -6,7 +6,7 @@ import enum
 
 class UserRole(str, enum.Enum):
     ADMIN = "ADMIN"
-    SUPERVISOR = "SUPERVISOR"
+    MANAGER = "MANAGER"
     EMPLOYEE = "EMPLOYEE"
 
 

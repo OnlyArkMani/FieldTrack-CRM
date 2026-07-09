@@ -12,7 +12,7 @@ import '../models/team.dart';
 import '../providers/team_provider.dart';
 import '../widgets/create_team_sheet.dart';
 
-/// Team management. Admins manage all teams (create + delete); supervisors see
+/// Team management. Admins manage all teams (create + delete); managers see
 /// their own team(s) read-only. The create FAB is admin-only.
 class TeamListScreen extends ConsumerWidget {
   const TeamListScreen({super.key});
@@ -26,7 +26,8 @@ class TeamListScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Teams', maxLines: 1, overflow: TextOverflow.ellipsis),
+        title:
+            const Text('Teams', maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
       floatingActionButton: isAdmin
           ? FloatingActionButton.extended(
@@ -53,7 +54,8 @@ class TeamListScreen extends ConsumerWidget {
     if (state.isLoading) return const ShimmerList(count: 4);
 
     if (state.error != null && state.teams.isEmpty) {
-      return ErrorStateView(message: state.error!, onRetry: () => notifier.load());
+      return ErrorStateView(
+          message: state.error!, onRetry: () => notifier.load());
     }
 
     if (state.isEmpty) {
@@ -67,7 +69,7 @@ class TeamListScreen extends ConsumerWidget {
               icon: Icons.groups_2_rounded,
               title: 'No teams yet',
               message: isAdmin
-                  ? 'Create a team to group employees and assign a supervisor.'
+                  ? 'Create a team to group employees and assign a manager.'
                   : 'You have not been assigned to a team yet.',
               actionLabel: isAdmin ? 'Create team' : null,
               onAction: isAdmin ? () => showCreateTeamSheet(context) : null,
@@ -131,8 +133,7 @@ class TeamListScreen extends ConsumerWidget {
     if (confirmed != true) return;
     final err = await ref.read(teamListProvider.notifier).delete(team.id);
     if (err != null && context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(err)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
     }
   }
 }
@@ -180,7 +181,7 @@ class _TeamCardState extends ConsumerState<_TeamCard> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (team.supervisorName != null) ...[
+                    if (team.managerName != null) ...[
                       const SizedBox(height: 2),
                       Row(
                         children: [
@@ -189,7 +190,7 @@ class _TeamCardState extends ConsumerState<_TeamCard> {
                           const SizedBox(width: 3),
                           Flexible(
                             child: Text(
-                              team.supervisorName!,
+                              team.managerName!,
                               style: AppTextStyles.caption
                                   .copyWith(color: colors.textSecondary),
                               maxLines: 1,
@@ -217,7 +218,8 @@ class _TeamCardState extends ConsumerState<_TeamCard> {
             const SizedBox(height: AppDimens.grid),
             Text(
               team.description!,
-              style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+              style:
+                  AppTextStyles.caption.copyWith(color: colors.textSecondary),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
@@ -229,7 +231,8 @@ class _TeamCardState extends ConsumerState<_TeamCard> {
             children: [
               _Pill(
                 icon: Icons.people_alt_rounded,
-                label: '${team.memberCount} member${team.memberCount == 1 ? '' : 's'}',
+                label:
+                    '${team.memberCount} member${team.memberCount == 1 ? '' : 's'}',
               ),
               const SizedBox(width: AppDimens.grid * 1.5),
               _Pill(
@@ -249,8 +252,9 @@ class _TeamCardState extends ConsumerState<_TeamCard> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(_expanded ? 'Hide' : 'Members',
-                            style: AppTextStyles.caption
-                                .copyWith(color: scheme.primary, fontWeight: FontWeight.w600)),
+                            style: AppTextStyles.caption.copyWith(
+                                color: scheme.primary,
+                                fontWeight: FontWeight.w600)),
                         Icon(
                           _expanded
                               ? Icons.keyboard_arrow_up_rounded
@@ -267,8 +271,9 @@ class _TeamCardState extends ConsumerState<_TeamCard> {
           ),
           AnimatedCrossFade(
             duration: const Duration(milliseconds: 250),
-            crossFadeState:
-                _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            crossFadeState: _expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
             firstChild: const SizedBox(width: double.infinity),
             secondChild: _MemberStatusList(teamId: team.id),
           ),
@@ -302,8 +307,8 @@ class _MemberStatusList extends ConsumerWidget {
                       strokeWidth: 2, color: colors.textSecondary)),
               const SizedBox(width: AppDimens.grid),
               Text('Loading members…',
-                  style:
-                      AppTextStyles.caption.copyWith(color: colors.textSecondary)),
+                  style: AppTextStyles.caption
+                      .copyWith(color: colors.textSecondary)),
             ],
           ),
         ),
@@ -313,8 +318,8 @@ class _MemberStatusList extends ConsumerWidget {
         data: (team) {
           if (team.members.isEmpty) {
             return Text('No members in this team yet',
-                style:
-                    AppTextStyles.caption.copyWith(color: colors.textSecondary));
+                style: AppTextStyles.caption
+                    .copyWith(color: colors.textSecondary));
           }
           return Column(
             children: [
@@ -355,14 +360,19 @@ class _MemberRow extends StatelessWidget {
           const SizedBox(width: AppDimens.grid),
           Expanded(
             child: Text(member.name,
-                style: AppTextStyles.bodyMedium.copyWith(color: scheme.onSurface),
+                style:
+                    AppTextStyles.bodyMedium.copyWith(color: scheme.onSurface),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis),
           ),
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+          Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
           const SizedBox(width: 6),
           Text(label,
-              style: AppTextStyles.caption.copyWith(color: dot, fontWeight: FontWeight.w500)),
+              style: AppTextStyles.caption
+                  .copyWith(color: dot, fontWeight: FontWeight.w500)),
         ],
       ),
     );

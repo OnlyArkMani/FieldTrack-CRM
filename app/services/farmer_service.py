@@ -3,11 +3,11 @@ and team-scope authorization.
 
 TEAM SCOPE (the core rule):
   - ADMIN            sees/edits every farmer.
-  - SUPERVISOR/EMPLOYEE see only farmers on their own team. A user with no team
+  - MANAGER/EMPLOYEE see only farmers on their own team. A user with no team
     falls back to farmers they personally created (so a freshly-onboarded rep
     still sees their own entries).
 Create assigns team automatically for employees (they cannot file a farmer
-under another team); admins/supervisors may set team_id explicitly.
+under another team); admins/managers may set team_id explicitly.
 """
 import logging
 
@@ -54,8 +54,8 @@ class FarmerService:
         """List filter kwargs that enforce visibility for a non-admin user."""
         if self._is_admin(user):
             return {}
-        if user.role == UserRole.SUPERVISOR:
-            stmt = select(Team.id).where(Team.supervisor_id == user.id)
+        if user.role == UserRole.MANAGER:
+            stmt = select(Team.id).where(Team.manager_id == user.id)
             team_ids = list((await self.db.execute(stmt)).scalars().all())
             return {"team_ids": team_ids, "created_by": user.id}
         if user.team_id is not None:
@@ -66,8 +66,8 @@ class FarmerService:
     async def _assert_can_view(self, farmer: Farmer, user: User) -> None:
         if self._is_admin(user):
             return
-        if user.role == UserRole.SUPERVISOR:
-            stmt = select(Team.id).where(Team.supervisor_id == user.id)
+        if user.role == UserRole.MANAGER:
+            stmt = select(Team.id).where(Team.manager_id == user.id)
             team_ids = list((await self.db.execute(stmt)).scalars().all())
             if farmer.team_id in team_ids:
                 return
@@ -186,7 +186,7 @@ class FarmerService:
         if user.role == UserRole.EMPLOYEE:
             team_id = user.team_id
         else:
-            # Admin/supervisor may set team_id explicitly; default to their own.
+            # Admin/manager may set team_id explicitly; default to their own.
             team_id = payload.team_id if payload.team_id is not None else user.team_id
 
         if team_id is not None and not await self.repo.active_team_exists(team_id):
@@ -226,7 +226,7 @@ class FarmerService:
         await self._assert_can_view(farmer, user)
 
         fields = payload.model_dump(exclude_unset=True)
-        # team reassignment is admin/supervisor only.
+        # team reassignment is admin/manager only.
         if "team_id" in fields:
             if user.role == UserRole.EMPLOYEE:
                 fields.pop("team_id")

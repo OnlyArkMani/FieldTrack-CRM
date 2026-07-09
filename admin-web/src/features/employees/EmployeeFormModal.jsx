@@ -133,7 +133,7 @@ export default function EmployeeFormModal({ open, onClose, employee }) {
         <div className="grid grid-cols-2 gap-4">
           <Select label="Role" value={form.role} onChange={set("role")}>
             <option value="EMPLOYEE">Employee</option>
-            <option value="SUPERVISOR">Supervisor</option>
+            <option value="MANAGER">Manager</option>
             <option value="ADMIN">Admin</option>
           </Select>
           <Select label="Team" value={form.team_id} onChange={set("team_id")}>

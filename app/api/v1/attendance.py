@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import (
     CurrentUser,
     get_current_admin,
-    get_current_supervisor,
+    get_current_manager,
     get_db,
 )
 from app.models.enums import SessionType
@@ -159,16 +159,16 @@ async def history(
     )
 
 
-# ── Supervisor: team attendance for a date ───────────────────────────────
+# ── Manager: team attendance for a date ───────────────────────────────
 @router.get("/team/{team_id}", response_model=list[AttendanceOut])
 async def team_attendance(
     team_id: int,
-    supervisor: Annotated[User, Depends(get_current_supervisor)],
+    manager: Annotated[User, Depends(get_current_manager)],
     db: Annotated[AsyncSession, Depends(get_db)],
     day: date = Query(default_factory=date.today, alias="date"),
 ) -> list[AttendanceOut]:
     return await AttendanceService(db).get_team_for_date(
-        supervisor=supervisor, team_id=team_id, day=day
+        manager=manager, team_id=team_id, day=day
     )
 
 
