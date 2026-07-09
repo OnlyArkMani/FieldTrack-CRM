@@ -77,7 +77,13 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
       _villageError = village.isEmpty ? 'Village is required' : null;
       _districtError = district.isEmpty ? 'District is required' : null;
       _addressError = address.isEmpty ? 'Address is required' : null;
-      _pincodeError = pincode.isEmpty ? 'PIN code is required' : null;
+      if (pincode.isEmpty) {
+        _pincodeError = 'PIN code is required';
+      } else if (pincode.length != 6) {
+        _pincodeError = 'PIN code must be exactly 6 digits';
+      } else {
+        _pincodeError = null;
+      }
       _formError = null;
     });
 
@@ -88,7 +94,8 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
         village.isEmpty ||
         district.isEmpty ||
         address.isEmpty ||
-        pincode.isEmpty) {
+        pincode.isEmpty ||
+        pincode.length != 6) {
       return;
     }
 
@@ -267,7 +274,10 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
               keyboardType: TextInputType.number,
               textInputAction: TextInputAction.next,
               prefixIcon: Icons.markunread_mailbox_rounded,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(6),
+              ],
             ),
             const SizedBox(height: AppDimens.grid * 2),
             AppTextField(

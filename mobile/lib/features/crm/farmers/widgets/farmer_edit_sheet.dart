@@ -53,6 +53,7 @@ class _FarmerEditFormState extends ConsumerState<_FarmerEditForm> {
   bool _saving = false;
   String? _nameError;
   String? _phoneError;
+  String? _pincodeError;
   String? _formError;
 
   @override
@@ -72,6 +73,7 @@ class _FarmerEditFormState extends ConsumerState<_FarmerEditForm> {
   Future<void> _save() async {
     final name = _name.text.trim();
     final phone = _phone.text.trim();
+    final pincode = _pincode.text.trim();
     setState(() {
       _nameError = name.isEmpty ? 'Name is required' : null;
       if (phone.isNotEmpty) {
@@ -85,9 +87,14 @@ class _FarmerEditFormState extends ConsumerState<_FarmerEditForm> {
       } else {
         _phoneError = null;
       }
+      if (pincode.isNotEmpty && pincode.length != 6) {
+        _pincodeError = 'PIN code must be exactly 6 digits';
+      } else {
+        _pincodeError = null;
+      }
       _formError = null;
     });
-    if (name.isEmpty || _phoneError != null) return;
+    if (name.isEmpty || _phoneError != null || _pincodeError != null) return;
 
     setState(() => _saving = true);
     try {
@@ -145,8 +152,12 @@ class _FarmerEditFormState extends ConsumerState<_FarmerEditForm> {
         AppTextField(
             label: 'PIN code',
             controller: _pincode,
+            errorText: _pincodeError,
             keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly]),
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(6),
+            ]),
         const SizedBox(height: AppDimens.grid * 2),
         AppTextField(
             label: 'Total cattle',
