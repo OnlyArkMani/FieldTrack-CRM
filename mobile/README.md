@@ -1,6 +1,6 @@
 # FieldTrack Mobile
 
-Flutter app for Employees and Supervisors. Android-first, **min SDK 21**,
+Flutter app for Employees and Managers. Android-first, **min SDK 21**,
 built for low-end devices. Admin uses the web dashboard only.
 
 ## lib/ structure
@@ -36,13 +36,13 @@ lib/
 │   │   └── screens/login_screen.dart
 │   ├── home/
 │   │   └── screens/home_shell.dart     # bottom nav shell (animated indicator)
-│   ├── dashboard/            # role-aware: supervisor=team view, employee=personal
+│   ├── dashboard/            # role-aware: manager=team view, employee=personal
 │   ├── attendance/           # START/BREAK/RESUME/END (next phase)
 │   ├── map/                  # flutter_map + offline tiles (next phase)
 │   ├── profile/
 │   │   └── screens/profile_screen.dart
 │   └── employees/
-│       └── screens/employee_detail_screen.dart  # supervisor-only
+│       └── screens/employee_detail_screen.dart  # manager-only
 └── (tests in test/)
 ```
 

@@ -5,12 +5,12 @@ the admin web dashboard, and the Flutter app.
 
 **Your actual ports (from `.env`):**
 
-| Service  | Host port | URL / access                     |
-|----------|-----------|----------------------------------|
-| Nginx    | **8090**  | http://localhost:8090            |
-| Postgres | **5434**  | localhost:5434 (internal 5432)   |
-| Redis    | **6380**  | localhost:6380 (internal 6379)   |
-| App      | 8000      | internal only (behind Nginx)     |
+| Service  | Host port | URL / access                   |
+| -------- | --------- | ------------------------------ |
+| Nginx    | **8090**  | http://localhost:8090          |
+| Postgres | **5434**  | localhost:5434 (internal 5432) |
+| Redis    | **6380**  | localhost:6380 (internal 6379) |
+| App      | 8000      | internal only (behind Nginx)   |
 
 Run everything from the repo root: `C:\Projects\SamarthAgri\FieldTrack\FieldTrack`
 
@@ -68,13 +68,15 @@ docker compose exec postgres psql -U fieldtrack -d fieldtrack -c "\dt" | \
 docker compose exec -T app python - < scripts/seed_users.py
 ```
 
-| Role       | Email                      | Password       |
-|------------|----------------------------|----------------|
-| Admin      | admin@fieldtrack.com       | Admin@123      |
-| Supervisor | supervisor@fieldtrack.com  | Super@123      |
-| Employee   | employee@fieldtrack.com    | Employee@123   |
+| Role     | Email                   | Password     |
+| -------- | ----------------------- | ------------ |
+| Admin    | admin@fieldtrack.com    | Admin@123    |
+| Manager  | manager@fieldtrack.com  | Manager@123  |
+| Employee | employee@fieldtrack.com | Employee@123 |
 
 ---
+
+`
 
 ## 4. Health check
 
@@ -184,6 +186,7 @@ flutter build apk --release     # or: bash scripts/build_flutter.sh
 ```
 
 **Backend URL for the app:**
+
 - Android **emulator** → `http://10.0.2.2:8090`
 - **Physical phone** on same Wi-Fi → `http://<your-laptop-LAN-IP>:8090` (not `localhost`)
 
