@@ -46,7 +46,7 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Center(
           child: Column(
@@ -59,7 +59,7 @@ class _SplashScreenState extends State<SplashScreen>
                   child: Container(
                     width: 96,
                     height: 96,
-                    decoration: const BoxDecoration(color: Colors.white),
+                    decoration: const BoxDecoration(color: Colors.transparent),
                     child: Image.asset(
                       'assets/images/app_logo_tree.png',
                       fit: BoxFit.contain,
