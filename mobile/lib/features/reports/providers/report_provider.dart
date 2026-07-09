@@ -35,7 +35,7 @@ class ReportUiState {
   final ReportFormat format;
   final DateTimeRange? range; // attendance / distance
   final DateTime month; // team report (1st of month)
-  final int? teamId; // supervisor team selection
+  final int? teamId; // manager team selection
   final ReportPhase phase;
   final String? error;
   final File? file; // mobile only — null on web (browser-downloaded instead)
@@ -85,12 +85,14 @@ class ReportNotifier extends Notifier<ReportUiState> {
     final end = DateTime(now.year, now.month, now.day);
     if (auth.status != AuthStatus.authenticated) {
       return ReportUiState(
-        range: DateTimeRange(start: end.subtract(const Duration(days: 29)), end: end),
+        range: DateTimeRange(
+            start: end.subtract(const Duration(days: 29)), end: end),
         month: DateTime(now.year, now.month, 1),
       );
     }
     return ReportUiState(
-      range: DateTimeRange(start: end.subtract(const Duration(days: 29)), end: end),
+      range: DateTimeRange(
+          start: end.subtract(const Duration(days: 29)), end: end),
       month: DateTime(now.year, now.month, 1),
     );
   }
@@ -104,30 +106,49 @@ class ReportNotifier extends Notifier<ReportUiState> {
         ? ReportFormat.excel
         : state.format;
     state = state.copyWith(
-        type: t, format: fmt, phase: ReportPhase.configuring, clearFile: true, clearError: true);
+        type: t,
+        format: fmt,
+        phase: ReportPhase.configuring,
+        clearFile: true,
+        clearError: true);
   }
-  void setFormat(ReportFormat f) =>
-      state = state.copyWith(format: f, phase: ReportPhase.configuring, clearFile: true, clearError: true);
-  void setRange(DateTimeRange r) =>
-      state = state.copyWith(range: r, phase: ReportPhase.configuring, clearFile: true, clearError: true);
+
+  void setFormat(ReportFormat f) => state = state.copyWith(
+      format: f,
+      phase: ReportPhase.configuring,
+      clearFile: true,
+      clearError: true);
+  void setRange(DateTimeRange r) => state = state.copyWith(
+      range: r,
+      phase: ReportPhase.configuring,
+      clearFile: true,
+      clearError: true);
   void setMonth(DateTime m) => state = state.copyWith(
       month: DateTime(m.year, m.month, 1),
       phase: ReportPhase.configuring,
       clearFile: true,
       clearError: true);
   void setTeam(int? id) => state = state.copyWith(
-      teamId: id, clearTeam: id == null, phase: ReportPhase.configuring, clearFile: true, clearError: true);
+      teamId: id,
+      clearTeam: id == null,
+      phase: ReportPhase.configuring,
+      clearFile: true,
+      clearError: true);
 
   void reset() {
     _runId++; // cancel any in-flight poll
     state = state.copyWith(
-        phase: ReportPhase.configuring, clearFile: true, clearError: true, timedOut: false);
+        phase: ReportPhase.configuring,
+        clearFile: true,
+        clearError: true,
+        timedOut: false);
   }
 
   // ── Generate + poll ───────────────────────────────────────────────────
   Future<void> generate() async {
     if (state.type.requiresTeam && state.teamId == null) {
-      state = state.copyWith(phase: ReportPhase.failed, error: 'Select a team first');
+      state = state.copyWith(
+          phase: ReportPhase.failed, error: 'Select a team first');
       return;
     }
 
@@ -156,7 +177,8 @@ class ReportNotifier extends Notifier<ReportUiState> {
           st = await _repo.status(reportId);
         } catch (e) {
           state = state.copyWith(
-              phase: ReportPhase.failed, error: _msg(e, 'Could not check report status.'));
+              phase: ReportPhase.failed,
+              error: _msg(e, 'Could not check report status.'));
           return;
         }
 
@@ -185,7 +207,8 @@ class ReportNotifier extends Notifier<ReportUiState> {
       // leave the UI stuck on "Generating…" forever.
       if (_runId != runId) return;
       state = state.copyWith(
-          phase: ReportPhase.failed, error: _msg(e, 'Something went wrong generating the report.'));
+          phase: ReportPhase.failed,
+          error: _msg(e, 'Something went wrong generating the report.'));
     }
   }
 
@@ -207,7 +230,8 @@ class ReportNotifier extends Notifier<ReportUiState> {
     } catch (e) {
       if (_runId != runId) return;
       state = state.copyWith(
-          phase: ReportPhase.failed, error: _msg(e, 'Download failed. Please retry.'));
+          phase: ReportPhase.failed,
+          error: _msg(e, 'Download failed. Please retry.'));
     }
   }
 

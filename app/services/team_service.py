@@ -85,8 +85,8 @@ class TeamService:
             id=row.id,
             name=row.name,
             description=row.description,
-            supervisor_id=row.supervisor_id,
-            supervisor_name=row.supervisor_name,
+            manager_id=row.manager_id,
+            manager_name=row.manager_name,
             member_count=row.member_count,
             present_today=row.present_today,
             performance_pct=self._performance(row.present_today, row.member_count),
@@ -94,11 +94,11 @@ class TeamService:
 
     # ── List ──────────────────────────────────────────────────────────────
     async def list_teams(self, actor: User) -> list[TeamOut]:
-        supervisor_id = actor.id if actor.role == UserRole.SUPERVISOR else None
+        manager_id = actor.id if actor.role == UserRole.MANAGER else None
         rows = await self.repo.list_with_stats(
             today=date.today(),
             only_active=True,
-            supervisor_id=supervisor_id,
+            manager_id=manager_id,
         )
         if actor.role == UserRole.EMPLOYEE:
             rows = [r for r in rows if r.id == actor.team_id]
@@ -111,8 +111,8 @@ class TeamService:
             raise not_found("Team not found")
 
         # Access control
-        if actor.role == UserRole.SUPERVISOR and row.supervisor_id != actor.id:
-            raise forbidden("You do not supervise this team")
+        if actor.role == UserRole.MANAGER and row.manager_id != actor.id:
+            raise forbidden("You do not manage this team")
         if actor.role == UserRole.EMPLOYEE and row.id != actor.team_id:
             raise forbidden("You are not a member of this team")
 
@@ -141,13 +141,13 @@ class TeamService:
     ) -> TeamDetailOut:
         if await self.repo.name_exists(payload.name):
             raise conflict("A team with this name already exists")
-        if payload.supervisor_id is not None:
-            await self._validate_supervisor(payload.supervisor_id)
+        if payload.manager_id is not None:
+            await self._validate_manager(payload.manager_id)
 
         team = Team(
             name=payload.name,
             description=payload.description,
-            supervisor_id=payload.supervisor_id,
+            manager_id=payload.manager_id,
         )
         self.repo.add(team)
         await self.db.flush()
@@ -178,11 +178,11 @@ class TeamService:
             team.name = fields["name"]
         if "description" in fields:
             team.description = fields["description"]
-        if "supervisor_id" in fields:
-            sid = fields["supervisor_id"]
-            if sid is not None:
-                await self._validate_supervisor(sid)
-            team.supervisor_id = sid
+        if "manager_id" in fields:
+            mid = fields["manager_id"]
+            if mid is not None:
+                await self._validate_manager(mid)
+            team.manager_id = mid
 
         self.repo.add(team)
         self.repo.add_audit_log(
@@ -265,9 +265,9 @@ class TeamService:
         return await self.get_detail(team_id, actor)
 
     # ── Helpers ──────────────────────────────────────────────────────────
-    async def _validate_supervisor(self, supervisor_id: int) -> None:
-        sup = await self.repo.user_by_id(supervisor_id)
+    async def _validate_manager(self, manager_id: int) -> None:
+        sup = await self.repo.user_by_id(manager_id)
         if sup is None:
-            raise not_found("Supervisor not found")
-        if sup.role not in (UserRole.SUPERVISOR, UserRole.ADMIN):
-            raise bad_request("Assigned supervisor must have SUPERVISOR or ADMIN role")
+            raise not_found("Manager not found")
+        if sup.role not in (UserRole.MANAGER, UserRole.ADMIN):
+            raise bad_request("Assigned manager must have MANAGER or ADMIN role")

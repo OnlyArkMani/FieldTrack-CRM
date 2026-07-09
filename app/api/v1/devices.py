@@ -2,7 +2,7 @@
 
 The mobile app registers its FCM token here on first launch and on every token
 rotation (FCM rotates periodically). It also reports when the user turns GPS
-off so a supervisor can be alerted (anti-gaming visibility).
+off so a manager can be alerted (anti-gaming visibility).
 
 AUTHZ: any authenticated active user — these are device-scoped, self-only
 actions (the token is bound to the caller; the GPS event is about the caller).
@@ -43,7 +43,7 @@ async def report_gps_disabled(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
     """The caller's device detected location services are off. Best-effort:
-    notifies the caller's supervisor. Always 202 (fire-and-forget from the
+    notifies the caller's manager. Always 202 (fire-and-forget from the
     device's perspective; the employee gets no signal they were flagged)."""
     await NotificationService(db).gps_disabled(user.id)
     return {"status": "accepted"}

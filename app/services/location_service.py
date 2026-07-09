@@ -12,8 +12,8 @@ INGESTION PIPELINE (POST /location/batch):
    with the NEWEST record by device timestamp — batches arrive oldest-first,
    but we don't trust ordering.
 
-ACCESS RULES (live/history): admin -> anyone; supervisor -> members of teams
-they supervise (+ themselves); employee -> self only.
+ACCESS RULES (live/history): admin -> anyone; manager -> members of teams
+they manage (+ themselves); employee -> self only.
 """
 import hashlib
 import logging
@@ -212,7 +212,7 @@ class LocationService:
     async def _check_geofences(self, user_id: int, newest: dict, prev) -> None:
         """Server-side geofence evaluation (best-effort: never blocks ingestion).
         Compares the batch's newest point with the user's prior ping; the
-        GeofenceService records ENTER/EXIT events and notifies supervisors."""
+        GeofenceService records ENTER/EXIT events and notifies managers."""
         from app.services.geofence_service import GeofenceService
 
         try:
@@ -253,11 +253,11 @@ class LocationService:
     async def _assert_can_view(self, viewer: User, target_id: int) -> None:
         if viewer.id == target_id or viewer.role == UserRole.ADMIN:
             return
-        if viewer.role == UserRole.SUPERVISOR:
+        if viewer.role == UserRole.MANAGER:
             target = await self.repo.get_user(target_id)
             if target is None:
                 raise ApiError(404, "User not found", "NOT_FOUND")
-            team_ids = await self.repo.supervised_team_ids(viewer.id)
+            team_ids = await self.repo.managed_team_ids(viewer.id)
             if target.team_id in team_ids:
                 return
             raise forbidden("This employee is not on your team")
@@ -401,7 +401,7 @@ class LocationService:
         """Per-day distance + point count for the last `days` days. One
         grouped PostGIS query over location_logs (retention window is 31 days —
         no extra storage). The UI lists this table and lets the
-        admin/supervisor open any day's full trail via /location/route."""
+        admin/manager open any day's full trail via /location/route."""
         await self._assert_can_view(viewer, user_id)
 
         end_date = date_type.today()
@@ -435,14 +435,14 @@ class LocationService:
             days=out_days,
         )
 
-    # ── Team live (supervisor map) ──────────────────────────────────────────
+    # ── Team live (manager map) ──────────────────────────────────────────
     async def team_live(self, viewer: User) -> list[TeamLivePoint]:
-        team_ids = await self.repo.supervised_team_ids(viewer.id)
+        team_ids = await self.repo.managed_team_ids(viewer.id)
         members = await self.repo.members_of_teams(team_ids)
-        # A supervisor is a field user with extra rights — they carry a tracked
+        # A manager is a field user with extra rights — they carry a tracked
         # device too and should see their OWN position on the team map. Append
-        # them (deduped: a supervisor may also be a member of a team they run).
-        if viewer.role == UserRole.SUPERVISOR and not any(
+        # them (deduped: a manager may also be a member of a team they run).
+        if viewer.role == UserRole.MANAGER and not any(
             m.id == viewer.id for m in members
         ):
             members = [*members, viewer]

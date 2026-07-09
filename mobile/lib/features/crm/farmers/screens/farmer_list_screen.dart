@@ -13,7 +13,7 @@ import '../utils.dart';
 import '../widgets/customer_type_chip.dart';
 import '../widgets/lead_status_badge.dart';
 
-/// Farmer directory. Field-facing (employees + supervisors).
+/// Farmer directory. Field-facing (employees + managers).
 /// - debounced search (name/village) + lead-status filter chips
 /// - pull-to-refresh, infinite scroll (cursor paging)
 /// - shimmer first-load, empty + error states
@@ -260,9 +260,7 @@ class _FilterChips extends StatelessWidget {
           ),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isSelected
-                ? color.withValues(alpha: 0.16)
-                : colors.card,
+            color: isSelected ? color.withValues(alpha: 0.16) : colors.card,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
               color: isSelected

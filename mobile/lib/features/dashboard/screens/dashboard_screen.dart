@@ -10,7 +10,7 @@ import '../../attendance/widgets/attendance_status_tile.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../notifications/widgets/notification_bell.dart';
 
-/// Role-aware dashboard: supervisors get the team view (with quick access to
+/// Role-aware dashboard: managers get the team view (with quick access to
 /// the team directory & team management), employees the personal view. The
 /// remaining live-metric content ships with later tracking phases — these
 /// shimmer cards hold its place.
@@ -20,12 +20,12 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authProvider).user;
-    final isSupervisor = user?.isSupervisor ?? false;
+    final isManager = user?.isManager ?? false;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          isSupervisor ? 'Team Dashboard' : 'My Dashboard',
+          isManager ? 'Team Dashboard' : 'My Dashboard',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -76,7 +76,7 @@ class DashboardScreen extends ConsumerWidget {
               onTap: () => context.push('/vet'),
             ),
             const SizedBox(height: AppDimens.grid * 1.5),
-            if (isSupervisor) ...[
+            if (isManager) ...[
               Row(
                 children: [
                   Expanded(
@@ -117,7 +117,7 @@ class DashboardScreen extends ConsumerWidget {
             _QuickAction(
               icon: Icons.assessment_rounded,
               label: 'Reports',
-              subtitle: isSupervisor
+              subtitle: isManager
                   ? 'Attendance, distance & team exports'
                   : 'Export your attendance & distance',
               onTap: () => context.push('/reports'),

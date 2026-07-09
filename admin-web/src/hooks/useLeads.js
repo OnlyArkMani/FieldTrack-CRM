@@ -12,7 +12,7 @@ export function usePipeline() {
   });
 }
 
-/** Team leads (supervisor/admin): grouped counts + filterable list. */
+/** Team leads (manager/admin): grouped counts + filterable list. */
 export function useTeamLeads({ status, employeeId, teamId, territory } = {}) {
   return useQuery({
     queryKey: [KEY, 'team', { status, employeeId, teamId, territory }],

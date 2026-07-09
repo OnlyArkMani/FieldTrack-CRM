@@ -52,7 +52,7 @@ enum LiveStatusValue {
       };
 }
 
-/// One team member's live position for the supervisor map.
+/// One team member's live position for the manager map.
 class TeamLiveMember {
   const TeamLiveMember({
     required this.userId,

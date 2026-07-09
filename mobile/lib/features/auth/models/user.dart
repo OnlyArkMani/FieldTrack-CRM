@@ -2,7 +2,7 @@ import '../../../core/config/env.dart';
 
 enum UserRole {
   admin('ADMIN'),
-  supervisor('SUPERVISOR'),
+  manager('MANAGER'),
   employee('EMPLOYEE');
 
   const UserRole(this.wire);
@@ -15,7 +15,7 @@ enum UserRole {
 
   String get label => switch (this) {
         UserRole.admin => 'Admin',
-        UserRole.supervisor => 'Supervisor',
+        UserRole.manager => 'Manager',
         UserRole.employee => 'Employee',
       };
 }
@@ -45,7 +45,7 @@ class User {
   final String? district;
   final String? state;
 
-  bool get isSupervisor => role == UserRole.supervisor;
+  bool get isManager => role == UserRole.manager;
 
   factory User.fromJson(Map<String, dynamic> json) {
     final photoUrl = json['profile_photo_url'] as String?;

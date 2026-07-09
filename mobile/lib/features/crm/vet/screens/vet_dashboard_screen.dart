@@ -16,7 +16,7 @@ import '../models/vet_request.dart';
 const _statuses = ['REQUESTED', 'SCHEDULED', 'DONE'];
 
 /// Dashboard listing customers who requested a vet during a visit. Scope is
-/// enforced server-side (employee=own, supervisor=team, admin=all). Filterable
+/// enforced server-side (employee=own, manager=team, admin=all). Filterable
 /// by status; each card can be advanced REQUESTED → SCHEDULED → DONE.
 class VetDashboardScreen extends ConsumerStatefulWidget {
   const VetDashboardScreen({super.key});
@@ -69,7 +69,8 @@ class _VetDashboardScreenState extends ConsumerState<VetDashboardScreen> {
                   horizontal: AppDimens.grid * 2, vertical: AppDimens.grid),
               child: Row(
                 children: [
-                  _chip('All', _filter == null, () => setState(() => _filter = null)),
+                  _chip('All', _filter == null,
+                      () => setState(() => _filter = null)),
                   for (final s in _statuses) ...[
                     const SizedBox(width: AppDimens.grid),
                     _chip(_pretty(s), _filter == s,
@@ -80,8 +81,7 @@ class _VetDashboardScreenState extends ConsumerState<VetDashboardScreen> {
             ),
             Expanded(
               child: async.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
+                loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, _) => ErrorStateView(
                   message: e.toString(),
                   onRetry: () => ref.invalidate(vetRequestsProvider(_filter)),
@@ -121,9 +121,8 @@ class _VetDashboardScreenState extends ConsumerState<VetDashboardScreen> {
         padding: const EdgeInsets.symmetric(
             horizontal: AppDimens.grid * 1.25, vertical: AppDimens.grid * 0.6),
         decoration: BoxDecoration(
-          color: selected
-              ? scheme.primary.withValues(alpha: 0.16)
-              : colors.card,
+          color:
+              selected ? scheme.primary.withValues(alpha: 0.16) : colors.card,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: selected
@@ -163,8 +162,9 @@ class _VetDashboardScreenState extends ConsumerState<VetDashboardScreen> {
     final colors = context.appColors;
     final scheme = Theme.of(context).colorScheme;
     final statusColor = _statusColor(context, r.vetStatus);
-    final dateLabel =
-        r.visitDate != null ? DateFormat('d MMM yyyy').format(r.visitDate!) : '—';
+    final dateLabel = r.visitDate != null
+        ? DateFormat('d MMM yyyy').format(r.visitDate!)
+        : '—';
     return Padding(
       padding: const EdgeInsets.only(bottom: AppDimens.grid * 1.5),
       child: AppCard(
@@ -191,7 +191,8 @@ class _VetDashboardScreenState extends ConsumerState<VetDashboardScreen> {
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: statusColor.withValues(alpha: 0.4)),
+                    border:
+                        Border.all(color: statusColor.withValues(alpha: 0.4)),
                   ),
                   child: Text(_pretty(r.vetStatus),
                       style: TextStyle(
@@ -208,7 +209,8 @@ class _VetDashboardScreenState extends ConsumerState<VetDashboardScreen> {
                 if (r.village != null && r.village!.isNotEmpty) r.village,
                 dateLabel,
               ].join('  ·  '),
-              style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+              style:
+                  AppTextStyles.caption.copyWith(color: colors.textSecondary),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -297,7 +299,7 @@ class _VetDashboardScreenState extends ConsumerState<VetDashboardScreen> {
                           Icon(Icons.phone_in_talk_rounded,
                               size: 16, color: colors.statusActive),
                           const SizedBox(width: 4),
-                           Text(
+                          Text(
                             'Call ${r.customerType.label}',
                             style: AppTextStyles.caption.copyWith(
                               color: colors.statusActive,
@@ -324,7 +326,8 @@ class _VetDashboardScreenState extends ConsumerState<VetDashboardScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.edit_rounded, size: 15, color: scheme.primary),
+                        Icon(Icons.edit_rounded,
+                            size: 15, color: scheme.primary),
                         const SizedBox(width: 4),
                         Text('Update status',
                             style: AppTextStyles.caption.copyWith(
@@ -342,6 +345,5 @@ class _VetDashboardScreenState extends ConsumerState<VetDashboardScreen> {
     );
   }
 
-  String _pretty(String s) =>
-      s[0].toUpperCase() + s.substring(1).toLowerCase();
+  String _pretty(String s) => s[0].toUpperCase() + s.substring(1).toLowerCase();
 }

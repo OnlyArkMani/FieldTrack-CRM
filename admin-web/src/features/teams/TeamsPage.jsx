@@ -35,12 +35,12 @@ function PerformanceRing({ pct }) {
 function CreateTeamModal({ open, onClose }) {
   const create = useCreateTeam();
   const { data: emps } = useEmployees({});
-  const supervisors = (emps?.items || []).filter(
-    (e) => e.role === 'SUPERVISOR' || e.role === 'ADMIN',
+  const managers = (emps?.items || []).filter(
+    (e) => e.role === 'MANAGER' || e.role === 'ADMIN',
   );
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [supervisorId, setSupervisorId] = useState('');
+  const [managerId, setManagerId] = useState('');
   const [error, setError] = useState(null);
 
   const submit = async () => {
@@ -49,11 +49,11 @@ function CreateTeamModal({ open, onClose }) {
       await create.mutateAsync({
         name: name.trim(),
         description: description.trim() || null,
-        supervisor_id: supervisorId === '' ? null : Number(supervisorId),
+        manager_id: managerId === '' ? null : Number(managerId),
       });
       setName('');
       setDescription('');
-      setSupervisorId('');
+      setManagerId('');
       onClose();
     } catch (err) {
       setError(apiErrorMessage(err));
@@ -77,9 +77,9 @@ function CreateTeamModal({ open, onClose }) {
       <div className="space-y-4">
         <Input label="Team name" value={name} onChange={(e) => setName(e.target.value)} />
         <Textarea label="Description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional" />
-        <Select label="Supervisor" value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)}>
-          <option value="">No supervisor</option>
-          {supervisors.map((s) => (
+        <Select label="Manager" value={managerId} onChange={(e) => setManagerId(e.target.value)}>
+          <option value="">No manager</option>
+          {managers.map((s) => (
             <option key={s.id} value={s.id}>{s.name} ({titleCase(s.role)})</option>
           ))}
         </Select>
@@ -122,9 +122,9 @@ export default function TeamsPage() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="truncate text-base font-semibold text-text-primary">{t.name}</h3>
-                  {t.supervisor_name && (
+                  {t.manager_name && (
                     <div className="mt-0.5 flex items-center gap-1 text-xs text-text-secondary">
-                      <ShieldCheck className="h-3.5 w-3.5" /> {t.supervisor_name}
+                      <ShieldCheck className="h-3.5 w-3.5" /> {t.manager_name}
                     </div>
                   )}
                 </div>

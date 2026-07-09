@@ -7,13 +7,13 @@ final orderRepositoryProvider = Provider<OrderRepository>((ref) {
   return OrderRepository(ref.watch(apiClientProvider));
 });
 
-/// Thin wrapper over the /orders API (supervisor/admin approval workflow).
+/// Thin wrapper over the /orders API (managers/admin approval workflow).
 class OrderRepository {
   OrderRepository(this._api);
   final ApiClient _api;
 
   /// SUBMITTED orders awaiting approval. Admin sees all (optional team filter);
-  /// supervisor is locked to their own team server-side.
+  /// manager is locked to their own team server-side.
   Future<List<PendingOrder>> pending({int? teamId}) async {
     final data = await _api.getList('/orders/pending', query: {
       if (teamId != null) 'team_id': teamId,
@@ -38,7 +38,6 @@ class OrderRepository {
 }
 
 /// Pending orders for the approval screen.
-final pendingOrdersProvider =
-    FutureProvider<List<PendingOrder>>((ref) async {
+final pendingOrdersProvider = FutureProvider<List<PendingOrder>>((ref) async {
   return ref.watch(orderRepositoryProvider).pending();
 });

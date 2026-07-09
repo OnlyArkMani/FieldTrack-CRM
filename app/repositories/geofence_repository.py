@@ -128,7 +128,7 @@ class GeofenceRepository:
         self, user_id: int, team_id: int | None
     ) -> list[dict]:
         """Active geofences visible to this user: every UNIVERSAL zone, plus the
-        TEAM zones assigned to their team. Used by the employee/supervisor map,
+        TEAM zones assigned to their team. Used by the employee/manager map,
         and by the ENTER/EXIT engine to scope which zones can trigger for them.
         `user_id` is accepted for signature parity / future per-user rules; the
         visibility predicate is team-driven."""

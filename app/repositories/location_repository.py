@@ -126,9 +126,9 @@ class LocationRepository:
         )
         return [(row.day, float(row.meters), int(row.pts)) for row in result.all()]
 
-    async def supervised_team_ids(self, supervisor_id: int) -> set[int]:
+    async def managed_team_ids(self, manager_id: int) -> set[int]:
         result = await self.db.execute(
-            select(Team.id).where(Team.supervisor_id == supervisor_id)
+            select(Team.id).where(Team.manager_id == manager_id)
         )
         return set(result.scalars().all())
 

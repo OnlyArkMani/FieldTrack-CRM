@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import (
     CurrentUser,
-    get_current_supervisor,
+    get_current_manager,
     get_db,
 )
 from app.core.exceptions import forbidden, not_found
@@ -235,7 +235,7 @@ async def submit(
     return DailyReportResponse.model_validate(report)
 
 
-# -- Supervisor: team DSRs ----------------------------------------------------
+# -- Manager: team DSRs ----------------------------------------------------
 
 @router.get("/team", response_model=list[TeamDsrItem])
 async def team_dsrs(
@@ -247,12 +247,12 @@ async def team_dsrs(
     """DSR status for a team on a date.
 
     ADMIN: all employees (optionally filtered by ``team_id``).
-    SUPERVISOR: always their own team (``team_id`` is ignored).
+    MANAGER: always their own team (``team_id`` is ignored).
     Every active employee in scope is listed — those without a DSR row for the
     date show as MISSING, so the table is never empty.
     """
     emp_filters = [User.role == UserRole.EMPLOYEE, User.is_active.is_(True)]
-    if user.role == UserRole.SUPERVISOR:
+    if user.role == UserRole.MANAGER:
         if not user.team_id:
             return []
         emp_filters.append(User.team_id == user.team_id)
@@ -313,12 +313,12 @@ async def team_dsrs(
 async def team_dsr_detail(
     employee_id: int,
     report_date: date,
-    supervisor: Annotated[User, Depends(get_current_supervisor)],
+    manager: Annotated[User, Depends(get_current_manager)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DsrDetailResponse:
-    if supervisor.role == UserRole.SUPERVISOR:
+    if manager.role == UserRole.MANAGER:
         emp = await db.get(User, employee_id)
-        if emp is None or emp.team_id != supervisor.team_id:
+        if emp is None or emp.team_id != manager.team_id:
             raise forbidden("Employee is not on your team")
 
     detail = await get_dsr_with_details(db, employee_id=employee_id, report_date=report_date)
@@ -331,14 +331,14 @@ async def team_dsr_detail(
 async def download_team_dsr(
     employee_id: int,
     report_date: date,
-    supervisor: Annotated[User, Depends(get_current_supervisor)],
+    manager: Annotated[User, Depends(get_current_manager)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> StreamingResponse:
-    """Download one team member's DSR for a day as CSV (supervisor/admin)."""
+    """Download one team member's DSR for a day as CSV (manager/admin)."""
     emp = await db.get(User, employee_id)
     if emp is None:
         raise not_found("Employee not found")
-    if supervisor.role == UserRole.SUPERVISOR and emp.team_id != supervisor.team_id:
+    if manager.role == UserRole.MANAGER and emp.team_id != manager.team_id:
         raise forbidden("Employee is not on your team")
     detail = await get_dsr_with_details(db, employee_id=employee_id, report_date=report_date)
     if detail is None:
@@ -346,19 +346,19 @@ async def download_team_dsr(
     return _dsr_csv_response(detail, emp.name, report_date)
 
 
-# -- Supervisor: add manager comment ------------------------------------------
+# -- Manager: add manager comment ------------------------------------------
 
 @router.post("/{report_id}/manager-comment", response_model=DailyReportResponse)
 async def post_manager_comment(
     report_id: int,
     body: ManagerCommentRequest,
-    supervisor: Annotated[User, Depends(get_current_supervisor)],
+    manager: Annotated[User, Depends(get_current_manager)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DailyReportResponse:
     report = await add_manager_comment(
         db,
         report_id=report_id,
-        supervisor_id=supervisor.id,
+        manager_id=manager.id,
         comment=body.comment,
     )
     return DailyReportResponse.model_validate(report)
@@ -394,7 +394,7 @@ async def archive(
     customer/farmer name (`search`) — checklist #55.
 
     ADMIN: all employees, optionally filtered by team_id / employee_id.
-    SUPERVISOR: always restricted to their own team.
+    MANAGER: always restricted to their own team.
     Max ~24-month window (400 otherwise)."""
     from sqlalchemy import exists, func
 
@@ -408,12 +408,12 @@ async def archive(
                 headers={"X-Error-Code": "DATE_RANGE_TOO_LARGE"},
             )
 
-    if user.role not in (UserRole.ADMIN, UserRole.SUPERVISOR):
+    if user.role not in (UserRole.ADMIN, UserRole.MANAGER):
         raise forbidden("Not permitted")
 
     base_filters = []
-    # Scope: supervisors are pinned to their own team; admins may filter.
-    if user.role == UserRole.SUPERVISOR:
+    # Scope: managers are pinned to their own team; admins may filter.
+    if user.role == UserRole.MANAGER:
         if not user.team_id:
             return CursorPage[ArchiveDsrItem](items=[], next_cursor=None, total=0, has_more=False)
         base_filters.append(User.team_id == user.team_id)
@@ -509,7 +509,7 @@ async def visits_export(
     employee_id: int | None = Query(default=None),
 ) -> StreamingResponse:
     """One row per completed visit across the caller's scope, as .xlsx. ADMIN:
-    all (optional team/employee filter); SUPERVISOR: own team. Includes meeting,
+    all (optional team/employee filter); MANAGER: own team. Includes meeting,
     order, vet and livestock detail so managers get every visit's full picture."""
     rows = await visits_export_rows(
         db,

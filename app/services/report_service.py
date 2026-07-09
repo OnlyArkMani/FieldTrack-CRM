@@ -144,8 +144,8 @@ class ReportService:
                 user_id=actor.id, status=status, scope_label="My records",
             )
 
-        if actor.role == UserRole.SUPERVISOR:
-            return await self._authorize_supervisor_range(
+        if actor.role == UserRole.MANAGER:
+            return await self._authorize_manager_range(
                 actor, type_, start, end, filters, status
             )
 
@@ -162,10 +162,10 @@ class ReportService:
         team = await self.repo.get_team(filters.team_id)
         if team is None:
             raise not_found("Team not found")
-        if actor.role == UserRole.SUPERVISOR:
-            supervised = await self.repo.supervised_team_ids(actor.id)
-            if filters.team_id not in supervised:
-                raise forbidden("You don't supervise this team")
+        if actor.role == UserRole.MANAGER:
+            managed = await self.repo.managed_team_ids(actor.id)
+            if filters.team_id not in managed:
+                raise forbidden("You don't manage this team")
 
         month = filters.month or date.today().replace(day=1)
         start, end = self._month_bounds(month)
@@ -187,10 +187,10 @@ class ReportService:
         team = await self.repo.get_team(filters.team_id)
         if team is None:
             raise not_found("Team not found")
-        if actor.role == UserRole.SUPERVISOR:
-            supervised = await self.repo.supervised_team_ids(actor.id)
-            if filters.team_id not in supervised:
-                raise forbidden("You don't supervise this team")
+        if actor.role == UserRole.MANAGER:
+            managed = await self.repo.managed_team_ids(actor.id)
+            if filters.team_id not in managed:
+                raise forbidden("You don't manage this team")
 
         start, end = self._resolve_range(filters.start_date, filters.end_date)
         return NormalizedReport(
@@ -210,8 +210,8 @@ class ReportService:
         end: date,
         filters: ReportFilters,
     ) -> NormalizedReport:
-        """One employee, all their activity in one workbook. Admin/supervisor
-        only; supervisors are limited to employees on the teams they supervise."""
+        """One employee, all their activity in one workbook. Admin/manager
+        only; managers are limited to employees on the teams they manage."""
         if actor.role == UserRole.EMPLOYEE:
             raise forbidden("Employees cannot generate this report")
         if filters.user_id is None:
@@ -221,9 +221,9 @@ class ReportService:
             raise not_found("Employee not found")
         if target.role == UserRole.ADMIN:
             raise bad_request("Cannot generate a report for an admin account")
-        if actor.role == UserRole.SUPERVISOR:
-            supervised = await self.repo.supervised_team_ids(actor.id)
-            if target.team_id not in supervised:
+        if actor.role == UserRole.MANAGER:
+            managed = await self.repo.managed_team_ids(actor.id)
+            if target.team_id not in managed:
                 raise forbidden("That employee isn't on your team")
         return NormalizedReport(
             type=ReportType.EMPLOYEE_CONSOLIDATED,
@@ -239,8 +239,8 @@ class ReportService:
         self, actor: User, filters: ReportFilters
     ) -> NormalizedReport:
         """A single FPO/farmer's full history. Any field user may export a farmer
-        they can access (own team or created by them); supervisors are limited to
-        their supervised teams; admin sees all. Exports the whole history, so no
+        they can access (own team or created by them); managers are limited to
+        their managed teams; admin sees all. Exports the whole history, so no
         date range applies."""
         if filters.farmer_id is None:
             raise bad_request("farmer_id is required for an FPO export")
@@ -248,9 +248,9 @@ class ReportService:
         if farmer is None:
             raise not_found("FPO not found")
 
-        if actor.role == UserRole.SUPERVISOR:
-            supervised = await self.repo.supervised_team_ids(actor.id)
-            if farmer.team_id not in supervised and farmer.created_by != actor.id:
+        if actor.role == UserRole.MANAGER:
+            managed = await self.repo.managed_team_ids(actor.id)
+            if farmer.team_id not in managed and farmer.created_by != actor.id:
                 raise forbidden("You don't have access to this FPO")
         elif actor.role == UserRole.EMPLOYEE:
             same_team = (
@@ -275,22 +275,22 @@ class ReportService:
     ) -> NormalizedReport:
         """A current-state snapshot (Hot/Warm/Cold), not date-ranged. Same team
         scoping as GET /leads/team: admin sees every team (optionally narrowed
-        via team_id), a single-team supervisor is defaulted automatically, a
+        via team_id), a single-team manager is defaulted automatically, a
         multi-team one must pick — same convention as the other reports here."""
         if actor.role == UserRole.EMPLOYEE:
             raise forbidden("Employees cannot generate a lead pipeline report")
 
         team_id = filters.team_id
         scope_label = "All teams"
-        if actor.role == UserRole.SUPERVISOR:
-            supervised = await self.repo.supervised_team_ids(actor.id)
-            if not supervised:
-                raise forbidden("You don't supervise any team")
+        if actor.role == UserRole.MANAGER:
+            managed = await self.repo.managed_team_ids(actor.id)
+            if not managed:
+                raise forbidden("You don't manage any team")
             if team_id is not None:
-                if team_id not in supervised:
-                    raise forbidden("You don't supervise this team")
-            elif len(supervised) == 1:
-                team_id = next(iter(supervised))
+                if team_id not in managed:
+                    raise forbidden("You don't manage this team")
+            elif len(managed) == 1:
+                team_id = next(iter(managed))
             else:
                 raise bad_request("Select a team for this report")
 
@@ -313,7 +313,7 @@ class ReportService:
             scope_label=scope_label,
         )
 
-    async def _authorize_supervisor_range(
+    async def _authorize_manager_range(
         self,
         actor: User,
         type_: ReportType,
@@ -322,15 +322,15 @@ class ReportService:
         filters: ReportFilters,
         status: AttendanceStatus | None,
     ) -> NormalizedReport:
-        supervised = await self.repo.supervised_team_ids(actor.id)
-        if not supervised:
-            raise forbidden("You don't supervise any team")
+        managed = await self.repo.managed_team_ids(actor.id)
+        if not managed:
+            raise forbidden("You don't manage any team")
 
         if filters.user_id is not None:
             target = await self.repo.get_user(filters.user_id)
             if target is None:
                 raise not_found("Employee not found")
-            if target.team_id not in supervised:
+            if target.team_id not in managed:
                 raise forbidden("That employee isn't on your team")
             return NormalizedReport(
                 type=type_, start=start, end=end, team_id=None,
@@ -339,8 +339,8 @@ class ReportService:
             )
 
         if filters.team_id is not None:
-            if filters.team_id not in supervised:
-                raise forbidden("You don't supervise this team")
+            if filters.team_id not in managed:
+                raise forbidden("You don't manage this team")
             team = await self.repo.get_team(filters.team_id)
             return NormalizedReport(
                 type=type_, start=start, end=end, team_id=filters.team_id,
@@ -349,8 +349,8 @@ class ReportService:
             )
 
         # Neither set: default to their single team, else ask them to pick.
-        if len(supervised) == 1:
-            tid = next(iter(supervised))
+        if len(managed) == 1:
+            tid = next(iter(managed))
             team = await self.repo.get_team(tid)
             return NormalizedReport(
                 type=type_, start=start, end=end, team_id=tid, user_id=None,
@@ -1546,7 +1546,7 @@ async def generate_team_report_file(
     scheduler jobs (no HTTP request, no polling). Files are written to an
     ``auto/`` subdir so the short-TTL on-demand pruner never touches them; the
     Redis status carries the long `ttl_seconds` so the download link survives
-    until the supervisor fetches it. Returns None (and logs) on failure so one
+    until the manager fetches it. Returns None (and logs) on failure so one
     bad team never aborts the whole fan-out."""
     from app.services.report_exporters import render_report  # lazy: heavy libs
 

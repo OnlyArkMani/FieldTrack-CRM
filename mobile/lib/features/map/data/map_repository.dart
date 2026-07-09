@@ -29,7 +29,7 @@ class MapRepository {
     return TrailRoute.fromJson(data);
   }
 
-  /// Live positions of the supervisor's team members.
+  /// Live positions of the manager's team members.
   Future<List<TeamLiveMember>> teamLive() async {
     final data = await _api.getList('/location/team-live');
     return data

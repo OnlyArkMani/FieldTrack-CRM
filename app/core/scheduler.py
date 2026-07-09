@@ -41,7 +41,7 @@ from app.repositories.notification_repository import NotificationRepository
 from app.repositories.report_repository import ReportRepository
 from app.repositories.visit_plan_repository import VisitPlanRepository
 from app.schemas.report import ReportFormat
-from app.services.dsr_service import _supervisor_ids_for_team, mark_late_reports
+from app.services.dsr_service import _manager_ids_for_team, mark_late_reports
 from app.services.notification_service import NotificationService
 from app.services.report_service import generate_team_report_file
 
@@ -166,7 +166,7 @@ async def redis_cleanup_job() -> None:
 
 async def check_unsubmitted_plans() -> None:
     """20:00 — find employees with no SUBMITTED plan for tomorrow. Nudge the
-    employee to plan, and alert their team's supervisor that it's outstanding.
+    employee to plan, and alert their team's manager that it's outstanding.
 
     Idempotent-ish: a duplicate run would create a second notification row, so
     the cross-worker claim lock guards it (keyed by tomorrow's date)."""
@@ -175,12 +175,12 @@ async def check_unsubmitted_plans() -> None:
         return
     async with async_session_factory() as db:
         repo = VisitPlanRepository(db)
-        employees = await repo.all_active_employees_with_supervisor()
+        employees = await repo.all_active_employees_with_manager()
         submitted = await repo.submitted_employee_ids(tomorrow)
         service = NotificationService(db)
 
         notified = 0
-        for emp_id, emp_name, _team_name, supervisor_id in employees:
+        for emp_id, emp_name, _team_name, manager_id in employees:
             if emp_id in submitted:
                 continue
             # Nudge the employee.
@@ -192,10 +192,10 @@ async def check_unsubmitted_plans() -> None:
                 data={"screen": "planning"},
                 commit=False,
             )
-            # Alert the supervisor (never the employee themselves).
-            if supervisor_id and supervisor_id != emp_id:
+            # Alert the manager (never the employee themselves).
+            if manager_id and manager_id != emp_id:
                 await service.send_fcm(
-                    supervisor_id,
+                    manager_id,
                     title="Plan not submitted",
                     body=f"{emp_name} has not submitted tomorrow's visit plan.",
                     type="PLAN_NOT_SUBMITTED",
@@ -213,7 +213,7 @@ async def check_unsubmitted_plans() -> None:
 
 async def missed_visits_reminder_job() -> None:
     """18:30 — nudge employees who still have PLANNED (unvisited) stops on
-    today's plan, and alert their supervisor. Those stops auto-carry-over onto
+    today's plan, and alert their manager. Those stops auto-carry-over onto
     the next day's plan where the employee can reschedule or drop them."""
     today = _today_utc()
     if not await _claim(f"missed_visits:{today}"):
@@ -225,7 +225,7 @@ async def missed_visits_reminder_job() -> None:
             return
         service = NotificationService(db)
         notified = 0
-        for emp_id, emp_name, supervisor_id, missed in rows:
+        for emp_id, emp_name, manager_id, missed in rows:
             if not missed:
                 continue
             plural = "visit" if missed == 1 else "visits"
@@ -238,12 +238,12 @@ async def missed_visits_reminder_job() -> None:
                 data={"screen": "planning"},
                 commit=False,
             )
-            if supervisor_id and supervisor_id != emp_id:
+            if manager_id and manager_id != emp_id:
                 await service.send_fcm(
-                    supervisor_id,
+                    manager_id,
                     title="Missed visits",
                     body=f"{emp_name} has {missed} unvisited planned {plural} today.",
-                    type="MISSED_VISITS_SUPERVISOR",
+                    type="MISSED_VISITS_MANAGER",
                     data={"screen": "planning", "employee_id": str(emp_id)},
                     commit=False,
                 )
@@ -397,7 +397,7 @@ async def send_visit_reminders() -> None:
 
 
 async def escalate_unacknowledged_followups() -> None:
-    """Hourly — escalate to the supervisor any of today's follow-ups still
+    """Hourly — escalate to the manager any of today's follow-ups still
     PENDING (un-acknowledged) more than 2 hours past their time."""
     now = _business_now()
     today = now.date()
@@ -413,10 +413,10 @@ async def escalate_unacknowledged_followups() -> None:
             return
         service = NotificationService(db)
         escalated = 0
-        for fu, farmer_name, employee_name, supervisor_id in rows:
-            if supervisor_id and supervisor_id != fu.employee_id:
+        for fu, farmer_name, employee_name, manager_id in rows:
+            if manager_id and manager_id != fu.employee_id:
                 await service.send_fcm(
-                    supervisor_id,
+                    manager_id,
                     title="Missed follow-up",
                     body=f"{employee_name or 'An employee'} missed a follow-up "
                     f"with {farmer_name or 'a farmer'}.",
@@ -433,10 +433,10 @@ async def escalate_unacknowledged_followups() -> None:
 
 async def late_dsr_check_job() -> None:
     """19:30 — mark DRAFT DSRs as is_late; notify each late employee's team
-    supervisor(s) individually (checklist #53 — was previously one aggregate
-    "N employees late" FCM broadcast to every active supervisor regardless of
+    manager(s) individually (checklist #53 — was previously one aggregate
+    "N employees late" FCM broadcast to every active manager regardless of
     team; now a per-employee flag sent only to that employee's own team
-    supervisor(s)).
+    manager(s)).
 
     Business rule: DSRs that are still DRAFT after 19:30 in the business
     timezone are marked late.
@@ -450,24 +450,24 @@ async def late_dsr_check_job() -> None:
             return
         async with async_session_factory() as db:
             svc = NotificationService(db)
-            # Cache team -> supervisor lookups since multiple late employees
+            # Cache team -> manager lookups since multiple late employees
             # commonly share a team.
-            team_supervisors: dict[int, list[int]] = {}
+            team_managers: dict[int, list[int]] = {}
             notified = 0
             for employee_id, employee_name, team_id in late_rows:
-                sup_ids: list[int] = []
+                manager_ids: list[int] = []
                 if team_id is not None:
-                    if team_id not in team_supervisors:
-                        team_supervisors[team_id] = await _supervisor_ids_for_team(
+                    if team_id not in team_managers:
+                        team_managers[team_id] = await _manager_ids_for_team(
                             db, team_id
                         )
-                    sup_ids = team_supervisors[team_id]
-                for sup_id in sup_ids:
+                    manager_ids = team_managers[team_id]
+                for manager_id in manager_ids:
                     await svc.send_fcm(
-                        sup_id,
+                        manager_id,
                         title="DSR Not Submitted",
                         body=f"{employee_name or 'An employee'} has not submitted their DSR.",
-                        type="DSR_LATE_EMPLOYEE",
+                        type="DSR_LATE_MANAGER",
                         data={"screen": "daily_reports", "employee_id": str(employee_id)},
                         commit=False,
                     )
@@ -512,7 +512,7 @@ async def refresh_gps_config_cache() -> None:
 
 # ── Wiring ──────────────────────────────────────────────────────────────────
 async def absentee_alert_job() -> None:
-    """09:30 — alert each supervisor about their team's executives who still have
+    """09:30 — alert each manager about their team's executives who still have
     no attendance today (checklist #62/#7). One aggregate notification per team,
     mirroring the late-DSR fan-out. Distinct from the 09:00 self-nudge, which
     goes to the employee; this goes to the manager."""
@@ -532,12 +532,12 @@ async def absentee_alert_job() -> None:
         svc = NotificationService(db)
         notified = 0
         for team_id, names in by_team.items():
-            for sup_id in await _supervisor_ids_for_team(db, team_id):
+            for sup_id in await _manager_ids_for_team(db, team_id):
                 await svc.absentee_alert(sup_id, absent_names=names, commit=False)
                 notified += 1
         await db.commit()
         logger.info(
-            "ABSENTEE_ALERT: %d team(s), notified %d supervisor(s)",
+            "ABSENTEE_ALERT: %d team(s), notified %d manager(s)",
             len(by_team), notified,
         )
 
@@ -545,7 +545,7 @@ async def absentee_alert_job() -> None:
 async def stationary_alert_job() -> None:
     """Every 30 min during field hours — flag on-clock executives whose trailing
     ~90 min of GPS pings all sit within a small radius (checklist #21). Alerts
-    the team supervisor once per employee per day (Redis cooldown), so a genuinely
+    the team manager once per employee per day (Redis cooldown), so a genuinely
     parked exec doesn't re-trigger every half hour."""
     now = _business_now()
     if not await _claim(f"stationary_alert:{now:%Y%m%d%H%M}"):
@@ -580,7 +580,7 @@ async def stationary_alert_job() -> None:
                     continue
             except Exception:  # noqa: BLE001 — Redis down: still alert
                 logger.warning("stationary cooldown check failed; alerting anyway")
-            for sup_id in await _supervisor_ids_for_team(db, emp.team_id):
+            for sup_id in await _manager_ids_for_team(db, emp.team_id):
                 await svc.stationary_alert(
                     sup_id,
                     employee_id=emp.id,
@@ -603,7 +603,7 @@ async def _generate_and_notify_team_reports(
     ttl_seconds: int,
 ) -> None:
     """Shared body for the weekly/monthly auto-report jobs: build one TEAM report
-    per active team for [start, end] and notify that team's supervisor(s) with a
+    per active team for [start, end] and notify that team's manager(s) with a
     download link. A failure for one team is logged and skipped."""
     async with async_session_factory() as db:
         rrepo = ReportRepository(db)
@@ -613,12 +613,12 @@ async def _generate_and_notify_team_reports(
         svc = NotificationService(db)
         generated = 0
         for team_id in team_ids:
-            sup_ids = await _supervisor_ids_for_team(db, team_id)
+            sup_ids = await _manager_ids_for_team(db, team_id)
             if not sup_ids:
-                continue  # no supervisor to send it to
+                continue  # no manager to send it to
             team = await rrepo.get_team(team_id)
             scope = f"Team: {team.name if team else team_id}"
-            # owner = first supervisor (download authz); admins can always fetch.
+            # owner = first manager (download authz); admins can always fetch.
             result = await generate_team_report_file(
                 team_id=team_id,
                 start=start,

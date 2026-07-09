@@ -64,7 +64,7 @@ class EmployeeAvatar extends StatelessWidget {
       );
 }
 
-/// Small role pill (Admin / Supervisor / Employee).
+/// Small role pill (Admin / Manager / Employee).
 class RoleBadge extends StatelessWidget {
   const RoleBadge({super.key, required this.label});
   final String label;

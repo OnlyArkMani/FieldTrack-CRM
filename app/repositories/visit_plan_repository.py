@@ -178,14 +178,14 @@ class VisitPlanRepository:
     async def employees_with_missed_items(
         self, on_date: date_type
     ) -> list[tuple[int, str, int | None, int]]:
-        """(employee_id, employee_name, supervisor_id, missed_count) for every
+        """(employee_id, employee_name, manager_id, missed_count) for every
         employee who still has PLANNED items on their plan for `on_date`. Used
         by the end-of-day missed-visits reminder job."""
         stmt = (
             select(
                 User.id,
                 User.name,
-                Team.supervisor_id,
+                Team.manager_id,
                 func.count(VisitPlanItem.id).label("missed"),
             )
             .select_from(VisitPlanItem)
@@ -197,7 +197,7 @@ class VisitPlanRepository:
                 VisitPlanItem.status == "PLANNED",
                 User.is_active.is_(True),
             )
-            .group_by(User.id, User.name, Team.supervisor_id)
+            .group_by(User.id, User.name, Team.manager_id)
         )
         return [
             (row[0], row[1], row[2], row[3])
@@ -223,8 +223,8 @@ class VisitPlanRepository:
         return (await self.db.get(Farmer, farmer_id)) is not None
 
     # ── team / admin views ───────────────────────────────────────────────
-    async def supervised_team_ids(self, supervisor_id: int) -> list[int]:
-        stmt = select(Team.id).where(Team.supervisor_id == supervisor_id)
+    async def managed_team_ids(self, manager_id: int) -> list[int]:
+        stmt = select(Team.id).where(Team.manager_id == manager_id)
         return list((await self.db.execute(stmt)).scalars().all())
 
     async def list_employees(
@@ -257,13 +257,13 @@ class VisitPlanRepository:
         return {p.employee_id: p for p in rows}
 
     # ── scheduler (global, no requesting user) ───────────────────────────
-    async def all_active_employees_with_supervisor(
+    async def all_active_employees_with_manager(
         self,
     ) -> list[tuple[int, str, str | None, int | None]]:
-        """(employee_id, employee_name, team_name, supervisor_id) for every
+        """(employee_id, employee_name, team_name, manager_id) for every
         active EMPLOYEE-role user. Used by the 8 PM unsubmitted-plan job."""
         stmt = (
-            select(User.id, User.name, Team.name, Team.supervisor_id)
+            select(User.id, User.name, Team.name, Team.manager_id)
             .outerjoin(Team, Team.id == User.team_id)
             .where(User.role == UserRole.EMPLOYEE, User.is_active.is_(True))
         )

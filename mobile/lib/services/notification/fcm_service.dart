@@ -102,7 +102,7 @@ class FcmService {
             title: const Text('Stay in the loop'),
             content: const Text(
               'FieldTrack sends attendance reminders and important updates from '
-              'your supervisor. Allow notifications to receive them.',
+              'your manager. Allow notifications to receive them.',
             ),
             actions: [
               TextButton(

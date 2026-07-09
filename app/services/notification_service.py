@@ -140,16 +140,16 @@ class NotificationService:
 
     async def gps_disabled(self, employee_id: int, *, commit: bool = True) -> Notification | None:
         """The employee's device reported GPS turned off. Notify their
-        supervisor (anti-gaming visibility), not the employee. Returns the
-        supervisor's notification, or None if no supervisor is set."""
+        manager (anti-gaming visibility), not the employee. Returns the
+        manager's notification, or None if no manager is set."""
         employee = await self.db.get(User, employee_id)
         if employee is None:
             return None
-        supervisor_id = await self._supervisor_for(employee)
-        if supervisor_id is None:
+        manager_id = await self._manager_for(employee)
+        if manager_id is None:
             return None
         return await self.send_fcm(
-            supervisor_id,
+            manager_id,
             title="GPS turned off",
             body=f"{employee.name} disabled location. Tracking is paused.",
             type=NotificationType.GPS_DISABLED,
@@ -158,9 +158,9 @@ class NotificationService:
         )
 
     async def absentee_alert(
-        self, supervisor_id: int, *, absent_names: list[str], commit: bool = False
+        self, manager_id: int, *, absent_names: list[str], commit: bool = False
     ) -> Notification:
-        """09:30 alert to a supervisor: which of their executives haven't clocked
+        """09:30 alert to a manager: which of their executives haven't clocked
         in. One aggregate notification per team (mirrors the late-DSR fan-out)."""
         n = len(absent_names)
         preview = ", ".join(absent_names[:3])
@@ -172,7 +172,7 @@ class NotificationService:
             else f"{n} team member(s) not checked in by 09:30."
         )
         return await self.send_fcm(
-            supervisor_id,
+            manager_id,
             title="Attendance alert",
             body=body,
             type=NotificationType.ABSENTEE_ALERT,
@@ -182,17 +182,17 @@ class NotificationService:
 
     async def stationary_alert(
         self,
-        supervisor_id: int,
+        manager_id: int,
         *,
         employee_id: int,
         employee_name: str,
         minutes: int,
         commit: bool = False,
     ) -> Notification:
-        """Alert a supervisor that an on-clock executive hasn't moved for
+        """Alert a manager that an on-clock executive hasn't moved for
         `minutes` during field hours (anti-idling visibility)."""
         return await self.send_fcm(
-            supervisor_id,
+            manager_id,
             title="Executive stationary",
             body=f"{employee_name} hasn't moved for {minutes}+ min during field hours.",
             type=NotificationType.STATIONARY_ALERT,
@@ -209,7 +209,7 @@ class NotificationService:
         download_url: str,
         commit: bool = False,
     ) -> Notification:
-        """Notify a supervisor that an auto-generated weekly/monthly team report
+        """Notify a manager that an auto-generated weekly/monthly team report
         is ready to download."""
         kind = "Weekly" if weekly else "Monthly"
         return await self.send_fcm(
@@ -309,20 +309,20 @@ class NotificationService:
         return device
 
     # ── Helpers ──────────────────────────────────────────────────────────
-    async def _supervisor_for(self, employee: User) -> int | None:
-        """Resolve the supervisor a notification about this employee should go
-        to: the supervisor of the employee's team (never the employee
+    async def _manager_for(self, employee: User) -> int | None:
+        """Resolve the manager a notification about this employee should go
+        to: the manager of the employee's team (never the employee
         themselves)."""
         if employee.team_id is None:
             return None
-        supervisor_id = (
+        manager_id = (
             await self.db.execute(
-                select(Team.supervisor_id).where(Team.id == employee.team_id)
+                select(Team.manager_id).where(Team.id == employee.team_id)
             )
         ).scalar_one_or_none()
-        if supervisor_id is None or supervisor_id == employee.id:
+        if manager_id is None or manager_id == employee.id:
             return None
-        return int(supervisor_id)
+        return int(manager_id)
 
 
 # ── Module helpers ────────────────────────────────────────────────────────

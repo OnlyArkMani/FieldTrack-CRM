@@ -134,7 +134,7 @@ class _Content extends ConsumerWidget {
 
   /// Mirrors the backend's A15 gate (AttendanceService.is_active_today):
   /// employees can't start a visit once they've checked out (or before
-  /// checking in) for the day. Supervisors/admins are exempt.
+  /// checking in) for the day. Managers/admins are exempt.
   bool _canStartVisit(User? user, MachineState state) {
     if (user == null) return false;
     if (user.role != UserRole.employee) return true;
@@ -351,8 +351,8 @@ class _HeaderCard extends StatelessWidget {
                 const SizedBox(width: AppDimens.grid * 0.5),
                 IconButton(
                   visualDensity: VisualDensity.compact,
-                  icon: Icon(Icons.edit_rounded,
-                      size: 20, color: scheme.primary),
+                  icon:
+                      Icon(Icons.edit_rounded, size: 20, color: scheme.primary),
                   onPressed: onEdit,
                   tooltip: 'Edit',
                 ),
@@ -375,8 +375,13 @@ class _HeaderCard extends StatelessWidget {
           ),
           const SizedBox(height: AppDimens.grid),
           if (farmer.village != null && farmer.village!.isNotEmpty)
-            _line(context, Icons.home_work_rounded,
-                [farmer.village, farmer.district].whereType<String>().where((s) => s.isNotEmpty).join(', ')),
+            _line(
+                context,
+                Icons.home_work_rounded,
+                [farmer.village, farmer.district]
+                    .whereType<String>()
+                    .where((s) => s.isNotEmpty)
+                    .join(', ')),
           if ((farmer.address != null && farmer.address!.isNotEmpty) ||
               (farmer.landmark != null && farmer.landmark!.isNotEmpty))
             _line(
@@ -428,8 +433,7 @@ class _HeaderCard extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style:
-                  AppTextStyles.body.copyWith(color: colors.textSecondary),
+              style: AppTextStyles.body.copyWith(color: colors.textSecondary),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -540,8 +544,7 @@ class _LivestockCard extends StatelessWidget {
           const SizedBox(height: AppDimens.grid),
           if (ls == null)
             Text('No livestock recorded yet.',
-                style:
-                    AppTextStyles.body.copyWith(color: colors.textSecondary))
+                style: AppTextStyles.body.copyWith(color: colors.textSecondary))
           else ...[
             Wrap(
               spacing: AppDimens.grid * 2,
@@ -549,7 +552,9 @@ class _LivestockCard extends StatelessWidget {
               children: [
                 _kv(context, 'Breed', ls.breed ?? '—'),
                 _kv(context, 'Brand', ls.currentBrand ?? '—'),
-                _kv(context, 'Kg/animal/day',
+                _kv(
+                    context,
+                    'Kg/animal/day',
                     ls.kgPerAnimalPerDay != null
                         ? '${ls.kgPerAnimalPerDay} kg'
                         : '—'),
@@ -615,8 +620,7 @@ class _LeadCard extends StatelessWidget {
             if (lead.reasonNote != null && lead.reasonNote!.isNotEmpty) ...[
               const SizedBox(height: AppDimens.grid * 0.5),
               Text(lead.reasonNote!,
-                  style:
-                      AppTextStyles.body.copyWith(color: scheme.onSurface)),
+                  style: AppTextStyles.body.copyWith(color: scheme.onSurface)),
             ],
           ] else ...[
             const SizedBox(height: AppDimens.grid),
@@ -710,7 +714,8 @@ class _VisitHistory extends StatelessWidget {
           const SizedBox(width: AppDimens.grid * 1.5),
           Expanded(
             child: Padding(
-              padding: EdgeInsets.only(bottom: isLast ? 0 : AppDimens.grid * 1.5),
+              padding:
+                  EdgeInsets.only(bottom: isLast ? 0 : AppDimens.grid * 1.5),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -727,7 +732,10 @@ class _VisitHistory extends StatelessWidget {
                       ),
                       Text(
                         v.status[0].toUpperCase() +
-                            v.status.substring(1).toLowerCase().replaceAll('_', ' '),
+                            v.status
+                                .substring(1)
+                                .toLowerCase()
+                                .replaceAll('_', ' '),
                         style: AppTextStyles.caption.copyWith(
                             color: statusColor, fontWeight: FontWeight.w600),
                       ),
@@ -775,7 +783,8 @@ class _FollowUps extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: AppDimens.grid),
               child: Row(
                 children: [
-                  Icon(Icons.event_rounded, size: 14, color: colors.textSecondary),
+                  Icon(Icons.event_rounded,
+                      size: 14, color: colors.textSecondary),
                   const SizedBox(width: AppDimens.grid),
                   Expanded(
                     child: Text(

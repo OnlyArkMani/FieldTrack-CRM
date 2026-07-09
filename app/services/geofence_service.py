@@ -172,7 +172,7 @@ class GeofenceService:
     async def list_for_user(
         self, user_id: int, team_id: int | None
     ) -> list[GeofenceOut]:
-        """Zones visible to a supervisor/employee: their team + universal."""
+        """Zones visible to a manager/employee: their team + universal."""
         rows = await self.repo.get_geofences_for_user(user_id, team_id)
         return [self._to_out(r) for r in rows]
 
@@ -337,7 +337,7 @@ class GeofenceService:
         now: datetime,
     ) -> None:
         """On each crossing, notify BOTH:
-        - the supervisor (anti-gaming visibility) — "<name> entered/left <zone>"
+        - the manager (anti-gaming visibility) — "<name> entered/left <zone>"
         - the employee themselves (Change 3) — "You entered/left <zone>", with
           the dwell duration on EXIT.
         In-app rows are written now (the source of truth); FCM is best-effort and
@@ -346,9 +346,9 @@ class GeofenceService:
             return
 
         names = await self._geofence_names(enters | exits)
-        supervisor_id = await self._supervisor_for(employee)
+        manager_id = await self._manager_for(employee)
 
-        # ── Supervisor messages (existing behaviour) ──────────────────────
+        # ── Manager messages (existing behaviour) ──────────────────────
         sup_messages: list[tuple[str, str]] = []  # (title, body)
         for gid in enters:
             sup_messages.append(
@@ -385,13 +385,13 @@ class GeofenceService:
                 )
             )
 
-        # Persist in-app rows. Supervisor rows keep the generic 'geofence' tag;
+        # Persist in-app rows. Manager rows keep the generic 'geofence' tag;
         # employee rows carry the typed ENTER/EXIT category (drives the app icon).
-        if supervisor_id is not None:
+        if manager_id is not None:
             for title, body in sup_messages:
                 self.db.add(
                     Notification(
-                        user_id=supervisor_id, title=title, body=body, type="geofence"
+                        user_id=manager_id, title=title, body=body, type="geofence"
                     )
                 )
         for title, body, ntype in emp_messages:
@@ -402,9 +402,9 @@ class GeofenceService:
             )
 
         # Push best-effort to each recipient (one nudge each; rows are truth).
-        if supervisor_id is not None and sup_messages:
+        if manager_id is not None and sup_messages:
             await self._push(
-                supervisor_id, sup_messages[0][0], sup_messages[0][1], "geofence"
+                manager_id, sup_messages[0][0], sup_messages[0][1], "geofence"
             )
         if emp_messages:
             await self._push(
@@ -461,13 +461,13 @@ class GeofenceService:
         )
         return {row[0]: row[1] for row in result.all()}
 
-    async def _supervisor_for(self, employee: User) -> int | None:
+    async def _manager_for(self, employee: User) -> int | None:
         if employee.team_id is None:
             return None
         team = await self.db.get(Team, employee.team_id)
-        if team is None or team.supervisor_id is None:
+        if team is None or team.manager_id is None:
             return None
-        # Don't notify the employee about themselves if they supervise.
-        if team.supervisor_id == employee.id:
+        # Don't notify the employee about themselves if they manage.
+        if team.manager_id == employee.id:
             return None
-        return team.supervisor_id
+        return team.manager_id

@@ -144,7 +144,7 @@ class TrailSummaryOut(BaseModel):
 
 
 class TeamLivePoint(BaseModel):
-    """One team member's live position for the supervisor map. status is the
+    """One team member's live position for the manager map. status is the
     derived ACTIVE/IDLE/OFFLINE; attendance_state is the state-machine label."""
 
     user_id: int

@@ -15,7 +15,7 @@ import '../models/employee.dart';
 import '../providers/employee_provider.dart';
 
 /// Edit an employee's profile. Role reassignment is admin-only (the control is
-/// hidden for supervisors). On success, invalidates the detail + list so both
+/// hidden for managers). On success, invalidates the detail + list so both
 /// reflect the change.
 Future<bool> showEmployeeEditSheet(BuildContext context, Employee employee) async {
   final result = await AppBottomSheet.show<bool>(

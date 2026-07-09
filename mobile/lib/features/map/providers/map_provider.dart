@@ -95,14 +95,14 @@ final employeeZonesTodayProvider =
   return {for (final v in list) v.geofenceId: v};
 });
 
-/// Team presence inside a given zone today (supervisor zone sheet). Keyed by
+/// Team presence inside a given zone today (manager zone sheet). Keyed by
 /// geofence id so each tapped zone fetches independently.
 final zonePresenceProvider =
     FutureProvider.autoDispose.family<List<ZonePresence>, int>((ref, gid) async {
   return ref.watch(mapRepositoryProvider).zonePresence(gid);
 });
 
-/// Supervisor team-live, polled every 30s. autoDispose => polling stops when
+/// Manager team-live, polled every 30s. autoDispose => polling stops when
 /// the map screen is closed (no wasted requests in the background).
 final teamLiveProvider =
     StreamProvider.autoDispose<List<TeamLiveMember>>((ref) async* {

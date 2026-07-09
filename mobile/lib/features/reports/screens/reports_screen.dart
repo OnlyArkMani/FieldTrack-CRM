@@ -20,8 +20,8 @@ class ReportsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(reportProvider);
     final notifier = ref.read(reportProvider.notifier);
-    final isSupervisor =
-        ref.watch(authProvider).user?.role == UserRole.supervisor;
+    final isManager =
+        ref.watch(authProvider).user?.role == UserRole.manager;
     final busy = state.phase == ReportPhase.generating;
     // Enforce the 31-day cap (range reports only; team reports use a month).
     final rangeTooLong = !state.isTeamReport &&
@@ -37,7 +37,7 @@ class ReportsScreen extends ConsumerWidget {
           physics: const ClampingScrollPhysics(),
           padding: const EdgeInsets.all(AppDimens.grid * 2),
           children: [
-            _SectionLabel(isSupervisor ? 'Team reporting' : 'My reports'),
+            _SectionLabel(isManager ? 'Team reporting' : 'My reports'),
 
             // ── Report type ─────────────────────────────────────────────
             AppCard(
@@ -53,9 +53,9 @@ class ReportsScreen extends ConsumerWidget {
                     runSpacing: AppDimens.grid,
                     children: [
                       for (final t in ReportType.values)
-                        // Supervisor-only reports (team overview, compliance)
+                        // Manager-only reports (team overview, compliance)
                         // are hidden from employees.
-                        if (isSupervisor || !t.supervisorOnly)
+                        if (isManager || !t.managerOnly)
                           _SelectChip(
                             label: t.label,
                             icon: t.icon,
@@ -79,12 +79,12 @@ class ReportsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: AppDimens.grid * 2),
 
-            // ── Scope: team selector (supervisor) ───────────────────────
-            if (isSupervisor) ...[
+            // ── Scope: team selector (manager) ───────────────────────
+            if (isManager) ...[
               _TeamSelector(
                 value: state.teamId,
                 isRequired: state.type.requiresTeam,
-                // Compliance is locked to the supervisor's own team (pre-
+                // Compliance is locked to the manager's own team (pre-
                 // selected, not changeable).
                 locked: state.type == ReportType.compliance,
                 enabled: !busy,
@@ -201,7 +201,7 @@ class _TeamSelector extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final teams = ref.watch(teamListProvider).teams;
 
-    // Locked (compliance): default to the supervisor's first/own team and keep
+    // Locked (compliance): default to the manager's first/own team and keep
     // the control read-only.
     if (locked && value == null && teams.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

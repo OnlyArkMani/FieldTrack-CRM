@@ -8,8 +8,8 @@ KEY RULES:
 - POST upserts by (employee_id, plan_date): an existing plan's items are
   replaced (not duplicated) and status flips to SUBMITTED. employee_id always
   comes from the caller, never the body.
-- Team/pending views: ADMIN sees everyone; SUPERVISOR sees employees on the
-  teams they supervise; EMPLOYEE is forbidden.
+- Team/pending views: ADMIN sees everyone; MANAGER sees employees on the
+  teams they manage; EMPLOYEE is forbidden.
 """
 import logging
 from datetime import date as date_type
@@ -217,7 +217,7 @@ class VisitPlanService:
         plan = await self.repo.get_plan_by_id(plan_id)
         if plan is None:
             raise not_found("Plan not found")
-        is_privileged = user.role in (UserRole.ADMIN, UserRole.SUPERVISOR)
+        is_privileged = user.role in (UserRole.ADMIN, UserRole.MANAGER)
         if plan.employee_id != user.id and not is_privileged:
             raise forbidden("This plan isn't yours")
 
@@ -236,12 +236,12 @@ class VisitPlanService:
 
     # ── team scope helper ────────────────────────────────────────────────
     async def _scope_team_ids(self, user: User) -> list[int] | None:
-        """None == all teams (admin); a list == the supervisor's teams."""
+        """None == all teams (admin); a list == the manager's teams."""
         if user.role == UserRole.ADMIN:
             return None
-        if user.role == UserRole.SUPERVISOR:
-            return await self.repo.supervised_team_ids(user.id)
-        raise forbidden("Team plans are supervisor/admin only")
+        if user.role == UserRole.MANAGER:
+            return await self.repo.managed_team_ids(user.id)
+        raise forbidden("Team plans are manager/admin only")
 
     # ── public: team plans for a date ────────────────────────────────────
     async def get_team_plans(
@@ -307,7 +307,7 @@ class VisitPlanService:
         plan = await self.repo.get_plan_by_id(item.plan_id)
         if plan is None:
             raise not_found("Plan not found")
-        is_privileged = user.role in (UserRole.ADMIN, UserRole.SUPERVISOR)
+        is_privileged = user.role in (UserRole.ADMIN, UserRole.MANAGER)
         if plan.employee_id != user.id and not is_privileged:
             raise forbidden("This plan isn't yours")
         item.status = "SKIPPED"
@@ -336,7 +336,7 @@ class VisitPlanService:
         source_plan = await self.repo.get_plan_by_id(item.plan_id)
         if source_plan is None:
             raise not_found("Plan not found")
-        is_privileged = user.role in (UserRole.ADMIN, UserRole.SUPERVISOR)
+        is_privileged = user.role in (UserRole.ADMIN, UserRole.MANAGER)
         if source_plan.employee_id != user.id and not is_privileged:
             raise forbidden("This plan isn't yours")
 

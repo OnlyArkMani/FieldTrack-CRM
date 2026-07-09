@@ -4,7 +4,7 @@ scope live in VisitPlanService.
 AUTHZ:
 - /my, POST, PATCH item: the caller's own plan (employee_id comes from the JWT,
   never the body).
-- /team, /pending-submissions: supervisor or admin only.
+- /team, /pending-submissions: manager or admin only.
 """
 from datetime import date
 from typing import Annotated
@@ -12,7 +12,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import CurrentUser, get_current_supervisor, get_db
+from app.core.dependencies import CurrentUser, get_current_manager, get_db
 from app.models.user import User
 from app.schemas.crm import (
     CarryOverRequest,
@@ -34,22 +34,22 @@ async def ping() -> dict:
 
 @router.get("/pending-submissions", response_model=list[PendingSubmissionView])
 async def pending_submissions(
-    supervisor: Annotated[User, Depends(get_current_supervisor)],
+    manager: Annotated[User, Depends(get_current_manager)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[PendingSubmissionView]:
     """Employees (in the caller's scope) with no SUBMITTED plan for tomorrow.
     Powers the 'plan not submitted' alert."""
-    return await VisitPlanService(db).get_pending_submissions(supervisor)
+    return await VisitPlanService(db).get_pending_submissions(manager)
 
 
 @router.get("/team/{plan_date}", response_model=TeamPlansResponse)
 async def team_plans(
     plan_date: date,
-    supervisor: Annotated[User, Depends(get_current_supervisor)],
+    manager: Annotated[User, Depends(get_current_manager)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TeamPlansResponse:
     """All in-scope employees' plans for a date — who submitted, who hasn't."""
-    return await VisitPlanService(db).get_team_plans(supervisor, plan_date)
+    return await VisitPlanService(db).get_team_plans(manager, plan_date)
 
 
 @router.get("/my/{plan_date}", response_model=MyPlanResponse)

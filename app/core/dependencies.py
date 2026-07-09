@@ -39,7 +39,7 @@ __all__ = [
     "get_current_user",
     "get_current_active_user",
     "get_current_admin",
-    "get_current_supervisor",
+    "get_current_manager",
     "get_current_employee",
     "login_rate_limit",
     "CurrentUser",
@@ -92,15 +92,15 @@ async def get_current_admin(user: CurrentUser) -> User:
     return user
 
 
-async def get_current_supervisor(user: CurrentUser) -> User:
-    """Supervisor OR admin — admins can do anything a supervisor can."""
-    if user.role not in (UserRole.ADMIN, UserRole.SUPERVISOR):
-        raise forbidden("Supervisor access required")
+async def get_current_manager(user: CurrentUser) -> User:
+    """Manager OR admin — admins can do anything a manager can."""
+    if user.role not in (UserRole.ADMIN, UserRole.MANAGER):
+        raise forbidden("Manager access required")
     return user
 
 
 async def get_current_employee(user: CurrentUser) -> User:
-    """Any authenticated active user (employees, supervisors, admins)."""
+    """Any authenticated active user (employees, managers, admins)."""
     return user
 
 

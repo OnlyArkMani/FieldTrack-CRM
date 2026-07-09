@@ -2,7 +2,7 @@
 
 Endpoints
 ---------
-GET  /gps-config/team/{team_id}   Admin or supervisor of that team.
+GET  /gps-config/team/{team_id}   Admin or manager of that team.
 PUT  /gps-config/team/{team_id}   Admin only.  Upserts config + caches.
 GET  /gps-config/my               Employee: returns their team's config.
                                   Redis-first, DB fallback, re-caches on miss.
@@ -24,7 +24,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.core.dependencies import (
     CurrentUser,
     get_current_admin,
-    get_current_supervisor,
+    get_current_manager,
     get_db,
 )
 from app.core.redis import get_redis
@@ -141,11 +141,11 @@ async def _get_config_cached(db: AsyncSession, team_id: int) -> dict:
 @router.get("/team/{team_id}", response_model=GpsConfigOut)
 async def get_team_config(
     team_id: int,
-    principal: Annotated[User, Depends(get_current_supervisor)],
+    principal: Annotated[User, Depends(get_current_manager)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> GpsConfigOut:
-    """Admin or team's supervisor can fetch config. Falls back to defaults."""
-    if principal.role == UserRole.SUPERVISOR and principal.team_id != team_id:
+    """Admin or team's manager can fetch config. Falls back to defaults."""
+    if principal.role == UserRole.MANAGER and principal.team_id != team_id:
         raise HTTPException(status_code=403, detail="Not your team.")
     data = await _get_config_cached(db, team_id)
     return GpsConfigOut(**data)

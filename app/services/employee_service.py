@@ -434,7 +434,7 @@ class EmployeeService:
         """7-day mock-GPS picture for one employee: total detections, whether
         flagged today, and the (capped) flagged-point timeline.
 
-        EMPLOYEE-INVISIBLE: this is supervisor/admin-only data; nothing here is
+        EMPLOYEE-INVISIBLE: this is manager/admin-only data; nothing here is
         ever exposed to the employee's own app (intentional anti-gaming
         design)."""
         if await self.repo.get_by_id(user_id) is None:

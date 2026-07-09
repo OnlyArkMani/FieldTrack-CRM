@@ -75,13 +75,13 @@ class TeamNotifier extends Notifier<TeamListState> {
   Future<String?> create({
     required String name,
     String? description,
-    int? supervisorId,
+    int? managerId,
   }) async {
     try {
       final team = await _repo.create(
         name: name,
         description: description,
-        supervisorId: supervisorId,
+        managerId: managerId,
       );
       state = state.copyWith(teams: [team, ...state.teams]);
       return null;

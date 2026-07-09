@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import (
     CurrentUser,
     get_current_admin,
-    get_current_supervisor,
+    get_current_manager,
     get_db,
 )
 from app.models.user import User
@@ -46,12 +46,12 @@ async def my_leads(
 
 @router.get("/team", response_model=TeamLeadsResponse)
 async def team_leads(
-    supervisor: Annotated[User, Depends(get_current_supervisor)],
+    manager: Annotated[User, Depends(get_current_manager)],
     db: Annotated[AsyncSession, Depends(get_db)],
     status: str | None = Query(default=None, description="HOT | WARM | COLD"),
     employee_id: int | None = Query(default=None),
     team_id: int | None = Query(
-        default=None, description="Admin: narrow to one team. Supervisor: must be one of their own teams."
+        default=None, description="Admin: narrow to one team. Manager: must be one of their own teams."
     ),
     territory: str | None = Query(
         default=None, description="Farmer village/district substring match"
@@ -59,7 +59,7 @@ async def team_leads(
 ) -> TeamLeadsResponse:
     """Team farmers with lead status, grouped counts + a filterable list."""
     return await LeadService(db).get_team_leads(
-        supervisor,
+        manager,
         status=_norm_status(status),
         employee_id=employee_id,
         team_id=team_id,

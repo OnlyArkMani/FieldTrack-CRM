@@ -50,8 +50,8 @@ class Team {
     required this.presentToday,
     required this.performancePct,
     this.description,
-    this.supervisorId,
-    this.supervisorName,
+    this.managerId,
+    this.managerName,
     this.members = const [],
   });
 
@@ -61,8 +61,8 @@ class Team {
   final int presentToday;
   final double performancePct;
   final String? description;
-  final int? supervisorId;
-  final String? supervisorName;
+  final int? managerId;
+  final String? managerName;
   final List<TeamMember> members;
 
   factory Team.fromJson(Map<String, dynamic> json) => Team(
@@ -72,8 +72,8 @@ class Team {
         presentToday: (json['present_today'] as int?) ?? 0,
         performancePct: ((json['performance_pct'] as num?) ?? 0).toDouble(),
         description: json['description'] as String?,
-        supervisorId: json['supervisor_id'] as int?,
-        supervisorName: json['supervisor_name'] as String?,
+        managerId: json['manager_id'] as int?,
+        managerName: json['manager_name'] as String?,
         members: ((json['members'] as List<dynamic>?) ?? [])
             .map((e) => TeamMember.fromJson(e as Map<String, dynamic>))
             .toList(),

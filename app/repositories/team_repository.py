@@ -1,7 +1,7 @@
 """Team DB access. DB-only — no business rules, no commits, no HTTP errors.
 
 The list query is the interesting one: team card needs member_count,
-supervisor_name, and present_today in a single grouped pass rather than
+manager_name, and present_today in a single grouped pass rather than
 N+1 per-team lookups.
 """
 from datetime import date
@@ -24,15 +24,15 @@ class TeamRow:
         self,
         team: Team,
         *,
-        supervisor_name: str | None,
+        manager_name: str | None,
         member_count: int,
         present_today: int,
     ) -> None:
         self.id = team.id
         self.name = team.name
         self.description = team.description
-        self.supervisor_id = team.supervisor_id
-        self.supervisor_name = supervisor_name
+        self.manager_id = team.manager_id
+        self.manager_name = manager_name
         self.member_count = member_count
         self.present_today = present_today
         self.is_active = team.is_active
@@ -44,15 +44,15 @@ class TeamRepository:
 
     # ── Reads ─────────────────────────────────────────────────────────────
     async def list_with_stats(
-        self, *, today: date, only_active: bool = True, supervisor_id: int | None = None
+        self, *, today: date, only_active: bool = True, manager_id: int | None = None
     ) -> list[TeamRow]:
-        """One pass: team + supervisor name + member count + present-today
+        """One pass: team + manager name + member count + present-today
         count. Members are users with team_id = team.id (role-agnostic).
 
         present_today = members with an attendance row dated `today` whose
         status is PRESENT or HALF_DAY (ABSENT rows don't count as present).
         """
-        supervisor = aliased(User)
+        manager = aliased(User)
         member = aliased(User)
 
         # Correlated subquery for present-today avoids fanning the member join
@@ -84,23 +84,23 @@ class TeamRepository:
         stmt = (
             select(
                 Team,
-                supervisor.name.label("supervisor_name"),
+                manager.name.label("manager_name"),
                 member_count_sq.label("member_count"),
                 present_sq.label("present_today"),
             )
-            .outerjoin(supervisor, supervisor.id == Team.supervisor_id)
+            .outerjoin(manager, manager.id == Team.manager_id)
             .order_by(Team.name.asc())
         )
         if only_active:
             stmt = stmt.where(Team.is_active.is_(True))
-        if supervisor_id is not None:
-            stmt = stmt.where(Team.supervisor_id == supervisor_id)
+        if manager_id is not None:
+            stmt = stmt.where(Team.manager_id == manager_id)
 
         result = await self.db.execute(stmt)
         return [
             TeamRow(
                 row[0],
-                supervisor_name=row[1],
+                manager_name=row[1],
                 member_count=int(row[2] or 0),
                 present_today=int(row[3] or 0),
             )

@@ -1,11 +1,11 @@
 """Employee router — thin HTTP layer; all logic lives in EmployeeService.
 
 AUTHZ:
-- List/detail/summary/location: any authenticated active user (supervisors &
+- List/detail/summary/location: any authenticated active user (managers &
   admins use these; the mobile team views read them). Tightening to team scope
   is a future refinement — the data returned is non-sensitive directory + live
   status. Create / status-change are ADMIN-only (per spec). Update is
-  supervisor-or-admin.
+  manager-or-admin.
 """
 from datetime import date
 from typing import Annotated
@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import (
     CurrentUser,
     get_current_admin,
-    get_current_supervisor,
+    get_current_manager,
     get_db,
 )
 from app.models.user import User
@@ -89,11 +89,11 @@ async def update_employee(
     employee_id: int,
     body: EmployeeUpdate,
     request: Request,
-    supervisor: Annotated[User, Depends(get_current_supervisor)],
+    manager: Annotated[User, Depends(get_current_manager)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> EmployeeDetailOut:
     return await EmployeeService(db).update(
-        employee_id, body, actor=supervisor, ip=_client_ip(request)
+        employee_id, body, actor=manager, ip=_client_ip(request)
     )
 
 
@@ -142,10 +142,10 @@ async def location_history(
 @router.get("/{employee_id}/gps-integrity", response_model=GpsIntegrityOut)
 async def gps_integrity(
     employee_id: int,
-    _supervisor: Annotated[User, Depends(get_current_supervisor)],
+    _manager: Annotated[User, Depends(get_current_manager)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> GpsIntegrityOut:
-    """Mock-GPS integrity for one employee (7-day window). Supervisor/admin
+    """Mock-GPS integrity for one employee (7-day window). Manager/admin
     only — this anti-gaming data is never exposed to the employee themselves."""
     return await EmployeeService(db).gps_integrity(employee_id)
 
@@ -189,7 +189,7 @@ class CrmPerformanceOut(_BaseModel):
 @router.get("/{employee_id}/crm-performance", response_model=CrmPerformanceOut)
 async def crm_performance(
     employee_id: int,
-    _supervisor: Annotated[User, Depends(get_current_supervisor)],
+    _manager: Annotated[User, Depends(get_current_manager)],
     db: Annotated[AsyncSession, Depends(get_db)],
     start_date: date | None = Query(default=None, description="Inclusive start (UTC)"),
     end_date: date | None = Query(default=None, description="Inclusive end (UTC)"),
@@ -197,7 +197,7 @@ async def crm_performance(
     """CRM performance scorecard for one employee over a date range.
 
     Defaults to last 30 days when no dates are provided.
-    Accessible by supervisors and admins.
+    Accessible by managers and admins.
     """
     from datetime import timedelta, date as _date
     from sqlalchemy import func, select, distinct, or_

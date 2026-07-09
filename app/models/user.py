@@ -3,7 +3,7 @@
 DECISIONS:
 - ASSUMPTION: spec omitted a password column but JWT auth requires one —
   added `password_hash` (bcrypt). Nullable=False; seed admin via script.
-- users.team_id <-> teams.supervisor_id is a circular FK. teams.supervisor_id
+- users.team_id <-> teams.manager_id is a circular FK. teams.manager_id
   uses use_alter=True so create order is teams -> users -> ALTER TABLE teams.
 - team_id is nullable: admins don't belong to teams, and employees may be
   created before assignment.
@@ -57,16 +57,16 @@ class Team(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(String(500))
     # use_alter=True breaks the users<->teams FK cycle: this FK is added via
     # ALTER TABLE after both tables exist.
-    supervisor_id: Mapped[int | None] = mapped_column(
+    manager_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL", use_alter=True,
-                   name="fk_teams_supervisor_id_users")
+                   name="fk_teams_manager_id_users")
     )
     # Soft-delete flag (TeamService.soft_delete). Added in migration 0003.
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
-    supervisor: Mapped["User | None"] = relationship(foreign_keys=[supervisor_id])
+    manager: Mapped["User | None"] = relationship(foreign_keys=[manager_id])
     members: Mapped[list["User"]] = relationship(
         back_populates="team", foreign_keys="User.team_id"
     )
 
-    __table_args__ = (Index("ix_teams_supervisor_id", "supervisor_id"),)
+    __table_args__ = (Index("ix_teams_manager_id", "manager_id"),)

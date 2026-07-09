@@ -12,7 +12,7 @@ import '../providers/employee_provider.dart';
 import '../widgets/employee_avatar.dart';
 import '../widgets/pulsing_status_dot.dart';
 
-/// Team directory with live status. Supervisor/admin facing.
+/// Team directory with live status. Manager/admin facing.
 /// - debounced search (300ms, in the notifier)
 /// - pull-to-refresh, infinite scroll (cursor paging)
 /// - shimmer first-load, empty + error states

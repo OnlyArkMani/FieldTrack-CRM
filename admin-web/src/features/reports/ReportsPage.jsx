@@ -212,13 +212,13 @@ export default function ReportsPage() {
   const today = dayjs().format('YYYY-MM-DD');
   const { data: teams = [] } = useTeams();
   const user = useAuthStore((s) => s.user);
-  const isSupervisor = user?.role === 'SUPERVISOR';
+  const isManager = user?.role === 'MANAGER';
   const myTeamId = user?.team_id ?? null;
   const [type, setType] = useState('ATTENDANCE');
   const [format, setFormat] = useState('EXCEL');
 
-  // Scope: 'all' | 'team' | 'employee'. Supervisors never get 'all'.
-  const [scope, setScope] = useState(isSupervisor ? 'team' : 'all');
+  // Scope: 'all' | 'team' | 'employee'. Managers never get 'all'.
+  const [scope, setScope] = useState(isManager ? 'team' : 'all');
   const [teamId, setTeamId] = useState('');
   const [employee, setEmployee] = useState(null); // { id, name, team_name }
 
@@ -247,18 +247,18 @@ export default function ReportsPage() {
   // For EMPLOYEE_CONSOLIDATED, force scope to a single employee.
   const forceEmployee = EMPLOYEE_REQUIRED_TYPES.has(type);
 
-  // Supervisors: never "all employees" — coerce to their team scope.
-  const roleScope = isSupervisor && scope === 'all' ? 'team' : scope;
+  // Managers: never "all employees" — coerce to their team scope.
+  const roleScope = isManager && scope === 'all' ? 'team' : scope;
   const effectiveScope = forceTeam ? 'team' : forceEmployee ? 'employee' : roleScope;
 
-  // Supervisor: pin the team filter to their own team.
+  // Manager: pin the team filter to their own team.
   useEffect(() => {
-    if (isSupervisor && myTeamId && String(teamId) !== String(myTeamId)) {
+    if (isManager && myTeamId && String(teamId) !== String(myTeamId)) {
       setTeamId(String(myTeamId));
     }
-    if (isSupervisor && scope === 'all') setScope('team');
+    if (isManager && scope === 'all') setScope('team');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSupervisor, myTeamId]);
+  }, [isManager, myTeamId]);
 
   const teamMissing = effectiveScope === 'team' && !teamId;
   const employeeMissing = effectiveScope === 'employee' && !employee;
@@ -439,7 +439,7 @@ export default function ReportsPage() {
               scope={roleScope}
               onChange={onScopeChange}
               disabled={busy}
-              hideAll={isSupervisor}
+              hideAll={isManager}
             />
           )}
 
@@ -449,18 +449,18 @@ export default function ReportsPage() {
                 label={
                   <>
                     Team{' '}
-                    {(forceTeam || isSupervisor) && <span className="text-danger">*</span>}
-                    {isSupervisor && (
+                    {(forceTeam || isManager) && <span className="text-danger">*</span>}
+                    {isManager && (
                       <span className="ml-1 font-normal text-text-secondary">(your team)</span>
                     )}
                   </>
                 }
                 value={teamId}
                 onChange={(e) => { setTeamId(e.target.value); resetResult(); }}
-                disabled={busy || isSupervisor}
+                disabled={busy || isManager}
               >
-                {!isSupervisor && <option value="">Select a team…</option>}
-                {(isSupervisor
+                {!isManager && <option value="">Select a team…</option>}
+                {(isManager
                   ? teams.filter((t) => String(t.id) === String(myTeamId))
                   : teams
                 ).map((t) => (

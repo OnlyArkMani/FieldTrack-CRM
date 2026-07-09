@@ -25,13 +25,13 @@ class TeamRepository {
   Future<Team> create({
     required String name,
     String? description,
-    int? supervisorId,
+    int? managerId,
   }) async {
     final data = await _api.post('/teams', body: {
       'name': name,
       if (description != null && description.isNotEmpty)
         'description': description,
-      if (supervisorId != null) 'supervisor_id': supervisorId,
+      if (managerId != null) 'manager_id': managerId,
     });
     return Team.fromJson(data);
   }

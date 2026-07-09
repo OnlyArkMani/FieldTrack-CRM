@@ -21,10 +21,10 @@ class OrderService:
         self.repo = OrderRepository(db)
 
     # ── scope helpers ────────────────────────────────────────────────────
-    async def _supervised_team_ids(self, supervisor_id: int) -> set[int]:
+    async def _managed_team_ids(self, manager_id: int) -> set[int]:
         from sqlalchemy import select
 
-        stmt = select(Team.id).where(Team.supervisor_id == supervisor_id)
+        stmt = select(Team.id).where(Team.manager_id == manager_id)
         return set((await self.db.execute(stmt)).scalars().all())
 
     @staticmethod
@@ -37,29 +37,29 @@ class OrderService:
         resp.employee_name = employee_name
         return resp
 
-    # ── pending list (admin/supervisor) ───────────────────────────────────
+    # ── pending list (admin/manager) ───────────────────────────────────
     async def list_pending(
         self, actor: User, *, team_id: int | None
     ) -> list[VisitOrderResponse]:
         if actor.role == UserRole.EMPLOYEE:
             raise forbidden("Employees cannot review orders")
 
-        if actor.role == UserRole.SUPERVISOR:
-            supervised = await self._supervised_team_ids(actor.id)
-            if not supervised:
+        if actor.role == UserRole.MANAGER:
+            managed = await self._managed_team_ids(actor.id)
+            if not managed:
                 return []
-            if team_id is not None and team_id not in supervised:
-                raise forbidden("You don't supervise this team")
-            # No explicit team_id: a supervisor with exactly one team gets it
+            if team_id is not None and team_id not in managed:
+                raise forbidden("You don't manage this team")
+            # No explicit team_id: a manager with exactly one team gets it
             # for free; with several, they see all of their own teams' orders
             # (list_pending already accepts one team_id, so loop when >1).
-            if team_id is None and len(supervised) > 1:
+            if team_id is None and len(managed) > 1:
                 rows: list[tuple[VisitOrder, str | None, str | None]] = []
-                for tid in supervised:
+                for tid in managed:
                     rows.extend(await self.repo.list_pending(team_id=tid))
                 rows.sort(key=lambda r: r[0].created_at, reverse=True)
                 return [self._to_response(r) for r in rows]
-            team_id = team_id or next(iter(supervised))
+            team_id = team_id or next(iter(managed))
 
         rows = await self.repo.list_pending(team_id=team_id)
         return [self._to_response(r) for r in rows]
@@ -77,10 +77,10 @@ class OrderService:
         if order.status != "SUBMITTED":
             raise bad_request(f"Order is already {order.status.lower()}")
 
-        if actor.role == UserRole.SUPERVISOR:
-            supervised = await self._supervised_team_ids(actor.id)
+        if actor.role == UserRole.MANAGER:
+            managed = await self._managed_team_ids(actor.id)
             employee = await self.db.get(User, order.employee_id)
-            if employee is None or employee.team_id not in supervised:
+            if employee is None or employee.team_id not in managed:
                 raise forbidden("This order isn't from your team")
 
         if payload.action == "REJECT":

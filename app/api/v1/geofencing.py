@@ -1,7 +1,7 @@
 """Geofencing router — thin HTTP layer; logic in GeofenceService.
 
 Reads (list/detail/presence) are open to any authenticated active user (a
-supervisor's mobile map renders zones); create/update/delete are ADMIN-only.
+manager's mobile map renders zones); create/update/delete are ADMIN-only.
 """
 from datetime import date as date_type
 from typing import Annotated
@@ -32,7 +32,7 @@ async def list_geofences(
 ) -> list[GeofenceOut]:
     """Role-scoped (Change 1):
     - ADMIN: every zone, with team_name joined in (web manager).
-    - SUPERVISOR / EMPLOYEE: their team's zones + all universal zones.
+    - MANAGER / EMPLOYEE: their team's zones + all universal zones.
     """
     service = GeofenceService(db)
     if user.role == UserRole.ADMIN:
