@@ -83,6 +83,26 @@ def _day_bounds_utc(report_date: date_type) -> tuple[datetime, datetime]:
     return day_start, day_end
 
 
+def business_today() -> date_type:
+    """Today's calendar date in the business timezone (Asia/Kolkata by default).
+
+    A DSR "day" is defined in the business tz everywhere in this module
+    (``_day_bounds_utc``, ``_is_late_now``, and the ``VisitPlan.plan_date``
+    lookup all treat ``report_date`` as a business-local date). The date fed to
+    the generators — and the default date on the read endpoints — must therefore
+    also be business-local. Using the UTC date (or the container's local
+    ``date.today()`` when it isn't IST) mis-files the DSR during the pre-dawn
+    hours where the UTC and business dates differ, and can even create two rows
+    for one business day.
+    """
+    settings = get_settings()
+    try:
+        tz = ZoneInfo(settings.business_timezone)
+    except Exception:
+        tz = timezone.utc
+    return datetime.now(tz).date()
+
+
 # ── Public API ───────────────────────────────────────────────────────────────
 
 async def generate_dsr(

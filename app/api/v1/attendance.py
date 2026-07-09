@@ -30,7 +30,11 @@ from app.schemas.attendance import (
 )
 from app.schemas.common import CursorPage, decode_cursor, encode_cursor
 from app.services.attendance_service import AttendanceService
-from app.services.dsr_service import generate_and_submit_dsr, generate_dsr
+from app.services.dsr_service import (
+    business_today,
+    generate_and_submit_dsr,
+    generate_dsr,
+)
 
 router = APIRouter(prefix="/attendance", tags=["attendance"])
 
@@ -89,8 +93,6 @@ async def end(
     db: Annotated[AsyncSession, Depends(get_db)],
     background_tasks: BackgroundTasks,
 ) -> AttendanceOut:
-    from datetime import datetime, timezone
-
     result = await AttendanceService(db).transition_state(
         user=user, action=SessionType.END, lat=body.lat, lng=body.lng,
         work_summary=body.work_summary, ip=_client_ip(request),
@@ -101,7 +103,10 @@ async def end(
     # manager sees it without the employee needing to open the DSR screen
     # separately (checklist #52). A manual End keeps the DSR in DRAFT so the
     # employee can add a note before submitting.
-    today = datetime.now(timezone.utc).date()
+    # Business-local date (not UTC): the DSR generators define a "day" in the
+    # business timezone, so the report_date must be business-local too — a UTC
+    # date mis-files the DSR in the pre-dawn IST hours. See business_today().
+    today = business_today()
     if body.work_summary is None:
         background_tasks.add_task(generate_and_submit_dsr, user.id, result.id, today)
     else:

@@ -30,6 +30,7 @@ from app.schemas.common import CursorPage, decode_cursor, encode_cursor
 from app.schemas.crm import DailyReportResponse
 from app.services.dsr_service import (
     add_manager_comment,
+    business_today,
     generate_dsr,
     get_dsr_with_details,
     submit_dsr,
@@ -241,7 +242,7 @@ async def submit(
 async def team_dsrs(
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-    report_date: date = Query(default_factory=date.today),
+    report_date: date = Query(default_factory=business_today),
     team_id: int | None = Query(default=None),
 ) -> list[TeamDsrItem]:
     """DSR status for a team on a date.
@@ -503,8 +504,8 @@ async def archive(
 async def visits_export(
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-    date_from: date = Query(default_factory=date.today),
-    date_to: date = Query(default_factory=date.today),
+    date_from: date = Query(default_factory=business_today),
+    date_to: date = Query(default_factory=business_today),
     team_id: int | None = Query(default=None),
     employee_id: int | None = Query(default=None),
 ) -> StreamingResponse:
