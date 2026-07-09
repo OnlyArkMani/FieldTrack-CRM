@@ -116,6 +116,7 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
             farmerId: farmer.id,
             farmerName: farmer.name,
             village: farmer.village,
+            customerType: farmer.customerType,
             leadStatus: farmer.leadStatus,
             lastVisitAt: farmer.lastVisitAt,
             sequenceOrder: 9999,
