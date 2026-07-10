@@ -22,6 +22,12 @@ class VisitPlanRepository {
     return MyPlan.fromJson(data);
   }
 
+  /// Manager/admin only: the caller's team's plans for a date.
+  Future<TeamPlans> teamPlans(DateTime date) async {
+    final data = await _api.get('/visit-plans/team/${ymd(date)}');
+    return TeamPlans.fromJson(data);
+  }
+
   /// Upsert the day's plan. Items are sent in their current order; the server
   /// stores sequence_order and flips status to SUBMITTED.
   Future<MyPlan> savePlan(DateTime date, List<PlanItem> items) async {

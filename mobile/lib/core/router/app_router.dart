@@ -12,6 +12,7 @@ import '../../features/crm/farmers/screens/farmer_list_screen.dart';
 import '../../features/crm/farmers/screens/farmer_visits_screen.dart';
 import '../../features/crm/farmers/screens/livestock_history_screen.dart';
 import '../../features/crm/planning/screens/plan_map_screen.dart';
+import '../../features/crm/planning/screens/team_visit_plan_screen.dart';
 import '../../features/crm/planning/screens/visit_plan_screen.dart';
 import '../../features/crm/dsr/screens/dsr_history_screen.dart';
 import '../../features/crm/dsr/screens/dsr_review_screen.dart';
@@ -74,7 +75,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       // from '/employee/' (detail) — both are covered here.
       final isTeamMgmt = loc == '/employees' ||
           loc == '/teams' ||
-          loc.startsWith('/employee/');
+          loc.startsWith('/employee/') ||
+          loc == '/planning/team';
       if (isTeamMgmt && auth.user?.role != UserRole.manager) {
         return '/home/dashboard';
       }
@@ -290,6 +292,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/dsr/team',
         pageBuilder: (context, state) =>
             WaterPage(key: state.pageKey, child: const TeamDsrScreen()),
+      ),
+
+      // Team visit plans (manager only — see isTeamMgmt guard above)
+      GoRoute(
+        path: '/planning/team',
+        pageBuilder: (context, state) =>
+            WaterPage(key: state.pageKey, child: const TeamVisitPlanScreen()),
       ),
 
       GoRoute(

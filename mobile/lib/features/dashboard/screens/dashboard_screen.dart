@@ -107,6 +107,13 @@ class DashboardScreen extends ConsumerWidget {
               ),
               const SizedBox(height: AppDimens.grid * 1.5),
               _QuickAction(
+                icon: Icons.event_note_rounded,
+                label: 'Team Visit Plans',
+                subtitle: "Who's planned tomorrow's visits",
+                onTap: () => context.push('/planning/team'),
+              ),
+              const SizedBox(height: AppDimens.grid * 1.5),
+              _QuickAction(
                 icon: Icons.fact_check_rounded,
                 label: 'Order approvals',
                 subtitle: 'Approve or reject field orders',

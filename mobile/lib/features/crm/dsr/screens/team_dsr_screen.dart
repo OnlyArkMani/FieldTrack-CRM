@@ -10,6 +10,13 @@ import '../../../../core/widgets/state_views.dart';
 import '../data/dsr_repository.dart';
 import '../models/dsr.dart';
 
+/// Selected date for the Team DSR screen. Held in a provider rather than
+/// local State — some ancestor rebuild (shell/router related) can dispose
+/// and recreate this screen's State right as the date picker resolves; a
+/// plain `DateTime` field would silently reset to `DateTime.now()` when that
+/// happens, making date changes look like they never took effect.
+final _teamDsrDateProvider = StateProvider<DateTime>((ref) => DateTime.now());
+
 /// Manager-only: their team's DSR status for a chosen date. Scope is
 /// auto-filtered to the caller's team on the backend. Tap a member with a DSR
 /// to see a read-only detail.
@@ -21,7 +28,6 @@ class TeamDsrScreen extends ConsumerStatefulWidget {
 }
 
 class _TeamDsrScreenState extends ConsumerState<TeamDsrScreen> {
-  DateTime _date = DateTime.now();
   late Future<List<TeamDsrItem>> _future;
 
   @override
@@ -31,19 +37,19 @@ class _TeamDsrScreenState extends ConsumerState<TeamDsrScreen> {
   }
 
   Future<List<TeamDsrItem>> _load() =>
-      ref.read(dsrRepositoryProvider).teamDsrs(_date);
+      ref.read(dsrRepositoryProvider).teamDsrs(ref.read(_teamDsrDateProvider));
 
   void _reload() => setState(() => _future = _load());
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: _date,
+      initialDate: ref.read(_teamDsrDateProvider),
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now(),
     );
     if (picked != null) {
-      _date = picked;
+      ref.read(_teamDsrDateProvider.notifier).state = picked;
       _reload();
     }
   }
@@ -51,6 +57,7 @@ class _TeamDsrScreenState extends ConsumerState<TeamDsrScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
+    final date = ref.watch(_teamDsrDateProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Team DSR',
@@ -77,7 +84,7 @@ class _TeamDsrScreenState extends ConsumerState<TeamDsrScreen> {
                       Icon(Icons.event_rounded,
                           size: 18, color: colors.textSecondary),
                       const SizedBox(width: AppDimens.grid),
-                      Text(DateFormat('EEEE, d MMM yyyy').format(_date),
+                      Text(DateFormat('EEEE, d MMM yyyy').format(date),
                           style: AppTextStyles.bodyMedium.copyWith(
                               color: Theme.of(context).colorScheme.onSurface)),
                       const Spacer(),
@@ -118,7 +125,7 @@ class _TeamDsrScreenState extends ConsumerState<TeamDsrScreen> {
                       itemCount: items.length,
                       itemBuilder: (_, i) => _MemberTile(
                         item: items[i],
-                        date: _date,
+                        date: date,
                       ),
                     );
                   },

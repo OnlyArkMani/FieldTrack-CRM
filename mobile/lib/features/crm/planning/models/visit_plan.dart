@@ -134,6 +134,59 @@ class PlanItem {
       };
 }
 
+/// One employee's plan summary in the manager's team view — mirrors
+/// TeamPlanEmployeeView.
+class TeamPlanEmployee {
+  const TeamPlanEmployee({
+    required this.employeeId,
+    required this.employeeName,
+    this.teamName,
+    this.planId,
+    this.status = 'NOT_SUBMITTED',
+    this.visitsPlanned = 0,
+    this.submittedAt,
+    this.items = const [],
+  });
+
+  final int employeeId;
+  final String employeeName;
+  final String? teamName;
+  final int? planId;
+  final String status; // NOT_SUBMITTED / DRAFT / SUBMITTED / IN_PROGRESS / COMPLETED
+  final int visitsPlanned;
+  final DateTime? submittedAt;
+  final List<PlanItem> items;
+
+  factory TeamPlanEmployee.fromJson(Map<String, dynamic> json) =>
+      TeamPlanEmployee(
+        employeeId: json['employee_id'] as int,
+        employeeName: (json['employee_name'] as String?) ?? 'Unknown',
+        teamName: json['team_name'] as String?,
+        planId: json['plan_id'] as int?,
+        status: (json['status'] as String?) ?? 'NOT_SUBMITTED',
+        visitsPlanned: (json['visits_planned'] as int?) ?? 0,
+        submittedAt: _dt(json['submitted_at']),
+        items: ((json['items'] as List<dynamic>?) ?? [])
+            .map((e) => PlanItem.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+/// GET /visit-plans/team/{date} — manager/admin only.
+class TeamPlans {
+  const TeamPlans({required this.planDate, this.employees = const []});
+
+  final DateTime planDate;
+  final List<TeamPlanEmployee> employees;
+
+  factory TeamPlans.fromJson(Map<String, dynamic> json) => TeamPlans(
+        planDate: DateTime.parse(json['plan_date'] as String),
+        employees: ((json['employees'] as List<dynamic>?) ?? [])
+            .map((e) => TeamPlanEmployee.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
 class MyPlan {
   const MyPlan({
     this.id,
