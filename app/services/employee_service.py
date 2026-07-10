@@ -26,7 +26,7 @@ from app.core.config import get_settings
 from app.core.exceptions import bad_request, conflict, not_found
 from app.core.redis import Keys, get_redis
 from app.core.security import hash_password
-from app.models.enums import AttendanceStatus
+from app.models.enums import AttendanceStatus, UserRole
 from app.models.misc import DeviceInfo, Notification
 from app.models.user import User
 from app.repositories.employee_repository import EmployeeRepository
@@ -73,14 +73,21 @@ class EmployeeService:
         team_id: int | None,
         status: str | None,
         search: str | None,
+        requesting_user: User,
     ) -> CursorPage[EmployeeOut]:
         is_active = self._parse_status_filter(status)
+        # Managers only see their own team's employees, never other managers
+        # or the admin; admins see everyone.
+        managed_by = (
+            requesting_user.id if requesting_user.role == UserRole.MANAGER else None
+        )
         rows, total = await self.repo.list_employees(
             cursor_id=decode_cursor(cursor),
             limit=limit,
             team_id=team_id,
             is_active=is_active,
             search=search,
+            managed_by=managed_by,
         )
         has_more = len(rows) > limit
         page = rows[:limit]

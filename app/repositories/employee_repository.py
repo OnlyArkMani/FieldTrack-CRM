@@ -25,6 +25,7 @@ class EmployeeRepository:
         team_id: int | None,
         is_active: bool | None,
         search: str | None,
+        managed_by: int | None,
     ) -> Select:
         if team_id is not None:
             stmt = stmt.where(User.team_id == team_id)
@@ -33,6 +34,15 @@ class EmployeeRepository:
         if search and search.strip():
             like = f"%{search.strip()}%"
             stmt = stmt.where(or_(User.name.ilike(like), User.email.ilike(like)))
+        if managed_by is not None:
+            # Managers only see the employees on team(s) they manage — never
+            # themselves, other managers, or the admin.
+            stmt = stmt.where(
+                User.team_id.in_(
+                    select(Team.id).where(Team.manager_id == managed_by)
+                ),
+                User.id != managed_by,
+            )
         return stmt
 
     async def list_employees(
@@ -43,6 +53,7 @@ class EmployeeRepository:
         team_id: int | None = None,
         is_active: bool | None = None,
         search: str | None = None,
+        managed_by: int | None = None,
     ) -> tuple[list[User], int]:
         """Keyset page (id ASC) + a total count for the filtered set.
 
@@ -50,7 +61,11 @@ class EmployeeRepository:
         service slices the sentinel off and derives the next cursor.
         """
         stmt = self._apply_list_filters(
-            select(User), team_id=team_id, is_active=is_active, search=search
+            select(User),
+            team_id=team_id,
+            is_active=is_active,
+            search=search,
+            managed_by=managed_by,
         )
         if cursor_id is not None:
             stmt = stmt.where(User.id > cursor_id)
@@ -62,6 +77,7 @@ class EmployeeRepository:
             team_id=team_id,
             is_active=is_active,
             search=search,
+            managed_by=managed_by,
         )
         total = (await self.db.execute(count_stmt)).scalar_one()
         return list(rows), int(total)
