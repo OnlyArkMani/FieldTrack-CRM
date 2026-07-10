@@ -44,7 +44,7 @@ def _client_ip(request: Request) -> str | None:
 
 @router.get("", response_model=CursorPage[EmployeeOut])
 async def list_employees(
-    _user: CurrentUser,
+    user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
     cursor: str | None = Query(default=None, description="Opaque forward cursor"),
     limit: int = Query(default=20, ge=1, le=100),
@@ -60,6 +60,7 @@ async def list_employees(
         team_id=team_id,
         status=status,
         search=search,
+        requesting_user=user,
     )
 
 
