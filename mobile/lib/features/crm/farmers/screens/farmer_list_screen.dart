@@ -7,6 +7,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/shimmer_card.dart';
 import '../../../../core/widgets/state_views.dart';
+import '../../../../core/widgets/sync_status_badge.dart';
 import '../models/farmer.dart';
 import '../providers/farmer_provider.dart';
 import '../utils.dart';
@@ -338,6 +339,13 @@ class _FarmerTile extends StatelessWidget {
                 LeadStatusBadge(status: farmer.leadStatus),
               ],
             ),
+            if (farmer.isPending) ...[
+              const SizedBox(height: AppDimens.grid * 0.75),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: SyncStatusBadge(syncStatus: farmer.syncStatus, compact: true),
+              ),
+            ],
             if (farmer.village != null && farmer.village!.isNotEmpty) ...[
               const SizedBox(height: 2),
               Text(

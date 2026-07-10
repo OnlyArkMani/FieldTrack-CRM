@@ -169,6 +169,22 @@ class VisitService:
 
     # ── check-in ─────────────────────────────────────────────────────────
     async def check_in(self, user: User, payload: CheckInRequest) -> CheckInResponse:
+        # Idempotent replay: the mobile offline queue retries a check-in
+        # whose response it never saw. If this client_id already made it
+        # in, hand back that visit instead of creating a duplicate.
+        if payload.client_id:
+            existing = await self.repo.get_visit_by_client_id(payload.client_id)
+            if existing is not None:
+                existing_farmer = await self.repo.get_farmer(existing.farmer_id)
+                distance = existing.distance_at_checkin_meters
+                return CheckInResponse(
+                    visit_id=existing.id,
+                    location_warning=existing.location_warning,
+                    distance_meters=round(distance, 1) if distance is not None else None,
+                    farmer_name=existing_farmer.name if existing_farmer else "",
+                    warning_required=existing.location_warning,
+                )
+
         farmer = await self.repo.get_farmer(payload.farmer_id)
         if farmer is None:
             raise not_found("Farmer not found")
@@ -238,6 +254,7 @@ class VisitService:
             location_warning=warning,
             purpose=purpose,
             status="CHECKED_IN",
+            client_id=payload.client_id,
         )
         self.repo.add(visit)
         await self.db.flush()
@@ -337,6 +354,16 @@ class VisitService:
     async def create_order(
         self, user: User, visit_id: int, payload: OrderCreate
     ) -> VisitOrderResponse:
+        # Idempotent replay: the offline sync engine removes an order from
+        # its local queue only after the request lands, so a lost response
+        # (app killed mid-sync, dropped connection right after the server
+        # committed) triggers a retry next pass. If this client_id already
+        # created an order, hand that back instead of creating a duplicate.
+        if payload.client_id:
+            existing = await self.repo.get_order_by_client_id(payload.client_id)
+            if existing is not None:
+                return VisitOrderResponse.model_validate(existing)
+
         visit = await self._load_owned_visit(visit_id, user)
         min_date = self._today() + _days(ORDER_MIN_LEAD_DAYS)
         if payload.delivery_date < min_date:
@@ -355,6 +382,7 @@ class VisitService:
             special_notes=payload.special_notes,
             price_per_bag=payload.price_per_bag,
             status="SUBMITTED",
+            client_id=payload.client_id,
         )
         self.repo.add(order)
         await self.db.flush()

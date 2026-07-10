@@ -4,7 +4,7 @@
 library;
 
 import '../../farmers/models/farmer.dart'
-    show CustomerType, LeadStatus, LivestockProfile;
+    show CustomerType, LeadStatus, LivestockProfile, placeholderIdFromLocalId;
 
 DateTime? _dt(dynamic v) =>
     v == null ? null : DateTime.tryParse(v as String)?.toLocal();
@@ -24,6 +24,7 @@ class CheckInResult {
     this.distanceMeters,
     required this.farmerName,
     required this.warningRequired,
+    this.localId,
   });
 
   final int visitId;
@@ -31,6 +32,26 @@ class CheckInResult {
   final double? distanceMeters;
   final String farmerName;
   final bool warningRequired;
+  /// Non-null only for a visit checked in offline. While non-null, [visitId]
+  /// is a placeholder, not a real server id — see [placeholderIdFromLocalId].
+  final String? localId;
+
+  bool get isPending => localId != null;
+
+  /// Built the instant an offline check-in is queued — before the server
+  /// has ever seen it, so there's no location-warning distance to show
+  /// (that check needs the farmer's stored lat/lng, a server-side read).
+  factory CheckInResult.pending({
+    required String localId,
+    required String farmerName,
+  }) =>
+      CheckInResult(
+        visitId: placeholderIdFromLocalId(localId),
+        locationWarning: false,
+        farmerName: farmerName,
+        warningRequired: false,
+        localId: localId,
+      );
 
   factory CheckInResult.fromJson(Map<String, dynamic> json) => CheckInResult(
         visitId: json['visit_id'] as int,

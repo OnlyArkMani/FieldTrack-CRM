@@ -166,6 +166,16 @@ class FarmerRepository:
     async def get_by_id(self, farmer_id: int) -> Farmer | None:
         return await self.db.get(Farmer, farmer_id)
 
+    async def get_by_client_id(self, client_id: str) -> Farmer | None:
+        stmt = select(Farmer).where(Farmer.client_id == client_id)
+        return (await self.db.execute(stmt)).scalar_one_or_none()
+
+    async def get_by_client_ids(self, client_ids: list[str]) -> list[Farmer]:
+        if not client_ids:
+            return []
+        stmt = select(Farmer).where(Farmer.client_id.in_(client_ids))
+        return list((await self.db.execute(stmt)).scalars().all())
+
     async def get_with_team(self, farmer_id: int) -> tuple[Farmer, str | None] | None:
         stmt = (
             select(Farmer, Team.name)

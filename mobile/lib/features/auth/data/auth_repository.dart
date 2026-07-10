@@ -1,24 +1,43 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_exceptions.dart';
 import '../../../core/storage/token_storage.dart';
+import '../../../services/sync/connectivity_service.dart';
 import '../models/user.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository(
     ref.watch(apiClientProvider),
     ref.watch(tokenStorageProvider),
+    ref.watch(connectivityServiceProvider),
   );
 });
 
 class AuthRepository {
-  AuthRepository(this._api, this._tokens);
+  AuthRepository(this._api, this._tokens, this._connectivity);
 
   final ApiClient _api;
   final TokenStorage _tokens;
+  final ConnectivityService _connectivity;
 
-  static const _kUserCache = 'cached_user';
+  /// Last profile fetched successfully (login/me/update) — see
+  /// TokenStorage.userJson for why this exists.
+  User? get cachedUser {
+    final json = _tokens.userJson;
+    if (json == null) return null;
+    try {
+      return User.fromJson(jsonDecode(json) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _cacheUser(User user) =>
+      _tokens.saveUserJson(jsonEncode(user.toJson()));
 
   Future<User> login(String email, String password) async {
     final data = await _api.post('/auth/login', body: {
@@ -30,12 +49,16 @@ class AuthRepository {
       access: data['access_token'] as String,
       refresh: data['refresh_token'] as String,
     );
-    return User.fromJson(data['user'] as Map<String, dynamic>);
+    final user = User.fromJson(data['user'] as Map<String, dynamic>);
+    await _cacheUser(user);
+    return user;
   }
 
   Future<User> me() async {
     final data = await _api.get('/auth/me');
-    return User.fromJson(data);
+    final user = User.fromJson(data);
+    await _cacheUser(user);
+    return user;
   }
 
   Future<void> logout() async {
@@ -54,6 +77,12 @@ class AuthRepository {
 
   bool get hasStoredSession => _tokens.hasSession;
 
+  /// Offline: merges the edit into the cached profile immediately (so the
+  /// UI reflects it right away) and queues it — only ever one pending edit
+  /// at a time, since this endpoint takes the full profile rather than a
+  /// partial patch, so a second offline edit before the first syncs simply
+  /// overwrites it (same "latest wins" reasoning as pending_visits' upsert
+  /// fields).
   Future<User> updateProfile({
     required String name,
     required String phone,
@@ -61,14 +90,41 @@ class AuthRepository {
     required String district,
     required String state,
   }) async {
-    final data = await _api.patch('/auth/me', body: {
+    final body = {
       'name': name.trim(),
       'phone': phone.trim().isNotEmpty ? phone.trim() : null,
       'village': village.trim().isNotEmpty ? village.trim() : null,
       'district': district.trim().isNotEmpty ? district.trim() : null,
       'state': state.trim().isNotEmpty ? state.trim() : null,
-    });
-    return User.fromJson(data);
+    };
+    if (!_connectivity.current) {
+      final current = cachedUser;
+      if (current == null) {
+        throw const UnknownApiException(
+          'No cached profile to edit offline — connect once, then retry.',
+          'NO_CACHED_PROFILE',
+        );
+      }
+      final updated = User(
+        id: current.id,
+        name: body['name'] as String,
+        email: current.email,
+        role: current.role,
+        phone: body['phone'],
+        teamId: current.teamId,
+        profilePhotoUrl: current.profilePhotoUrl,
+        village: body['village'],
+        district: body['district'],
+        state: body['state'],
+      );
+      await _tokens.savePendingProfileUpdateJson(jsonEncode(body));
+      await _cacheUser(updated);
+      return updated;
+    }
+    final data = await _api.patch('/auth/me', body: body);
+    final user = User.fromJson(data);
+    await _cacheUser(user);
+    return user;
   }
 
   Future<User> uploadProfilePhoto(String filePath) async {
@@ -77,7 +133,9 @@ class AuthRepository {
     });
     try {
       final res = await _api.dio.post('/auth/me/profile-photo', data: form);
-      return User.fromJson(res.data as Map<String, dynamic>);
+      final user = User.fromJson(res.data as Map<String, dynamic>);
+      await _cacheUser(user);
+      return user;
     } on DioException catch (e) {
       throw ApiClient.mapError(e);
     }

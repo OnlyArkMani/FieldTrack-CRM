@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/network/api_exceptions.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_card.dart';
@@ -36,10 +37,17 @@ class LeadPipelineScreen extends ConsumerWidget {
       body: SafeArea(
         child: async.when(
           loading: () => const ShimmerList(count: 6),
-          error: (e, _) => ErrorStateView(
-            message: e.toString(),
-            onRetry: () => ref.invalidate(myLeadsProvider),
-          ),
+          error: (e, _) => e is NoConnectionException || e is TimeoutException
+              ? const EmptyStateView(
+                  icon: Icons.cloud_off_rounded,
+                  title: 'No leads saved offline yet',
+                  message:
+                      'Open this screen once while online to keep leads available offline.',
+                )
+              : ErrorStateView(
+                  message: e.toString(),
+                  onRetry: () => ref.invalidate(myLeadsProvider),
+                ),
           data: (leads) {
             final hot = leads.where((l) => l.status == LeadStatus.hot).length;
             final warm = leads.where((l) => l.status == LeadStatus.warm).length;

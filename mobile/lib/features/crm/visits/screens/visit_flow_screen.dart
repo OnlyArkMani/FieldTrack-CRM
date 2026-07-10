@@ -16,8 +16,10 @@ import '../../farmers/models/farmer.dart'
     show CustomerType, LeadStatus, LivestockProfile;
 import '../../farmers/providers/farmer_provider.dart';
 import '../../farmers/utils.dart';
+import '../../leads/data/lead_repository.dart' show myLeadsProvider;
 import '../../planning/providers/visit_plan_provider.dart';
 import '../../planning/widgets/plan_item_card.dart' show purposeLabel;
+import '../../vet/data/vet_repository.dart' show vetRequestsProvider;
 import '../data/visit_repository.dart';
 import '../models/visit.dart';
 import '../widgets/step_indicator.dart';
@@ -191,11 +193,22 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
             ? int.tryParse(_targetBags.text.trim())
             : null,
         purpose: widget.planItemId == null ? _purpose : null,
+        farmerName: ref.read(farmerDetailProvider(widget.farmerId)).value?.name,
       );
       if (!mounted) return;
       HapticFeedback.mediumImpact();
       _visitId = result.visitId;
       _checkIn = result;
+      if (result.isPending) {
+        // Checked in offline — the rest of the guided flow (notes,
+        // livestock, orders, complete) is offline-capable too (see
+        // docs/OFFLINE_SYNC_PLAN.md), so just continue normally. No
+        // location-warning distance to show yet — that's computed
+        // server-side once check-in syncs.
+        HapticFeedback.selectionClick();
+        _enterStep(1);
+        return;
+      }
       if (result.warningRequired) {
         setState(() {
           _busy = false;
@@ -537,9 +550,15 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       // Refresh downstream views. Always reload the plan so the completed stop
       // moves out of Active (and any fulfilled follow-up disappears) — this
       // matters for follow-up visits too, which carry no plan_item_id.
+      // Leads/vet requests are invalidated too — offline, both now read
+      // this visit's pending lead-status/vet data directly (see
+      // LeadRepository/VetRepository), but a screen already open before
+      // completing needs a nudge to actually re-fetch and pick that up.
       ref.invalidate(farmerDetailProvider(widget.farmerId));
       ref.read(farmerListProvider.notifier).refresh(isRefresh: true);
       ref.read(visitPlanProvider.notifier).load();
+      ref.invalidate(myLeadsProvider);
+      ref.invalidate(vetRequestsProvider);
       if (!mounted) return;
       HapticFeedback.heavyImpact();
       await _showSuccess();

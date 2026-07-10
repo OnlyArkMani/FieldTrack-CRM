@@ -13,6 +13,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/state_views.dart';
+import '../../../../core/widgets/sync_status_badge.dart';
 import '../../../attendance/models/attendance.dart';
 import '../../../attendance/providers/attendance_provider.dart';
 import '../../../auth/models/user.dart';
@@ -744,6 +745,10 @@ class _VisitHistory extends StatelessWidget {
                   Text(prettyPurpose(v.purpose),
                       style: AppTextStyles.caption
                           .copyWith(color: colors.textSecondary)),
+                  if (v.syncStatus != null) ...[
+                    const SizedBox(height: 4),
+                    SyncStatusBadge(syncStatus: v.syncStatus, compact: true),
+                  ],
                 ],
               ),
             ),

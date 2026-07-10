@@ -82,10 +82,17 @@ class _VetDashboardScreenState extends ConsumerState<VetDashboardScreen> {
             Expanded(
               child: async.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => ErrorStateView(
-                  message: e.toString(),
-                  onRetry: () => ref.invalidate(vetRequestsProvider(_filter)),
-                ),
+                error: (e, _) => e is NoConnectionException || e is TimeoutException
+                    ? const EmptyStateView(
+                        icon: Icons.cloud_off_rounded,
+                        title: 'No vet requests saved offline yet',
+                        message:
+                            'Open this screen once while online to keep vet requests available offline.',
+                      )
+                    : ErrorStateView(
+                        message: e.toString(),
+                        onRetry: () => ref.invalidate(vetRequestsProvider(_filter)),
+                      ),
                 data: (items) {
                   if (items.isEmpty) {
                     return Center(

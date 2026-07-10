@@ -71,6 +71,14 @@ double? _d(dynamic v) {
   return null;
 }
 
+/// A farmer created offline has no real server id yet. This derives a
+/// stable-for-this-run placeholder int from the client UUID so screens that
+/// key on `int id` (routes, providers) keep working unmodified — the actual
+/// identity while pending is [FarmerDetail.localId] / [FarmerListItem.localId],
+/// never this placeholder. Negative so it can never collide with a real
+/// (always-positive) server id.
+int placeholderIdFromLocalId(String localId) => -(localId.hashCode.abs()) - 1;
+
 /// One row in the farmer list (GET /farmers).
 class FarmerListItem {
   const FarmerListItem({
@@ -87,6 +95,8 @@ class FarmerListItem {
     this.leadStatus,
     this.lastVisitAt,
     this.createdAt,
+    this.localId,
+    this.syncStatus,
   });
 
   final int id;
@@ -102,6 +112,54 @@ class FarmerListItem {
   final LeadStatus? leadStatus;
   final DateTime? lastVisitAt;
   final DateTime? createdAt;
+  /// Non-null only for a farmer that was created offline. While non-null,
+  /// [id] is a placeholder, not a real server id — see
+  /// [placeholderIdFromLocalId].
+  final String? localId;
+  /// Mirrors DatabaseHelper.farmerStatus* when [localId] is set — lets the
+  /// list UI show "pending sync" vs "needs attention" badges.
+  final int? syncStatus;
+
+  bool get isPending => localId != null;
+
+  /// Only `lastVisitAt`/`leadStatus` are ever overridden — to merge in an
+  /// offline visit's effect on this row (see
+  /// FarmerRepository._applyPendingVisitInfo).
+  FarmerListItem copyWith({DateTime? lastVisitAt, LeadStatus? leadStatus}) =>
+      FarmerListItem(
+        id: id,
+        name: name,
+        customerType: customerType,
+        phone: phone,
+        village: village,
+        district: district,
+        totalCattle: totalCattle,
+        isActive: isActive,
+        teamId: teamId,
+        teamName: teamName,
+        leadStatus: leadStatus ?? this.leadStatus,
+        lastVisitAt: lastVisitAt ?? this.lastVisitAt,
+        createdAt: createdAt,
+        localId: localId,
+        syncStatus: syncStatus,
+      );
+
+  factory FarmerListItem.pending({
+    required String localId,
+    required Map<String, dynamic> payload,
+    required int syncStatus,
+  }) =>
+      FarmerListItem(
+        id: placeholderIdFromLocalId(localId),
+        name: payload['name'] as String? ?? '',
+        customerType: CustomerType.fromWire(payload['customer_type'] as String?),
+        phone: payload['phone'] as String?,
+        village: payload['village'] as String?,
+        district: payload['district'] as String?,
+        totalCattle: (payload['total_cattle'] as int?) ?? 0,
+        localId: localId,
+        syncStatus: syncStatus,
+      );
 
   factory FarmerListItem.fromJson(Map<String, dynamic> json) => FarmerListItem(
         id: json['id'] as int,
@@ -153,6 +211,7 @@ class VisitSummary {
     this.purpose,
     required this.status,
     this.createdAt,
+    this.syncStatus,
   });
 
   final int id;
@@ -162,6 +221,14 @@ class VisitSummary {
   final String? purpose;
   final String status;
   final DateTime? createdAt;
+  /// Mirrors `DatabaseHelper.visitStatus*` — non-null only for a synthetic
+  /// entry built from a `pending_visits` row (see
+  /// FarmerRepository._pendingVisitSummaries); null for a real server row.
+  final int? syncStatus;
+
+  /// A negative id is always a placeholder for an unsynced visit — see
+  /// placeholderIdFromLocalId. Real server ids are always positive.
+  bool get isPending => id < 0;
 
   factory VisitSummary.fromJson(Map<String, dynamic> json) => VisitSummary(
         id: json['id'] as int,
@@ -335,6 +402,8 @@ class FarmerDetail {
     this.pendingFollowUps = const [],
     this.totalVisits = 0,
     this.totalOrders = 0,
+    this.localId,
+    this.syncStatus,
   });
 
   final int id;
@@ -364,6 +433,55 @@ class FarmerDetail {
   final List<FollowUp> pendingFollowUps;
   final int totalVisits;
   final int totalOrders;
+  /// Non-null only for a farmer created offline and not yet synced. While
+  /// non-null, [id] is a placeholder — see [placeholderIdFromLocalId].
+  final String? localId;
+  /// Mirrors DatabaseHelper.farmerStatus* when [localId] is set.
+  final int? syncStatus;
+
+  bool get isPending => localId != null;
+
+  /// Optimistic object returned the instant an offline create is queued —
+  /// built straight from the same payload that's sitting in
+  /// `pending_farmers`, before the server has ever seen it.
+  factory FarmerDetail.pending({
+    required String localId,
+    required Map<String, dynamic> payload,
+    int syncStatus = 0,
+  }) =>
+      FarmerDetail(
+        id: placeholderIdFromLocalId(localId),
+        customerType: CustomerType.fromWire(payload['customer_type'] as String?),
+        name: payload['name'] as String? ?? '',
+        phone: payload['phone'] as String?,
+        village: payload['village'] as String?,
+        district: payload['district'] as String?,
+        address: payload['address'] as String?,
+        pincode: payload['pincode'] as String?,
+        landmark: payload['landmark'] as String?,
+        totalCattle: (payload['total_cattle'] as int?) ?? 0,
+        currentFeedBrand: payload['current_feed_brand'] as String?,
+        notes: payload['notes'] as String?,
+        isActive: true,
+        localId: localId,
+        syncStatus: syncStatus,
+      );
+
+  /// Wire format for POST /farmers — used both for the online create call
+  /// and to build `payload_json` when queuing an offline create.
+  Map<String, dynamic> toCreateJson({String? clientId}) => {
+        'name': name,
+        'customer_type': customerType.wire,
+        if (phone != null && phone!.isNotEmpty) 'phone': phone,
+        if (village != null && village!.isNotEmpty) 'village': village,
+        if (district != null && district!.isNotEmpty) 'district': district,
+        if (address != null && address!.isNotEmpty) 'address': address,
+        if (pincode != null && pincode!.isNotEmpty) 'pincode': pincode,
+        if (landmark != null && landmark!.isNotEmpty) 'landmark': landmark,
+        if (notes != null && notes!.isNotEmpty) 'notes': notes,
+        if (teamId != null) 'team_id': teamId,
+        if (clientId != null) 'client_id': clientId,
+      };
 
   factory FarmerDetail.fromJson(Map<String, dynamic> json) => FarmerDetail(
         id: json['id'] as int,

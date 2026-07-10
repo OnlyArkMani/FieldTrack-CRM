@@ -57,6 +57,10 @@ class FarmerCreate(BaseModel):
     current_feed_brand: str | None = Field(default=None, max_length=200)
     current_feed_price_per_bag: Decimal | None = Field(default=None, ge=0)
     notes: str | None = None
+    # Client-generated UUID from the mobile offline queue. Omitted (None)
+    # for online creates. A retried request with the same client_id
+    # returns the existing farmer instead of creating a duplicate.
+    client_id: str | None = Field(default=None, max_length=36)
 
     _v_phone = field_validator("phone")(_validate_phone)
 
@@ -116,6 +120,9 @@ class FarmerMeetAttendee(BaseModel):
     # Each attendee's own village — distinct from the meet's venue village
     # below, since attendees at one meet often come from different villages.
     village: str = Field(min_length=1, max_length=200)
+    # Client-generated UUID from the mobile offline queue (per attendee).
+    # Omitted for online creates.
+    client_id: str | None = Field(default=None, max_length=36)
 
     _v_phone = field_validator("phone")(_validate_phone)
 
@@ -587,6 +594,10 @@ class CheckInRequest(BaseModel):
     # Purpose picked on the spot for an ad-hoc visit (ignored when
     # plan_item_id is set — that plan item's purpose wins, as before).
     purpose: VisitPurpose | None = None
+    # Client-generated UUID from the mobile offline queue. Omitted for
+    # online check-ins. A retried request with the same client_id returns
+    # the existing visit instead of creating a duplicate.
+    client_id: str | None = Field(default=None, max_length=36)
 
 
 class CheckInResponse(BaseModel):
@@ -645,6 +656,10 @@ class OrderCreate(BaseModel):
     payment_mode: PaymentMode | None = None
     special_notes: str | None = None
     price_per_bag: Decimal | None = Field(default=None, ge=0)
+    # Set by the mobile offline queue's retry; a repeat of the same client_id
+    # returns the existing order instead of creating a duplicate. None for
+    # online creates.
+    client_id: str | None = Field(default=None, max_length=36)
 
 
 class VisitOrderResponse(BaseModel):

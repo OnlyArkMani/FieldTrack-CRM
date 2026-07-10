@@ -28,6 +28,14 @@ class VisitRepository:
     async def get_visit(self, visit_id: int) -> Visit | None:
         return await self.db.get(Visit, visit_id)
 
+    async def get_visit_by_client_id(self, client_id: str) -> Visit | None:
+        stmt = select(Visit).where(Visit.client_id == client_id)
+        return (await self.db.execute(stmt)).scalar_one_or_none()
+
+    async def get_order_by_client_id(self, client_id: str) -> VisitOrder | None:
+        stmt = select(VisitOrder).where(VisitOrder.client_id == client_id)
+        return (await self.db.execute(stmt)).scalar_one_or_none()
+
     async def get_plan_item(self, item_id: int) -> VisitPlanItem | None:
         return await self.db.get(VisitPlanItem, item_id)
 

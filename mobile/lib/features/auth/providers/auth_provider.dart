@@ -63,8 +63,31 @@ class AuthNotifier extends Notifier<AuthState> {
     try {
       final user = await _repo.me();
       state = AuthState(status: AuthStatus.authenticated, user: user);
+    } on NoConnectionException {
+      _restoreFromCacheOrLogout();
+    } on TimeoutException {
+      _restoreFromCacheOrLogout();
     } on ApiException {
-      // Interceptor already attempted refresh; if we land here, session dead.
+      // Interceptor already attempted refresh; if we land here, the token
+      // itself was rejected (401/etc) — the session really is dead.
+      state = const AuthState(status: AuthStatus.unauthenticated);
+    }
+  }
+
+  /// Offline (or the server's briefly unreachable) at startup — there's no
+  /// way to ask /auth/me whether the token is still valid, but there's also
+  /// no evidence it isn't. Trust the stored tokens and the last-known
+  /// profile rather than forcing a login screen just because there's no
+  /// signal yet; a real 401 surfaces later via the refresh interceptor
+  /// (sessionRevokedProvider) and logs the user out then.
+  void _restoreFromCacheOrLogout() {
+    final cached = _repo.cachedUser;
+    if (cached != null) {
+      state = AuthState(status: AuthStatus.authenticated, user: cached);
+    } else {
+      // Only possible for a session that predates this cache (or an
+      // install that's never completed a successful /auth/me) — nothing to
+      // show, so this is the one offline case that still has to log out.
       state = const AuthState(status: AuthStatus.unauthenticated);
     }
   }

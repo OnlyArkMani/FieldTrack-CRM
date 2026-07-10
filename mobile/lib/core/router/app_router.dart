@@ -33,6 +33,7 @@ import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/edit_profile_screen.dart';
 import '../../features/reports/screens/reports_screen.dart';
 import '../../features/splash/splash_screen.dart';
+import '../../features/sync/screens/needs_attention_screen.dart';
 import '../../features/teams/screens/team_list_screen.dart';
 import 'transitions.dart';
 
@@ -305,6 +306,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/profile/edit',
         pageBuilder: (context, state) =>
             WaterPage(key: state.pageKey, child: const EditProfileScreen()),
+      ),
+
+      GoRoute(
+        path: '/needs-attention',
+        pageBuilder: (context, state) =>
+            WaterPage(key: state.pageKey, child: const NeedsAttentionScreen()),
       ),
     ],
   );
