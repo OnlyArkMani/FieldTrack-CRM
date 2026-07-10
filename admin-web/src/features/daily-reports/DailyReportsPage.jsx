@@ -468,7 +468,7 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
                         rel="noreferrer"
                         className="text-[11px] text-primary underline"
                       >
-                        {v.check_in_lat.toFixed(5)}, {v.check_in_lng.toFixed(5)}
+                        Location
                       </a>
                     )}
                     {v.meeting_highlights && (

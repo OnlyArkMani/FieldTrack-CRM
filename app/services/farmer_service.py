@@ -22,6 +22,8 @@ from app.repositories.farmer_repository import FarmerRepository
 from app.schemas.common import CursorPage, decode_cursor, encode_cursor
 from app.schemas.crm import (
     CurrentLead,
+    FarmerBatchCreate,
+    FarmerBatchCreateResponse,
     FarmerCreate,
     FarmerDetailResponse,
     FarmerListItem,
@@ -175,6 +177,19 @@ class FarmerService:
             total_orders=total_orders,
         )
 
+    # ── team resolution (shared by single + batch create) ────────────────
+    async def _resolve_team_id(self, requested: int | None, *, user: User) -> int | None:
+        # Employees cannot choose a team — they're pinned to their own.
+        if user.role == UserRole.EMPLOYEE:
+            team_id = user.team_id
+        else:
+            # Admin/manager may set team_id explicitly; default to their own.
+            team_id = requested if requested is not None else user.team_id
+
+        if team_id is not None and not await self.repo.active_team_exists(team_id):
+            raise not_found("Team not found")
+        return team_id
+
     # ── create ───────────────────────────────────────────────────────────
     async def create_farmer(
         self, payload: FarmerCreate, *, user: User
@@ -182,15 +197,7 @@ class FarmerService:
         if not payload.name.strip():
             raise bad_request("Name is required")
 
-        # Employees cannot choose a team — they're pinned to their own.
-        if user.role == UserRole.EMPLOYEE:
-            team_id = user.team_id
-        else:
-            # Admin/manager may set team_id explicitly; default to their own.
-            team_id = payload.team_id if payload.team_id is not None else user.team_id
-
-        if team_id is not None and not await self.repo.active_team_exists(team_id):
-            raise not_found("Team not found")
+        team_id = await self._resolve_team_id(payload.team_id, user=user)
 
         farmer = Farmer(
             team_id=team_id,
@@ -215,6 +222,45 @@ class FarmerService:
         await self.db.commit()
         await self.db.refresh(farmer)
         return FarmerResponse.model_validate(farmer)
+
+    # ── batch create (Farmer Meet: one event, many attendees) ────────────
+    async def create_farmers_batch(
+        self, payload: FarmerBatchCreate, *, user: User
+    ) -> FarmerBatchCreateResponse:
+        """One team lookup, one shared location, one commit for every
+        attendee — a failure partway through rolls the whole batch back
+        instead of leaving a partial meet on record."""
+        team_id = await self._resolve_team_id(payload.team_id, user=user)
+
+        farmers = [
+            Farmer(
+                team_id=team_id,
+                created_by=user.id,
+                customer_type=payload.customer_type,
+                name=attendee.name.strip(),
+                phone=attendee.phone,
+                village=attendee.village.strip(),
+                district=payload.district,
+                address=payload.address,
+                pincode=payload.pincode,
+                landmark=payload.landmark,
+                lat=payload.lat,
+                lng=payload.lng,
+                total_cattle=0,
+                notes=payload.notes,
+                is_active=True,
+            )
+            for attendee in payload.attendees
+        ]
+        for farmer in farmers:
+            self.repo.add(farmer)
+        await self.db.commit()
+        for farmer in farmers:
+            await self.db.refresh(farmer)
+        return FarmerBatchCreateResponse(
+            created=[FarmerResponse.model_validate(f) for f in farmers],
+            count=len(farmers),
+        )
 
     # ── update (base info only) ──────────────────────────────────────────
     async def update_farmer(

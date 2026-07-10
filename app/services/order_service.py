@@ -29,12 +29,14 @@ class OrderService:
 
     @staticmethod
     def _to_response(
-        row: tuple[VisitOrder, str | None, str | None]
+        row: tuple[VisitOrder, str | None, str | None, str | None, int | None]
     ) -> VisitOrderResponse:
-        order, farmer_name, employee_name = row
+        order, farmer_name, employee_name, customer_type, target_order_bags = row
         resp = VisitOrderResponse.model_validate(order)
         resp.farmer_name = farmer_name
         resp.employee_name = employee_name
+        resp.customer_type = customer_type
+        resp.target_order_bags = target_order_bags
         return resp
 
     # ── pending list (admin/manager) ───────────────────────────────────
@@ -54,7 +56,9 @@ class OrderService:
             # for free; with several, they see all of their own teams' orders
             # (list_pending already accepts one team_id, so loop when >1).
             if team_id is None and len(managed) > 1:
-                rows: list[tuple[VisitOrder, str | None, str | None]] = []
+                rows: list[
+                    tuple[VisitOrder, str | None, str | None, str | None, int | None]
+                ] = []
                 for tid in managed:
                     rows.extend(await self.repo.list_pending(team_id=tid))
                 rows.sort(key=lambda r: r[0].created_at, reverse=True)

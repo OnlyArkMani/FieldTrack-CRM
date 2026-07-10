@@ -42,6 +42,7 @@ from app.models.crm import (
     VisitOrder,
     VisitOrgAnswer,
     VisitPhoto,
+    VisitPlanItem,
 )
 from app.models.enums import UserRole
 from app.models.user import User
@@ -206,6 +207,23 @@ class VisitService:
             plan_item = await self.repo.get_plan_item(payload.plan_item_id)
             if plan_item is not None:
                 purpose = plan_item.purpose
+        else:
+            # Ad-hoc visit — purpose (and, if given, a target) are picked on
+            # the spot rather than inherited from a pre-existing plan item.
+            purpose = payload.purpose
+            if payload.target_order_bags is not None:
+                # Give it its own (plan-less) VisitPlanItem so it carries a
+                # target the same way a pre-planned stop does (the Orders
+                # review page reads it from there).
+                plan_item = VisitPlanItem(
+                    plan_id=None,
+                    farmer_id=farmer.id,
+                    target_order_bags=payload.target_order_bags,
+                    purpose=payload.purpose,
+                    status="PLANNED",
+                )
+                self.repo.add(plan_item)
+                await self.db.flush()
 
         visit = Visit(
             employee_id=user.id,

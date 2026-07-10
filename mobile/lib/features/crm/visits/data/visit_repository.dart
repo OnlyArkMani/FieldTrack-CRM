@@ -24,12 +24,17 @@ class VisitRepository {
     required double lat,
     required double lng,
     int? planItemId,
+    int? targetOrderBags,
+    String? purpose,
   }) async {
     final data = await _api.post('/visits/check-in', body: {
       'farmer_id': farmerId,
       'lat': lat,
       'lng': lng,
       if (planItemId != null) 'plan_item_id': planItemId,
+      if (planItemId == null && targetOrderBags != null)
+        'target_order_bags': targetOrderBags,
+      if (planItemId == null && purpose != null) 'purpose': purpose,
     });
     return CheckInResult.fromJson(data);
   }

@@ -37,6 +37,11 @@ export default function VetRequestsPage() {
   const update = useUpdateVetStatus();
 
   const columns = [
+    {
+      key: 'employee',
+      header: 'Employee',
+      render: (r) => r.employee_name ?? '—',
+    },
     { key: 'customer', header: 'Customer', render: (r) => r.farmer_name },
     {
       key: 'type',
@@ -44,11 +49,6 @@ export default function VetRequestsPage() {
       render: (r) => <Badge color="var(--ft-secondary)">{r.customer_type}</Badge>,
     },
     { key: 'village', header: 'Village', render: (r) => r.village || '—' },
-    {
-      key: 'employee',
-      header: 'Executive',
-      render: (r) => r.employee_name ?? '—',
-    },
     {
       key: 'date',
       header: 'Requested',

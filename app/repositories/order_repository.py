@@ -3,7 +3,9 @@ access. DB access ONLY — no business rules, no commits, no HTTP."""
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.crm import Farmer, VisitOrder
+
+
+from app.models.crm import Farmer, Visit, VisitOrder, VisitPlanItem
 from app.models.user import User
 
 
@@ -16,18 +18,24 @@ class OrderRepository:
 
     async def list_pending(
         self, *, team_id: int | None = None
-    ) -> list[tuple[VisitOrder, str | None, str | None]]:
-        """SUBMITTED orders, newest first, with farmer/employee name attached
-        (list view — the review UI needs names, not just ids). VisitOrder has
-        no team_id of its own — scope via the capturing employee's team."""
+    ) -> list[tuple[VisitOrder, str | None, str | None, str | None, int | None]]:
+        """SUBMITTED orders, newest first, with farmer/employee name, the
+        farmer's customer type, and the bags targeted by the originating
+        visit plan item attached (list view — the review UI needs these, not
+        just ids). VisitOrder has no team_id of its own — scope via the
+        capturing employee's team."""
         stmt = (
             select(
                 VisitOrder,
                 Farmer.name.label("farmer_name"),
                 User.name.label("employee_name"),
+                Farmer.customer_type.label("customer_type"),
+                VisitPlanItem.target_order_bags.label("target_order_bags"),
             )
             .outerjoin(Farmer, Farmer.id == VisitOrder.farmer_id)
             .outerjoin(User, User.id == VisitOrder.employee_id)
+            .outerjoin(Visit, Visit.id == VisitOrder.visit_id)
+            .outerjoin(VisitPlanItem, VisitPlanItem.id == Visit.plan_item_id)
             .where(VisitOrder.status == "SUBMITTED")
         )
         if team_id is not None:

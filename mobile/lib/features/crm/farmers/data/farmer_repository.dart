@@ -69,6 +69,36 @@ class FarmerRepository {
     return detail(data['id'] as int);
   }
 
+  /// Create every attendee of one Farmer Meet in a single backend
+  /// transaction. All attendees share the venue's address/district/etc.;
+  /// name/phone/village vary per row.
+  Future<List<FarmerDetail>> createBatch({
+    required List<({String name, String phone, String village})> attendees,
+    String? village,
+    String? district,
+    String? address,
+    String? pincode,
+    String? landmark,
+    String? notes,
+    int? teamId,
+  }) async {
+    final data = await _api.post('/farmers/batch', body: {
+      'attendees': attendees
+          .map((a) => {'name': a.name, 'phone': a.phone, 'village': a.village})
+          .toList(),
+      if (village != null && village.isNotEmpty) 'village': village,
+      if (district != null && district.isNotEmpty) 'district': district,
+      if (address != null && address.isNotEmpty) 'address': address,
+      if (pincode != null && pincode.isNotEmpty) 'pincode': pincode,
+      if (landmark != null && landmark.isNotEmpty) 'landmark': landmark,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+      if (teamId != null) 'team_id': teamId,
+    });
+    return ((data['created'] as List<dynamic>?) ?? [])
+        .map((e) => FarmerDetail.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<void> update(int id, Map<String, dynamic> changes) async {
     await _api.put('/farmers/$id', body: changes);
   }

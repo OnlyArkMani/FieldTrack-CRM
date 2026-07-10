@@ -109,6 +109,39 @@ class FarmerResponse(BaseModel):
     updated_at: datetime
 
 
+# ── Farmer Meet batch create (one event, many attendees) ─────────────────
+class FarmerMeetAttendee(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    phone: str | None = Field(default=None, max_length=20)
+    # Each attendee's own village — distinct from the meet's venue village
+    # below, since attendees at one meet often come from different villages.
+    village: str = Field(min_length=1, max_length=200)
+
+    _v_phone = field_validator("phone")(_validate_phone)
+
+
+class FarmerBatchCreate(BaseModel):
+    """POST /farmers/batch — one Farmer Meet event, many attendees sharing
+    the same venue; only name/phone/village vary per attendee."""
+
+    customer_type: CustomerType = "FARMER_MEET"
+    village: str | None = Field(default=None, max_length=200)
+    district: str | None = Field(default=None, max_length=200)
+    address: str | None = None
+    pincode: str | None = Field(default=None, max_length=10)
+    landmark: str | None = Field(default=None, max_length=200)
+    team_id: int | None = None
+    lat: float | None = None
+    lng: float | None = None
+    notes: str | None = None
+    attendees: list[FarmerMeetAttendee] = Field(min_length=1, max_length=100)
+
+
+class FarmerBatchCreateResponse(BaseModel):
+    created: list[FarmerResponse]
+    count: int
+
+
 # ── Customer bulk import (admin preload) ─────────────────────────────────
 class CustomerImportError(BaseModel):
     row: int  # 1-based data row number (matches spreadsheet, header excluded)
@@ -548,6 +581,12 @@ class CheckInRequest(BaseModel):
     lat: float
     lng: float
     plan_item_id: int | None = None
+    # Bags targeted for this stop, entered on the spot for an ad-hoc visit
+    # (ignored when plan_item_id is set — that plan item's target wins).
+    target_order_bags: int | None = Field(default=None, ge=0)
+    # Purpose picked on the spot for an ad-hoc visit (ignored when
+    # plan_item_id is set — that plan item's purpose wins, as before).
+    purpose: VisitPurpose | None = None
 
 
 class CheckInResponse(BaseModel):
@@ -630,6 +669,10 @@ class VisitOrderResponse(BaseModel):
     # None when not populated by the query (e.g. per-visit orders_for()).
     farmer_name: str | None = None
     employee_name: str | None = None
+    customer_type: CustomerType | None = None
+    # Bags targeted by the visit plan item this order was captured against —
+    # None for unplanned visits/orders.
+    target_order_bags: int | None = None
 
     @computed_field
     @property

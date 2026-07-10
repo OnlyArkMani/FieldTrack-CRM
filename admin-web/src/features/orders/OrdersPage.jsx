@@ -46,17 +46,27 @@ export default function OrdersPage() {
   };
 
   const columns = [
-    {
-      key: 'farmer',
-      header: 'Farmer',
-      render: (o) => o.farmer_name ?? `Farmer #${o.farmer_id}`,
-    },
-    {
-      key: 'employee',
+     {
+      key: 'Employee',
       header: 'Employee',
       render: (o) => o.employee_name ?? `Employee #${o.employee_id}`,
     },
-    { key: 'bags', header: 'Bags', render: (o) => o.bags_count },
+    {
+      key: 'Customer',
+      header: 'Customer',
+      render: (o) => o.farmer_name ?? `Farmer #${o.farmer_id}`,
+    },
+    {
+      key: 'Customer Type',
+      header: 'Customer Type',
+      render: (o) => o.customer_type ?? '—',
+    },
+    {
+      key: 'target_bags',
+      header: 'Target Bags',
+      render: (o) => o.target_order_bags ?? '—',
+    },
+    { key: 'bags', header: 'Actual Bags', render: (o) => o.bags_count },
     { key: 'value', header: 'Value', render: (o) => money(o.total_value) },
     {
       key: 'delivery',

@@ -17,6 +17,7 @@ import '../../farmers/models/farmer.dart'
 import '../../farmers/providers/farmer_provider.dart';
 import '../../farmers/utils.dart';
 import '../../planning/providers/visit_plan_provider.dart';
+import '../../planning/widgets/plan_item_card.dart' show purposeLabel;
 import '../data/visit_repository.dart';
 import '../models/visit.dart';
 import '../widgets/step_indicator.dart';
@@ -26,6 +27,12 @@ const _breeds = ['Sahiwal', 'Murrah', 'HF Cross', 'Gir', 'Local', 'Other'];
 const _ageGroups = ['Calf', 'Heifer', 'Adult', 'Senior'];
 const _healthLevels = ['Excellent', 'Good', 'Fair', 'Poor'];
 const _payModes = [('CASH', 'Cash'), ('UPI', 'UPI'), ('CREDIT', 'Credit')];
+const _visitPurposes = [
+  'FIRST_VISIT',
+  'FOLLOW_UP',
+  'ORDER_COLLECTION',
+  'RELATIONSHIP_VISIT',
+];
 
 /// The guided visit form: check-in (step 0) then 4 sequential steps
 /// (Notes → Livestock → Order → Lead). Progress is saved to the backend after
@@ -50,6 +57,8 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
   CheckInResult? _checkIn;
   bool _showWarning = false;
   final _remark = TextEditingController();
+  final _targetBags = TextEditingController();
+  String _purpose = 'FIRST_VISIT';
 
   // notes
   final _highlights = TextEditingController();
@@ -128,7 +137,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
   void dispose() {
     _autosave?.cancel();
     for (final c in [
-      _remark, _highlights, _concerns, _interest, _cattle,
+      _remark, _targetBags, _highlights, _concerns, _interest, _cattle,
       _bagsPerMonth, _kgPerAnimal, _pricePerBag, _payMin, _payMax, _healthNotes,
       _orgMembers, _orgBrand, _orgMonthlyBags,
       _orgInterestedBags, _orgPricePerBag, _orgNotes,
@@ -178,6 +187,10 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
         lat: pos.lat,
         lng: pos.lng,
         planItemId: widget.planItemId,
+        targetOrderBags: widget.planItemId == null
+            ? int.tryParse(_targetBags.text.trim())
+            : null,
+        purpose: widget.planItemId == null ? _purpose : null,
       );
       if (!mounted) return;
       HapticFeedback.mediumImpact();
@@ -697,6 +710,28 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
               onPressed: _busy ? null : _continueAfterWarning,
             ),
           ] else ...[
+            if (widget.planItemId == null) ...[
+              DropdownButtonFormField<String>(
+                initialValue: _purpose,
+                decoration: const InputDecoration(labelText: 'Purpose of visit'),
+                items: _visitPurposes
+                    .map((p) => DropdownMenuItem(value: p, child: Text(purposeLabel(p))))
+                    .toList(),
+                onChanged: (v) => setState(() => _purpose = v ?? _purpose),
+              ),
+              const SizedBox(height: AppDimens.grid * 2),
+              TextField(
+                controller: _targetBags,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  labelText: 'Target bags for this visit (optional)',
+                  helperText:
+                      'Set a target now to track it like a planned visit.',
+                ),
+              ),
+              const SizedBox(height: AppDimens.grid * 2),
+            ],
             if (_error != null) ...[
               Text(_error!,
                   style: AppTextStyles.caption.copyWith(color: scheme.error)),

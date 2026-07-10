@@ -25,13 +25,6 @@ import { useUiStore } from '@/store/uiStore';
 
 // NAV uses either a route object or a section divider { section: label }
 const NAV = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/employees', label: 'Employees', icon: Users },
-  { to: '/teams', label: 'Teams', icon: Boxes },
-  { to: '/attendance', label: 'Attendance', icon: Fingerprint },
-  { to: '/map', label: 'Live Map', icon: Map },
-  { to: '/geofences', label: 'Geofences', icon: Hexagon },
-  { to: '/reports', label: 'Reports', icon: FileBarChart },
   { section: 'CRM' },
   { to: '/farmers', label: 'Customers', icon: Sprout },
   { to: '/planning', label: 'Visit Plans', icon: CalendarCheck },
@@ -40,6 +33,14 @@ const NAV = [
   { to: '/follow-ups', label: 'Follow-ups', icon: BellRing },
   { to: '/vet-requests', label: 'Vet Requests', icon: Stethoscope },
   { to: '/daily-reports', label: 'DSR', icon: ClipboardList },
+  { section: 'Operations' },
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/employees', label: 'Employees', icon: Users },
+  { to: '/teams', label: 'Teams', icon: Boxes },
+  { to: '/attendance', label: 'Attendance', icon: Fingerprint },
+  { to: '/map', label: 'Live Map', icon: Map },
+  { to: '/geofences', label: 'Geofences', icon: Hexagon },
+  { to: '/reports', label: 'Reports', icon: FileBarChart },
   { to: '/settings', label: 'Settings', icon: Settings },
   { to: '/settings/gps', label: 'GPS Tracking', icon: Radio },
 ];

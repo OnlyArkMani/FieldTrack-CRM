@@ -728,6 +728,16 @@ function CrmScorecard({ employeeId }) {
             value={data.orders_captured}
             color="var(--ft-primary)"
           />
+
+          <Mini
+            label="Order bags (Got/Target)"
+            value={`${data.bags_captured}/${data.target_order_bags}`}
+            color={
+              data.target_order_bags > 0 && data.bags_captured >= data.target_order_bags
+                ? 'var(--ft-status-active)'
+                : 'var(--ft-status-battery)'
+            }
+          />
           <Mini
             label="Unique visits"
             value={data.unique_farmers_visited}
