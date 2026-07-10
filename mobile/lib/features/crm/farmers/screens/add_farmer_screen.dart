@@ -87,7 +87,7 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
     final phone = _phone.text.trim();
 
     setState(() {
-      _villageError = village.isEmpty ? 'Village is required' : null;
+      _villageError = !_isFarmerMeet && village.isEmpty ? 'Village is required' : null;
       _districtError = district.isEmpty ? 'District is required' : null;
       _addressError = address.isEmpty ? 'Address is required' : null;
       if (pincode.isEmpty) {
@@ -114,7 +114,7 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
           : null;
     });
 
-    if (village.isEmpty ||
+    if ((!_isFarmerMeet && village.isEmpty) ||
         district.isEmpty ||
         address.isEmpty ||
         pincode.isEmpty ||
@@ -133,7 +133,6 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
       if (_isFarmerMeet) {
         final created = await ref.read(farmerRepositoryProvider).createBatch(
               attendees: _attendees,
-              village: village,
               district: district,
               address: address,
               landmark: _landmark.text.trim(),
@@ -412,14 +411,16 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
               prefixIcon: Icons.location_on_rounded,
             ),
             const SizedBox(height: AppDimens.grid * 2),
-            AppTextField(
-              label: 'Village/Town/City *',
-              controller: _village,
-              errorText: _villageError,
-              textInputAction: TextInputAction.next,
-              prefixIcon: Icons.home_work_rounded,
-            ),
-            const SizedBox(height: AppDimens.grid * 2),
+            if (!_isFarmerMeet) ...[
+              AppTextField(
+                label: 'Village/Town/City *',
+                controller: _village,
+                errorText: _villageError,
+                textInputAction: TextInputAction.next,
+                prefixIcon: Icons.home_work_rounded,
+              ),
+              const SizedBox(height: AppDimens.grid * 2),
+            ],
             AppTextField(
               label: 'District *',
               controller: _district,

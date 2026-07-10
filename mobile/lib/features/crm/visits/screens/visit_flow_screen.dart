@@ -723,6 +723,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
               TextField(
                 controller: _targetBags,
                 keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: const InputDecoration(
                   labelText: 'Target bags for this visit (optional)',
                   helperText:

@@ -310,26 +310,35 @@ async def crm_performance(
     # "Target order (bags)" question asked when a visit is planned) — plus
     # targets set on the spot for ad-hoc visits, which have no VisitPlan
     # (plan_id is null) and are instead scoped by the visit's own check-in.
+    # Deduplicated to one row per VisitPlanItem.id first — a plan item can have
+    # more than one Visit row against it (e.g. revisits, reconnects), and
+    # joining straight to Visit would otherwise sum target_order_bags once per
+    # matching Visit instead of once per plan item.
+    target_bags_items = (
+        select(VisitPlanItem.id, VisitPlanItem.target_order_bags)
+        .outerjoin(VisitPlan, VisitPlan.id == VisitPlanItem.plan_id)
+        .outerjoin(Visit, Visit.plan_item_id == VisitPlanItem.id)
+        .where(
+            or_(
+                and_(
+                    VisitPlan.employee_id == employee_id,
+                    VisitPlan.plan_date >= start_date,
+                    VisitPlan.plan_date <= end_date,
+                ),
+                and_(
+                    VisitPlanItem.plan_id.is_(None),
+                    Visit.employee_id == employee_id,
+                    func.date(Visit.check_in_at) >= start_date,
+                    func.date(Visit.check_in_at) <= end_date,
+                ),
+            )
+        )
+        .distinct()
+        .subquery()
+    )
     target_order_bags = (
         await db.execute(
-            select(func.coalesce(func.sum(VisitPlanItem.target_order_bags), 0))
-            .outerjoin(VisitPlan, VisitPlan.id == VisitPlanItem.plan_id)
-            .outerjoin(Visit, Visit.plan_item_id == VisitPlanItem.id)
-            .where(
-                or_(
-                    and_(
-                        VisitPlan.employee_id == employee_id,
-                        VisitPlan.plan_date >= start_date,
-                        VisitPlan.plan_date <= end_date,
-                    ),
-                    and_(
-                        VisitPlanItem.plan_id.is_(None),
-                        Visit.employee_id == employee_id,
-                        func.date(Visit.check_in_at) >= start_date,
-                        func.date(Visit.check_in_at) <= end_date,
-                    ),
-                )
-            )
+            select(func.coalesce(func.sum(target_bags_items.c.target_order_bags), 0))
         )
     ).scalar_one() or 0
 
