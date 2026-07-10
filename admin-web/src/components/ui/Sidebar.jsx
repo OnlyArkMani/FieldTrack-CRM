@@ -26,6 +26,7 @@ import { useUiStore } from '@/store/uiStore';
 // NAV uses either a route object or a section divider { section: label }
 const NAV = [
   { section: 'CRM' },
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/farmers', label: 'Customers', icon: Sprout },
   { to: '/planning', label: 'Visit Plans', icon: CalendarCheck },
   { to: '/leads', label: 'Lead Pipeline', icon: TrendingUp },
@@ -34,7 +35,6 @@ const NAV = [
   { to: '/vet-requests', label: 'Vet Requests', icon: Stethoscope },
   { to: '/daily-reports', label: 'DSR', icon: ClipboardList },
   { section: 'Operations' },
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/employees', label: 'Employees', icon: Users },
   { to: '/teams', label: 'Teams', icon: Boxes },
   { to: '/attendance', label: 'Attendance', icon: Fingerprint },

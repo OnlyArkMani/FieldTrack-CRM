@@ -79,3 +79,27 @@ class Team {
             .toList(),
       );
 }
+
+/// One team's target-vs-completed order bags for a day — mirrors
+/// TeamOrdersSummaryOut. GET /teams/orders-summary.
+class TeamOrdersSummary {
+  const TeamOrdersSummary({
+    required this.teamId,
+    required this.teamName,
+    this.targetOrderBags = 0,
+    this.completedOrderBags = 0,
+  });
+
+  final int teamId;
+  final String teamName;
+  final int targetOrderBags;
+  final int completedOrderBags;
+
+  factory TeamOrdersSummary.fromJson(Map<String, dynamic> json) =>
+      TeamOrdersSummary(
+        teamId: json['team_id'] as int,
+        teamName: (json['team_name'] as String?) ?? 'Unknown',
+        targetOrderBags: (json['target_order_bags'] as int?) ?? 0,
+        completedOrderBags: (json['completed_order_bags'] as int?) ?? 0,
+      );
+}

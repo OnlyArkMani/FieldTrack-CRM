@@ -55,4 +55,13 @@ class TeamRepository {
     final data = await _api.delete('/teams/$teamId/members/$userId');
     return Team.fromJson(data);
   }
+
+  /// Manager/admin only: target vs completed order bags for today, per team
+  /// in scope (a manager gets just their own team).
+  Future<List<TeamOrdersSummary>> ordersSummary() async {
+    final data = await _api.getList('/teams/orders-summary');
+    return data
+        .map((e) => TeamOrdersSummary.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
 }

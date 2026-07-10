@@ -9,6 +9,8 @@ import '../../../core/widgets/app_card.dart';
 import '../../attendance/widgets/attendance_status_tile.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../notifications/widgets/notification_bell.dart';
+import '../../teams/models/team.dart';
+import '../../teams/providers/team_provider.dart';
 
 /// Role-aware dashboard: managers get the team view (with quick access to
 /// the team directory & team management), employees the personal view. The
@@ -77,6 +79,8 @@ class DashboardScreen extends ConsumerWidget {
             ),
             const SizedBox(height: AppDimens.grid * 1.5),
             if (isManager) ...[
+              const _TeamOrdersTodayCard(),
+              const SizedBox(height: AppDimens.grid * 1.5),
               Row(
                 children: [
                   Expanded(
@@ -137,6 +141,109 @@ class DashboardScreen extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Manager-only: this team's target vs completed order bags for today.
+/// GET /teams/orders-summary — a manager's account only ever gets back the
+/// team(s) they manage, so this renders one row per team in scope.
+class _TeamOrdersTodayCard extends ConsumerWidget {
+  const _TeamOrdersTodayCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.appColors;
+    final scheme = Theme.of(context).colorScheme;
+    final summary = ref.watch(teamOrdersSummaryProvider);
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Team Orders Today',
+            style: AppTextStyles.bodyMedium.copyWith(color: scheme.onSurface),
+          ),
+          const SizedBox(height: AppDimens.grid),
+          summary.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: AppDimens.grid * 2),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (_, __) => Text(
+              'Could not load today\'s order progress.',
+              style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+            ),
+            data: (teams) => teams.isEmpty
+                ? Text(
+                    'No team to show.',
+                    style: AppTextStyles.caption
+                        .copyWith(color: colors.textSecondary),
+                  )
+                : Column(
+                    children: [
+                      for (var i = 0; i < teams.length; i++) ...[
+                        if (i > 0) const SizedBox(height: AppDimens.grid),
+                        _TeamOrdersRow(team: teams[i]),
+                      ],
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TeamOrdersRow extends StatelessWidget {
+  const _TeamOrdersRow({required this.team});
+  final TeamOrdersSummary team;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final scheme = Theme.of(context).colorScheme;
+    final target = team.targetOrderBags;
+    final completed = team.completedOrderBags;
+    final pct = target > 0 ? (completed / target * 100).clamp(0, 100) : 0.0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                team.teamName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.bodyMedium
+                    .copyWith(color: scheme.onSurface),
+              ),
+            ),
+            Text(
+              '$completed / $target bags',
+              style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            value: target > 0 ? completed / target : 0,
+            minHeight: 6,
+            backgroundColor: scheme.primary.withValues(alpha: 0.12),
+            valueColor: AlwaysStoppedAnimation(scheme.primary),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          target > 0 ? '${pct.round()}% of target' : 'No target set today',
+          style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+        ),
+      ],
     );
   }
 }

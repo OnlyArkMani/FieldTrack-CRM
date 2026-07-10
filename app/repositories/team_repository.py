@@ -11,9 +11,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from app.models.attendance import Attendance
+from app.models.crm import Visit, VisitOrder, VisitPlan, VisitPlanItem
 from app.models.enums import AttendanceStatus
 from app.models.misc import AuditLog
 from app.models.user import Team, User
+
+
+class TeamOrdersSummaryRow:
+    """Plain carrier for one team's target-vs-completed order bags for a day."""
+
+    def __init__(
+        self, *, team_id: int, team_name: str, target_order_bags: int, completed_order_bags: int
+    ) -> None:
+        self.team_id = team_id
+        self.team_name = team_name
+        self.target_order_bags = target_order_bags
+        self.completed_order_bags = completed_order_bags
 
 
 class TeamRow:
@@ -105,6 +118,98 @@ class TeamRepository:
                 present_today=int(row[3] or 0),
             )
             for row in result.all()
+        ]
+
+    async def orders_summary(
+        self, *, target_date: date, manager_id: int | None
+    ) -> list[TeamOrdersSummaryRow]:
+        """One row per active team: bags targeted for `target_date` (from
+        visit plans, plus ad-hoc same-day targets set at check-in) vs bags
+        actually captured via orders on visits checked in that day.
+        manager_id scopes to teams that manager owns; None = every active
+        team (admin)."""
+        teams_stmt = select(Team.id, Team.name).where(Team.is_active.is_(True))
+        if manager_id is not None:
+            teams_stmt = teams_stmt.where(Team.manager_id == manager_id)
+        teams = (await self.db.execute(teams_stmt)).all()
+        if not teams:
+            return []
+        team_ids = [t[0] for t in teams]
+
+        # Target bags, source 1: items on a submitted plan for the day.
+        planned_rows = (
+            await self.db.execute(
+                select(
+                    User.team_id,
+                    func.coalesce(func.sum(VisitPlanItem.target_order_bags), 0),
+                )
+                .select_from(VisitPlanItem)
+                .join(VisitPlan, VisitPlan.id == VisitPlanItem.plan_id)
+                .join(User, User.id == VisitPlan.employee_id)
+                .where(VisitPlan.plan_date == target_date, User.team_id.in_(team_ids))
+                .group_by(User.team_id)
+            )
+        ).all()
+
+        # Target bags, source 2: ad-hoc visits (no VisitPlan) with a target
+        # set at check-in, scoped by the visit's own date. Deduplicated to
+        # one row per plan item first — a plan item can have more than one
+        # Visit row against it (revisits), which would otherwise double-count
+        # the same target (see employees.py::crm_performance for the same fix).
+        adhoc_items = (
+            select(
+                User.team_id.label("team_id"),
+                VisitPlanItem.id.label("id"),
+                VisitPlanItem.target_order_bags.label("target_order_bags"),
+            )
+            .select_from(VisitPlanItem)
+            .join(Visit, Visit.plan_item_id == VisitPlanItem.id)
+            .join(User, User.id == Visit.employee_id)
+            .where(
+                VisitPlanItem.plan_id.is_(None),
+                func.date(Visit.check_in_at) == target_date,
+                User.team_id.in_(team_ids),
+            )
+            .distinct()
+            .subquery()
+        )
+        adhoc_rows = (
+            await self.db.execute(
+                select(
+                    adhoc_items.c.team_id,
+                    func.coalesce(func.sum(adhoc_items.c.target_order_bags), 0),
+                ).group_by(adhoc_items.c.team_id)
+            )
+        ).all()
+
+        target_by_team: dict[int, int] = {}
+        for team_id, total in [*planned_rows, *adhoc_rows]:
+            target_by_team[team_id] = target_by_team.get(team_id, 0) + int(total)
+
+        # Completed bags: orders captured via visits checked in that day.
+        completed_rows = (
+            await self.db.execute(
+                select(User.team_id, func.coalesce(func.sum(VisitOrder.bags_count), 0))
+                .select_from(VisitOrder)
+                .join(Visit, Visit.id == VisitOrder.visit_id)
+                .join(User, User.id == Visit.employee_id)
+                .where(
+                    func.date(Visit.check_in_at) == target_date,
+                    User.team_id.in_(team_ids),
+                )
+                .group_by(User.team_id)
+            )
+        ).all()
+        completed_by_team = {team_id: int(total) for team_id, total in completed_rows}
+
+        return [
+            TeamOrdersSummaryRow(
+                team_id=team_id,
+                team_name=team_name,
+                target_order_bags=target_by_team.get(team_id, 0),
+                completed_order_bags=completed_by_team.get(team_id, 0),
+            )
+            for team_id, team_name in teams
         ]
 
     async def get_stats_for(
