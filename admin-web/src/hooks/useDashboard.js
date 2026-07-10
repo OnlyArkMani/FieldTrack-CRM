@@ -67,3 +67,18 @@ export function useDashboard() {
     },
   });
 }
+
+/**
+ * Team-wise target vs completed order bags for today.
+ * GET /teams/orders-summary — admin sees every team.
+ */
+export function useTeamOrdersSummary() {
+  return useQuery({
+    queryKey: ['teams', 'orders-summary', todayISO()],
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const { data } = await api.get('/teams/orders-summary');
+      return data || [];
+    },
+  });
+}

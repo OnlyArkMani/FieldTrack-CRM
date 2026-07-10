@@ -9,7 +9,7 @@ import {
 import { Users, UserCheck, UserX, Activity, Route, MapPin, TrendingUp, ClipboardList, BellRing } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-import { useDashboard } from '@/hooks/useDashboard';
+import { useDashboard, useTeamOrdersSummary } from '@/hooks/useDashboard';
 import { useCrmDashboard } from '@/hooks/useCrm';
 import Card, { CardHeader } from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
@@ -51,9 +51,35 @@ const fmtLoc = (e) =>
 export default function DashboardPage() {
   const { data, isLoading } = useDashboard();
   const { data: crm } = useCrmDashboard();
+  const { data: teamOrders, isLoading: teamOrdersLoading } = useTeamOrdersSummary();
   const navigate = useNavigate();
   const d = data || {};
   const c = crm || {};
+
+  const teamOrdersColumns = [
+    { key: 'team_name', header: 'Team' },
+    {
+      key: 'target_order_bags',
+      header: 'Target Bags (Today)',
+      align: 'right',
+      render: (t) => t.target_order_bags.toLocaleString(),
+    },
+    {
+      key: 'completed_order_bags',
+      header: 'Completed Bags (Today)',
+      align: 'right',
+      render: (t) => t.completed_order_bags.toLocaleString(),
+    },
+    {
+      key: 'progress',
+      header: 'Progress',
+      align: 'right',
+      render: (t) =>
+        t.target_order_bags > 0
+          ? `${Math.round((t.completed_order_bags / t.target_order_bags) * 100)}%`
+          : '—',
+    },
+  ];
 
   const columns = [
     {
@@ -219,6 +245,22 @@ export default function DashboardPage() {
           />
         </Card>
       </div>
+
+      <Card padded={false}>
+        <div className="p-5 pb-3">
+          <CardHeader
+            title="Team Orders Today"
+            subtitle="Target bags (from visit plans) vs bags actually captured, per team"
+          />
+        </div>
+        <Table
+          columns={teamOrdersColumns}
+          rows={teamOrders || []}
+          rowKey={(t) => t.team_id}
+          loading={teamOrdersLoading}
+          empty="No teams yet"
+        />
+      </Card>
 
       <LeadPipelineCard />
     </div>

@@ -109,3 +109,10 @@ final teamListProvider =
 final teamDetailProvider = FutureProvider.family<Team, int>((ref, id) async {
   return ref.watch(teamRepositoryProvider).detail(id);
 });
+
+/// Manager/admin only: today's target vs completed order bags, per team in
+/// scope. Powers the Dashboard's "Team Orders Today" card.
+final teamOrdersSummaryProvider =
+    FutureProvider<List<TeamOrdersSummary>>((ref) async {
+  return ref.watch(teamRepositoryProvider).ordersSummary();
+});

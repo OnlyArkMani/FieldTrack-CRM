@@ -23,6 +23,7 @@ from app.schemas.team import (
     TeamCreate,
     TeamDetailOut,
     TeamMemberOut,
+    TeamOrdersSummaryOut,
     TeamOut,
     TeamUpdate,
 )
@@ -103,6 +104,26 @@ class TeamService:
         if actor.role == UserRole.EMPLOYEE:
             rows = [r for r in rows if r.id == actor.team_id]
         return [self._to_out(r) for r in rows]
+
+    # ── Orders summary (target vs completed bags, team-wise) ─────────────
+    async def get_orders_summary(
+        self, actor: User, target_date: date
+    ) -> list[TeamOrdersSummaryOut]:
+        # actor is always MANAGER/ADMIN here — the router depends on
+        # get_current_manager, which already rejects EMPLOYEE.
+        manager_id = actor.id if actor.role == UserRole.MANAGER else None
+        rows = await self.repo.orders_summary(
+            target_date=target_date, manager_id=manager_id
+        )
+        return [
+            TeamOrdersSummaryOut(
+                team_id=r.team_id,
+                team_name=r.team_name,
+                target_order_bags=r.target_order_bags,
+                completed_order_bags=r.completed_order_bags,
+            )
+            for r in rows
+        ]
 
     # ── Detail ────────────────────────────────────────────────────────────
     async def get_detail(self, team_id: int, actor: User) -> TeamDetailOut:

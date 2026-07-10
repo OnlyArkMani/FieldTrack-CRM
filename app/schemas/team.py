@@ -66,3 +66,13 @@ class TeamMemberOut(BaseModel):
 
 class TeamDetailOut(TeamOut):
     members: list[TeamMemberOut]
+
+
+class TeamOrdersSummaryOut(BaseModel):
+    """One team's order-bags progress for a single day — target set while
+    planning visits vs bags actually captured via orders that day."""
+
+    team_id: int
+    team_name: str
+    target_order_bags: int = 0
+    completed_order_bags: int = 0

@@ -5,17 +5,19 @@ AUTHZ:
   on mobile; admins manage on web). create/update/delete/membership are
   ADMIN-only per the project's role matrix.
 """
+from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import CurrentUser, get_current_admin, get_db
+from app.core.dependencies import CurrentUser, get_current_admin, get_current_manager, get_db
 from app.models.user import User
 from app.schemas.team import (
     AddMemberRequest,
     TeamCreate,
     TeamDetailOut,
+    TeamOrdersSummaryOut,
     TeamOut,
     TeamUpdate,
 )
@@ -36,6 +38,19 @@ async def list_teams(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[TeamOut]:
     return await TeamService(db).list_teams(user)
+
+
+@router.get("/orders-summary", response_model=list[TeamOrdersSummaryOut])
+async def orders_summary(
+    manager: Annotated[User, Depends(get_current_manager)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    target_date: date = Query(default=None, description="Defaults to today (UTC)"),
+) -> list[TeamOrdersSummaryOut]:
+    """Team-wise target vs completed order bags for one day (admin sees every
+    team; a manager sees only the team(s) they manage)."""
+    return await TeamService(db).get_orders_summary(
+        manager, target_date or date.today()
+    )
 
 
 @router.get("/{team_id}", response_model=TeamDetailOut)
