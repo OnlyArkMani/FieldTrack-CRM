@@ -170,6 +170,11 @@ class CrmPerformanceOut(_BaseModel):
     vet_requests_raised: int
     vet_requests_by_status: dict[str, int]
     orders_captured: int
+    # Target bags set while planning visits (VisitPlanItem.target_order_bags)
+    # vs bags actually captured via orders in the same range — the field
+    # equivalent of the Visits (Done/Planned) card, for order volume.
+    target_order_bags: int
+    bags_captured: int
     hot_leads: int
     warm_leads: int
     cold_leads: int
@@ -200,7 +205,7 @@ async def crm_performance(
     Accessible by managers and admins.
     """
     from datetime import timedelta, date as _date
-    from sqlalchemy import func, select, distinct, or_
+    from sqlalchemy import and_, func, select, distinct, or_
     from app.models.crm import (
         Visit, VisitOrder, Lead, FollowUp, DailyReport, VisitNote, Farmer,
         VisitPlan, VisitPlanItem,
@@ -301,6 +306,33 @@ async def crm_performance(
         )
     ).scalar_one() or 0
 
+    # Target bags set while planning visits in range (checklist-adjacent: the
+    # "Target order (bags)" question asked when a visit is planned) — plus
+    # targets set on the spot for ad-hoc visits, which have no VisitPlan
+    # (plan_id is null) and are instead scoped by the visit's own check-in.
+    target_order_bags = (
+        await db.execute(
+            select(func.coalesce(func.sum(VisitPlanItem.target_order_bags), 0))
+            .outerjoin(VisitPlan, VisitPlan.id == VisitPlanItem.plan_id)
+            .outerjoin(Visit, Visit.plan_item_id == VisitPlanItem.id)
+            .where(
+                or_(
+                    and_(
+                        VisitPlan.employee_id == employee_id,
+                        VisitPlan.plan_date >= start_date,
+                        VisitPlan.plan_date <= end_date,
+                    ),
+                    and_(
+                        VisitPlanItem.plan_id.is_(None),
+                        Visit.employee_id == employee_id,
+                        func.date(Visit.check_in_at) >= start_date,
+                        func.date(Visit.check_in_at) <= end_date,
+                    ),
+                )
+            )
+        )
+    ).scalar_one() or 0
+
     # Leads by status (employee-owned leads updated in range)
     leads_rows = (
         await db.execute(
@@ -378,6 +410,7 @@ async def crm_performance(
     for customer_type, order_count, bag_count in orders_by_type_rows:
         orders_by_type[customer_type] = order_count
         bags_by_type[customer_type] = int(bag_count)
+    bags_captured = sum(bags_by_type.values())
 
     # Visits with a remark captured (meeting highlights and/or farmer concerns)
     visits_with_remarks = (
@@ -406,6 +439,8 @@ async def crm_performance(
         vet_requests_raised=vet_requests_raised,
         vet_requests_by_status=vet_requests_by_status,
         orders_captured=orders_captured,
+        target_order_bags=target_order_bags,
+        bags_captured=bags_captured,
         hot_leads=hot_leads,
         warm_leads=warm_leads,
         cold_leads=cold_leads,

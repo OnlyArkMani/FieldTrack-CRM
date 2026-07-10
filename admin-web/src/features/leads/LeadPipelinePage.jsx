@@ -221,8 +221,9 @@ export default function LeadPipelinePage() {
             <table className="w-full text-left text-sm">
               <thead className="border-b border-border bg-surface/60 text-text-secondary">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Customer</th>
                   <th className="px-4 py-3 font-semibold">Employee</th>
+                  <th className="px-4 py-3 font-semibold">Customer</th>
+                  <th className="px-4 py-3 font-semibold">Customer Type</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold">Last Visit</th>
                   <th className="px-4 py-3 font-semibold">Follow-up</th>
@@ -237,25 +238,19 @@ export default function LeadPipelinePage() {
                       key={lead.id}
                       className={`border-t border-border/60 ${overdue ? 'bg-danger/5' : 'hover:bg-surface/40'}`}
                     >
+                      <td className="px-4 py-3 text-text-secondary">{lead.employee_name ?? '—'}</td>
                       <td className="px-4 py-3 font-medium text-text-primary">
-                        <div className="flex items-center gap-1.5">
-                          <span className="truncate max-w-[150px]">{lead.farmer_name ?? '—'}</span>
-                          {lead.customer_type && lead.customer_type !== 'FARMER_MEET' && (
-                            <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
-                              {lead.customer_type}
-                            </span>
-                          )}
-                        </div>
+                        <span className="truncate max-w-[150px] block">{lead.farmer_name ?? '—'}</span>
                         {overdue && (
                           <div className="text-xs text-danger font-medium mt-0.5">Overdue follow-up</div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-text-secondary">{lead.employee_name ?? '—'}</td>
+                      <td className="px-4 py-3 text-text-secondary">{lead.customer_type ?? '—'}</td>
                       <td className="px-4 py-3">
-                        <LeadBadge status={lead.status} />
+                        <LeadBadge status={lead.lead_status} />
                       </td>
                       <td className="px-4 py-3 text-text-secondary">
-                        {lead.last_visit_date ? dayjs(lead.last_visit_date).format('D MMM') : '—'}
+                        {lead.last_visit_at ? dayjs(lead.last_visit_at).format('D MMM') : '—'}
                       </td>
                       <td className="px-4 py-3 text-text-secondary">
                         {lead.follow_up_date

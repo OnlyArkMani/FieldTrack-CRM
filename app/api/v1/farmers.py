@@ -21,6 +21,8 @@ from app.models.user import User
 from app.schemas.common import CursorPage
 from app.schemas.crm import (
     CustomerImportResult,
+    FarmerBatchCreate,
+    FarmerBatchCreateResponse,
     FarmerCreate,
     FarmerDetailResponse,
     FarmerListItem,
@@ -190,6 +192,17 @@ async def create_farmer(
     """Create a farmer. Employees are pinned to their own team; admin/manager
     may set team_id explicitly."""
     return await FarmerService(db).create_farmer(body, user=user)
+
+
+@router.post("/batch", response_model=FarmerBatchCreateResponse, status_code=201)
+async def create_farmers_batch(
+    body: FarmerBatchCreate,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> FarmerBatchCreateResponse:
+    """Create every attendee of one Farmer Meet in a single transaction —
+    they share the event's location; only name/phone vary per attendee."""
+    return await FarmerService(db).create_farmers_batch(body, user=user)
 
 
 @router.put("/{farmer_id}", response_model=FarmerResponse)

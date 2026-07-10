@@ -57,6 +57,12 @@ class VisitPlanScreen extends ConsumerWidget {
             : attendanceState.isOnLeave
                 ? "You're on leave today"
                 : null;
+    // An added/edited stop only exists locally until "Save Plan" is tapped —
+    // starting a visit against it before that sends a plan_item_id the
+    // server has never seen, so the visit's target/purpose land as null in
+    // admin. Follow-ups aren't backed by a plan item, so they're exempt.
+    final planNotSavedReason =
+        !state.isLoading && !state.isSaved ? 'Save the plan first' : null;
 
     // Scoped ScaffoldMessenger: without this, "removed"/"saved" SnackBars are
     // hosted by the app-root messenger (above the Navigator) and keep showing
@@ -107,7 +113,7 @@ class VisitPlanScreen extends ConsumerWidget {
                 _StatusBar(state: state),
               Expanded(
                   child: _body(context, ref, state, notifier,
-                      visitBlockedReason, onLeaveThisDay)),
+                      visitBlockedReason, planNotSavedReason, onLeaveThisDay)),
               _BottomBar(
                   state: state, notifier: notifier, blocked: onLeaveThisDay),
             ],
@@ -124,6 +130,7 @@ class VisitPlanScreen extends ConsumerWidget {
     VisitPlanState state,
     VisitPlanNotifier notifier,
     String? visitBlockedReason,
+    String? planNotSavedReason,
     bool onLeaveThisDay,
   ) {
     if (state.isLoading) return const ShimmerList(count: 4);
@@ -149,11 +156,14 @@ class VisitPlanScreen extends ConsumerWidget {
     }
 
     final main = _mainList(context, ref, notifier, carryOver,
-        visitBlockedReason, state.date, onLeaveThisDay);
+        visitBlockedReason, planNotSavedReason, state.date, onLeaveThisDay);
     if (carryOver.isEmpty) return main;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Carry-over stops are already persisted from an earlier day, so an
+        // unsaved edit made to *other* items in today's draft doesn't block
+        // them — only the leave/attendance reason applies here.
         _CarryOverSection(
             items: carryOver,
             notifier: notifier,
@@ -169,6 +179,7 @@ class VisitPlanScreen extends ConsumerWidget {
     VisitPlanNotifier notifier,
     List<PlanItem> carryOver,
     String? visitBlockedReason,
+    String? planNotSavedReason,
     DateTime planDate,
     bool onLeaveThisDay,
   ) {
@@ -207,7 +218,8 @@ class VisitPlanScreen extends ConsumerWidget {
                 item: item,
                 index: index,
                 onStartVisit: () => _startVisit(context, item, completed),
-                disabledReason: visitBlockedReason,
+                disabledReason: _startReason(
+                    item, visitBlockedReason, planNotSavedReason),
                 onEdit: _editCallback(context, item, planDate, onLeaveThisDay),
                 trailing: ReorderableDragStartListener(
                   index: index,
@@ -239,7 +251,8 @@ class VisitPlanScreen extends ConsumerWidget {
                 item: active[i],
                 index: i,
                 onStartVisit: () => _startVisit(context, active[i], completed),
-                disabledReason: visitBlockedReason,
+                disabledReason: _startReason(
+                    active[i], visitBlockedReason, planNotSavedReason),
                 onEdit:
                     _editCallback(context, active[i], planDate, onLeaveThisDay),
               ),
@@ -295,6 +308,19 @@ class VisitPlanScreen extends ConsumerWidget {
       return null;
     }
     return () => EditVisitSheet.show(context, item, planDate);
+  }
+
+  /// Reason (if any) "Start Visit" is disabled for [item]. Leave/attendance
+  /// blocks everything; the unsaved-plan block only applies to real plan
+  /// items — a follow-up isn't backed by one, so it's never affected by it.
+  String? _startReason(
+    PlanItem item,
+    String? visitBlockedReason,
+    String? planNotSavedReason,
+  ) {
+    if (visitBlockedReason != null) return visitBlockedReason;
+    if (item.isFollowUp) return null;
+    return planNotSavedReason;
   }
 
   /// Same-day revisit guard: if this farmer was already completed today, warn
