@@ -171,11 +171,26 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
         perm == LocationPermission.deniedForever) {
       return null;
     }
-    final pos = await Geolocator.getCurrentPosition(
-      locationSettings:
-          const LocationSettings(accuracy: LocationAccuracy.medium, timeLimit: Duration(seconds: 45)),
-    );
-    return (lat: pos.latitude, lng: pos.longitude);
+    // In offline mode, Android can't use network-assisted GPS (A-GPS) so a
+    // raw satellite fix can take 30–90 s on the original 45 s timeout, making
+    // the loading spinner appear to freeze.  We try for 8 s instead; if we
+    // still can't get a fresh fix we fall back to the last cached position
+    // (always available once GPS has ever been used on the device), which is
+    // accurate enough for an offline check-in that will be verified server-side
+    // once connectivity is restored.
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 8),
+        ),
+      );
+      return (lat: pos.latitude, lng: pos.longitude);
+    } catch (_) {
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null) return (lat: last.latitude, lng: last.longitude);
+      rethrow; // no cached fix either — surface the error to the user
+    }
   }
 
   Future<void> _doCheckIn() async {
