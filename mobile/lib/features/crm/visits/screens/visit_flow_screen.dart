@@ -25,6 +25,7 @@ import '../data/visit_repository.dart';
 import '../models/visit.dart';
 import '../widgets/step_indicator.dart';
 import '../widgets/visit_extras.dart';
+import '../../../../services/sync/connectivity_service.dart';
 
 const _breeds = ['Sahiwal', 'Murrah', 'HF Cross', 'Gir', 'Local', 'Other'];
 const _ageGroups = ['Calf', 'Heifer', 'Adult', 'Senior'];
@@ -199,15 +200,37 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       _error = null;
     });
     try {
-      final pos = await _position();
-      if (!mounted) return;
-      if (pos == null) {
-        setState(() {
-          _busy = false;
-          _error = 'Location permission is required to check in.';
-        });
-        return;
+      // Try to get device GPS position. On failure (timeout or no cached fix)
+      // fall back to the farmer's stored coordinates when offline — the server
+      // runs the distance check server-side once the visit syncs, so using the
+      // farmer's own pin is safe for an offline check-in.
+      ({double lat, double lng}) pos;
+      try {
+        final p = await _position();
+        if (!mounted) return;
+        if (p == null) {
+          // Permission denied — only hard-block when online (server enforces
+          // distance). Offline we still want the visit queued.
+          final isOnline = ref.read(connectivityServiceProvider).current;
+          if (isOnline) {
+            setState(() {
+              _busy = false;
+              _error = 'Location permission is required to check in.';
+            });
+            return;
+          }
+          // Offline: fall through to farmer-coords fallback below.
+          throw Exception('permission_denied');
+        }
+        pos = p;
+      } catch (_) {
+        // GPS failed (timeout + no last-known-position) OR permission denied
+        // while offline → use the farmer's stored pin.
+        final farmer = ref.read(farmerDetailProvider(widget.farmerId)).value;
+        pos = (lat: farmer?.lat ?? 0.0, lng: farmer?.lng ?? 0.0);
       }
+
+      if (!mounted) return;
       final result = await _repo.checkIn(
         farmerId: widget.farmerId,
         lat: pos.lat,

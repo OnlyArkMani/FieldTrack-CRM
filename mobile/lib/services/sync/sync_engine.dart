@@ -42,7 +42,12 @@ class SyncEngine {
 
   static const _locationBatchSize = 50;
   static const _sessionBatchSize = 200;
-  static const _periodicInterval = Duration(minutes: 5);
+  // 60 s: the primary sync trigger is the instant-on-reconnect connectivity
+  // listener, but if that ever misses (race between state changes, or the radio
+  // subscription was temporarily dead due to a platform error), this periodic
+  // timer is the safety net. 5 min was too long — users would see "pending sync"
+  // for up to 5 min after getting internet back even though everything is fine.
+  static const _periodicInterval = Duration(seconds: 60);
   static const _failureNotificationThreshold = 3;
   static const _backoffSchedule = <Duration>[
     Duration(seconds: 30),
@@ -138,8 +143,14 @@ class SyncEngine {
   }
 
   Future<bool> _isOnline() async {
-    if (_connectivity.current) return true;
-    return _connectivity.checkNow();
+    try {
+      if (_connectivity.current) return true;
+      return await _connectivity.checkNow();
+    } catch (_) {
+      // Platform channel error (e.g. DeadSystemException on Android) —
+      // treat as offline so the sync pass aborts cleanly instead of crashing.
+      return false;
+    }
   }
 
   /// Ordered: independent user-level actions first (profile, leave), then

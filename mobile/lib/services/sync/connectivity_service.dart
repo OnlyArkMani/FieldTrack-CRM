@@ -39,8 +39,22 @@ class ConnectivityService {
   void start() {
     if (_started) return;
     _started = true;
-    // React to radio changes instantly…
-    _radioSub = Connectivity().onConnectivityChanged.listen((_) => _check());
+    // React to radio changes instantly. Wrapped in its own try-catch because
+    // the connectivity_plus platform channel can throw DeadSystemException on
+    // Android when the system process is killed under memory pressure — that
+    // native JNI error bypasses Dart's normal exception handling and would
+    // crash the app if not guarded here.
+    _radioSub = Connectivity().onConnectivityChanged.listen(
+      (_) => _check(),
+      // cancelOnError: false is critical — without it, a single platform-channel
+      // error (e.g. DeadSystemException on Android) cancels the subscription
+      // permanently, so the engine never detects connectivity-restored again
+      // for the rest of the session. The 30s poll is the only fallback once
+      // the subscription dies, meaning sync can be delayed by up to 30s.
+      // With cancelOnError: false the subscription stays alive after errors.
+      cancelOnError: false,
+      onError: (_) {/* platform error — subscription stays alive, poll covers us */},
+    );
     // …and re-verify on a 30s heartbeat (catches captive portals that the
     // radio thinks are fine).
     _poll = Timer.periodic(const Duration(seconds: 30), (_) => _check());
@@ -52,7 +66,18 @@ class ConnectivityService {
   Future<bool> _check() async {
     bool online;
     try {
-      final radio = await Connectivity().checkConnectivity();
+      // Isolated try-catch for the platform channel call — connectivity_plus
+      // can throw android.os.DeadSystemException (a native JNI error) when
+      // the Android system server is killed under memory pressure.  Without
+      // this guard the exception bypasses Dart's catch and crashes the app.
+      List<ConnectivityResult> radio;
+      try {
+        radio = await Connectivity().checkConnectivity();
+      } catch (_) {
+        // Native platform crash — treat as offline to avoid crashing the app.
+        radio = const [ConnectivityResult.none];
+      }
+
       if (radio.contains(ConnectivityResult.none)) {
         online = false;
       } else {

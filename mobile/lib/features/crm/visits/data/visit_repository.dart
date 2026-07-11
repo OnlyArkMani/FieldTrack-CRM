@@ -72,7 +72,11 @@ class VisitRepository {
     String? purpose,
     String? farmerName,
   }) async {
-    if (!_connectivity.current) {
+    // A negative farmerId is a local placeholder for a farmer created offline
+    // that hasn't synced yet — the server has never seen it, so an online call
+    // would always return 404 "Farmer not found" even if connectivity just
+    // came back. Always use the offline path until the farmer syncs.
+    if (!_connectivity.current || farmerId < 0) {
       return _checkInOffline(
         farmerId: farmerId,
         lat: lat,
