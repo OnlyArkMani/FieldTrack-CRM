@@ -126,14 +126,27 @@ class AttendanceService:
     async def _current_state(
         self, user_id: int, attendance: Attendance | None
     ) -> str:
-        """STARTED|ON_BREAK|RESUMED|ENDED|ON_LEAVE|NULL. Trusts the DB (last
-        session) when an attendance row is in hand; Redis is only the
-        no-DB-row fast path used before we've loaded today's row."""
+        """STARTED|ON_BREAK|RESUMED|ENDED|ON_LEAVE|NULL. DB is the source of
+        truth. When an attendance row is loaded, compute state from its
+        sessions. When no DB row exists, the state is definitively NULL —
+        any Redis entry is stale (DB was cleaned up, or the row was never
+        committed) and is deleted on the spot so future calls are fast."""
         if attendance is not None:
             return self._state_of(attendance)
-        # No row loaded: peek Redis, else NULL (no attendance today).
-        cached = await self.redis.hget(Keys.attendance_state(user_id), "state")
-        return cached or "NULL"
+        # No DB row for today → state is NULL regardless of what Redis holds.
+        key = Keys.attendance_state(user_id)
+        cached = await self.redis.hget(key, "state")
+        if cached:
+            # Stale Redis entry: DB row no longer exists. Remove it so the
+            # user isn't stuck and future reads skip the delete round-trip.
+            await self.redis.delete(key)
+            logger.warning(
+                "Cleared stale Redis attendance state '%s' for user %s "
+                "(no DB row for today)",
+                cached,
+                user_id,
+            )
+        return "NULL"
 
     async def _write_redis_state(
         self, user_id: int, state: str, attendance_id: int, since: datetime
@@ -288,7 +301,7 @@ class AttendanceService:
         state = await self._current_state(user_id, attendance)
         if attendance is None:
             return TodayAttendanceOut(
-                has_attendance=False, current_state="NULL", attendance=None
+                has_attendance=False, current_state=state, attendance=None
             )
         return TodayAttendanceOut(
             has_attendance=True,

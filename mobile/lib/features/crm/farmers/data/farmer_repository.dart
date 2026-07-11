@@ -44,7 +44,7 @@ class FarmerRepository {
     int? teamId,
   }) async {
     if (!_connectivity.current) {
-      return _offlineList(search: search);
+      return _offlineList(search: search, leadStatus: leadStatus);
     }
     final query = <String, dynamic>{'limit': limit};
     if (cursor != null) query['cursor'] = cursor;
@@ -174,6 +174,27 @@ class FarmerRepository {
     return item.copyWith(lastVisitAt: info.lastVisitAt, leadStatus: info.leadStatus);
   }
 
+  /// Injects the flat `lead_status` and `last_visit_at` fields that the
+  /// list endpoint returns but the detail endpoint omits, so cached detail
+  /// JSON stays readable by FarmerListItem.fromJson when used offline.
+  static Map<String, dynamic> _enrichForListCache(Map<String, dynamic> data) {
+    final enriched = Map<String, dynamic>.from(data);
+    // lead_status: read from nested current_lead if not already flat.
+    if (!enriched.containsKey('lead_status')) {
+      final cl = data['current_lead'] as Map<String, dynamic>?;
+      enriched['lead_status'] = cl?['status'];
+    }
+    // last_visit_at: read from the first recent visit (newest-first order).
+    if (!enriched.containsKey('last_visit_at')) {
+      final rv = data['recent_visits'] as List<dynamic>?;
+      if (rv != null && rv.isNotEmpty) {
+        enriched['last_visit_at'] =
+            (rv.first as Map<String, dynamic>)['check_in_at'];
+      }
+    }
+    return enriched;
+  }
+
   Future<void> _cacheListPage(Map<String, dynamic> data) async {
     final items = (data['items'] as List<dynamic>? ?? []);
     final byId = <int, String>{
@@ -183,7 +204,10 @@ class FarmerRepository {
     await _db.upsertCachedFarmers(byId);
   }
 
-  Future<FarmerPage> _offlineList({String? search}) async {
+  Future<FarmerPage> _offlineList({
+    String? search,
+    LeadStatus? leadStatus,
+  }) async {
     final unsynced = await _db.getAllUnsyncedFarmers();
     final cachedJson = await _db.getAllCachedFarmerJson();
     final pendingInfo = await _pendingVisitInfo();
@@ -195,7 +219,15 @@ class FarmerRepository {
           FarmerListItem.fromJson(jsonDecode(json) as Map<String, dynamic>),
           pendingInfo.byServerId,
         ),
-    ].where((f) => q == null || q.isEmpty || f.name.toLowerCase().contains(q)).toList();
+    ].where((f) {
+      if (q != null && q.isNotEmpty) {
+        final nameMatch = f.name.toLowerCase().contains(q);
+        final villageMatch = f.village?.toLowerCase().contains(q) ?? false;
+        if (!nameMatch && !villageMatch) return false;
+      }
+      if (leadStatus != null && f.leadStatus != leadStatus) return false;
+      return true;
+    }).toList();
     return FarmerPage(items: items, total: items.length, hasMore: false);
   }
 
@@ -208,7 +240,12 @@ class FarmerRepository {
     FarmerDetail base;
     if (_connectivity.current) {
       final data = await _api.get('/farmers/$id');
-      unawaited(_db.upsertCachedFarmer(id, jsonEncode(data)));
+      // The detail JSON has `current_lead` (nested) and `recent_visits` but
+      // NOT the flat `lead_status` / `last_visit_at` fields that the list
+      // endpoint returns. When this overwrites the list-cache entry,
+      // FarmerListItem.fromJson can no longer read the lead badge or last
+      // visit date offline. Inject them before storing.
+      unawaited(_db.upsertCachedFarmer(id, jsonEncode(_enrichForListCache(data))));
       base = FarmerDetail.fromJson(data);
     } else {
       final cached = await _db.getCachedFarmerJson(id);
@@ -242,6 +279,23 @@ class FarmerRepository {
       farmerLocalId: farmerLocalId,
     );
     if (pending.isEmpty) return base;
+
+    // Pick up the lead status from the offline-completed visit — the server
+    // hasn't seen it yet so base.currentLead is stale until sync.
+    final pendingInfo = await _pendingVisitInfo();
+    CurrentLead? pendingLead;
+    if (farmerId != null) {
+      final info = pendingInfo.byServerId[farmerId];
+      if (info?.leadStatus != null) {
+        pendingLead = CurrentLead(status: info!.leadStatus!, changedAt: info.lastVisitAt);
+      }
+    } else if (farmerLocalId != null) {
+      final info = pendingInfo.byLocalId[farmerLocalId];
+      if (info?.leadStatus != null) {
+        pendingLead = CurrentLead(status: info!.leadStatus!, changedAt: info.lastVisitAt);
+      }
+    }
+
     return FarmerDetail(
       id: base.id,
       customerType: base.customerType,
@@ -264,7 +318,7 @@ class FarmerRepository {
       isActive: base.isActive,
       createdAt: base.createdAt,
       updatedAt: base.updatedAt,
-      currentLead: base.currentLead,
+      currentLead: pendingLead ?? base.currentLead,
       // Newest first, matching the server's own ordering — an unsynced
       // visit is always the most recent thing that's happened here.
       recentVisits: [...pending, ...base.recentVisits],

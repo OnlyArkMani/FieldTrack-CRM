@@ -10,6 +10,8 @@ class RouteData {
     required this.points,
     required this.rawCount,
     required this.simplified,
+    this.isFromCache = false,
+    this.cachedAt,
   });
 
   final int userId;
@@ -17,6 +19,12 @@ class RouteData {
   final List<LatLng> points;
   final int rawCount;
   final bool simplified;
+
+  /// True when the data came from the local SharedPreferences cache (offline).
+  final bool isFromCache;
+
+  /// When the cache was last written from a live server response.
+  final DateTime? cachedAt;
 
   factory RouteData.fromJson(Map<String, dynamic> json) => RouteData(
         userId: json['user_id'] as int,
@@ -30,6 +38,19 @@ class RouteData {
                 ))
             .toList(),
       );
+
+  factory RouteData.fromCached(Map<String, dynamic> json, DateTime? cachedAt) {
+    final base = RouteData.fromJson(json);
+    return RouteData(
+      userId: base.userId,
+      date: base.date,
+      points: base.points,
+      rawCount: base.rawCount,
+      simplified: base.simplified,
+      isFromCache: true,
+      cachedAt: cachedAt,
+    );
+  }
 }
 
 enum LiveStatusValue {

@@ -68,6 +68,9 @@ class _EditVisitFlowState extends ConsumerState<_EditVisitFlow> {
     super.dispose();
   }
 
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
   static TimeOfDay? _parseTimeSlot(String? slot) {
     if (slot == null || slot.length < 5) return null;
     final hour = int.tryParse(slot.substring(0, 2));
@@ -86,12 +89,18 @@ class _EditVisitFlowState extends ConsumerState<_EditVisitFlow> {
         : '${_time!.hour.toString().padLeft(2, '0')}:'
             '${_time!.minute.toString().padLeft(2, '0')}:00';
     final targetBags = int.tryParse(_targetBagsController.text.trim());
+    final dayChanged = !_sameDay(_day, widget.currentDay);
     final ok = await ref.read(visitPlanProvider.notifier).editItem(
           widget.item,
           timeSlot: slot,
           purpose: _purpose,
           targetOrderBags: targetBags,
-          planDate: _day,
+          // Only non-null when the day actually changed — VisitPlanNotifier
+          // .editItem/VisitPlanRepository.updateItem both key their
+          // same-day-vs-cross-day handling off this being null, so passing
+          // the unchanged day here would wrongly treat every edit as a
+          // cross-day move.
+          planDate: dayChanged ? _day : null,
         );
     if (!mounted) return;
     if (ok) {

@@ -2,10 +2,13 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exceptions.dart';
 import '../../../core/storage/token_storage.dart';
+import '../../../core/theme/app_theme.dart' show sharedPreferencesProvider;
+import '../../../local_db/database_helper.dart';
 import '../../../services/sync/connectivity_service.dart';
 import '../models/user.dart';
 
@@ -14,11 +17,14 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
     ref.watch(apiClientProvider),
     ref.watch(tokenStorageProvider),
     ref.watch(connectivityServiceProvider),
+    ref.watch(sharedPreferencesProvider),
   );
 });
 
 class AuthRepository {
-  AuthRepository(this._api, this._tokens, this._connectivity);
+  AuthRepository(this._api, this._tokens, this._connectivity, this._prefs);
+
+  final SharedPreferences _prefs;
 
   final ApiClient _api;
   final TokenStorage _tokens;
@@ -39,7 +45,13 @@ class AuthRepository {
   Future<void> _cacheUser(User user) =>
       _tokens.saveUserJson(jsonEncode(user.toJson()));
 
+  // Survives _tokens.clear() because it uses a different key prefix.
+  static const _kLastUserId = 'session_last_user_id';
+
   Future<User> login(String email, String password) async {
+    // Read before tokens are cleared — survives logout because it's stored
+    // under a key that _tokens.clear() does not touch.
+    final previousUserId = _prefs.getInt(_kLastUserId);
     final data = await _api.post('/auth/login', body: {
       'email': email.trim().toLowerCase(),
       'password': password,
@@ -51,6 +63,12 @@ class AuthRepository {
     );
     final user = User.fromJson(data['user'] as Map<String, dynamic>);
     await _cacheUser(user);
+    await _prefs.setInt(_kLastUserId, user.id);
+    // Different employee on the same device: wipe the previous user's unsynced
+    // queue so their pending visits/farmers don't sync under the new session.
+    if (previousUserId != null && previousUserId != user.id) {
+      await DatabaseHelper.instance.clearAllUserData();
+    }
     return user;
   }
 
@@ -67,7 +85,20 @@ class AuthRepository {
     } catch (_) {
       // Offline logout still logs out locally; server token expires anyway.
     }
+    // Only wipe the read cache (SharedPreferences cached_* keys). The SQLite
+    // pending queue (unsynced visits, farmers, etc.) is intentionally kept so
+    // the same employee logging back in doesn't lose unsynced work. If a
+    // *different* employee logs in next, login() detects the user-id change
+    // and wipes the queue at that point.
+    await _clearCachedPrefs();
     await _tokens.clear();
+  }
+
+  Future<void> _clearCachedPrefs() async {
+    final keys = _prefs.getKeys().where((k) => k.startsWith('cached_')).toList();
+    for (final k in keys) {
+      await _prefs.remove(k);
+    }
   }
 
   Future<void> forgotPassword(String email) async {

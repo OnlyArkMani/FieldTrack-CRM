@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_exceptions.dart';
 import '../../core/storage/token_storage.dart';
+import '../../core/theme/app_theme.dart' show sharedPreferencesProvider;
 import '../../local_db/database_helper.dart';
 import '../location/location_service.dart';
 import 'connectivity_service.dart';
@@ -289,6 +290,8 @@ class SyncEngine {
   // ── Visits (offline check-in + sub-actions) ───────────────────────────
   Future<void> _syncVisits() async {
     final pending = await _db.getPendingVisits();
+    bool anyCompleted = false;
+    bool anyVet = false;
     for (final visit in pending) {
       try {
         var serverId = visit.visitServerId;
@@ -296,7 +299,11 @@ class SyncEngine {
           serverId = await _checkInPendingVisit(visit);
           if (serverId == null) continue; // farmer not resolvable yet
         }
+        final hadComplete = (await _db.getPendingVisit(visit.localId))?.completeJson != null;
+        final hadVet = (await _db.getPendingVisit(visit.localId))?.vetJson != null;
         await _syncVisitSubActions(visit.localId, serverId);
+        if (hadComplete) anyCompleted = true;
+        if (hadVet) anyVet = true;
 
         // Re-read: sub-action syncing clears fields as it goes, so this
         // reflects what's actually still outstanding.
@@ -313,6 +320,10 @@ class SyncEngine {
         rethrow;
       }
     }
+    // Refresh read caches once after the whole pass rather than once per
+    // visit — prevents parallel writes racing on the same prefs key.
+    if (anyCompleted) unawaited(_refreshLeadsCache());
+    if (anyVet) unawaited(_refreshVetCache());
   }
 
   /// Posts check-in for a visit that hasn't synced yet. Returns the new
@@ -331,6 +342,20 @@ class SyncEngine {
       ...jsonDecode(visit.checkInPayloadJson) as Map<String, dynamic>,
       'farmer_id': farmerId,
     };
+
+    // If this visit was checked in offline from an offline-created plan item,
+    // the check-in payload has '_local_plan_item_id' (negative) instead of
+    // 'plan_item_id'. Resolve it to the real server ID now that the plan has
+    // synced and stored the mapping.
+    final localPlanItemId = payload['_local_plan_item_id'] as int?;
+    if (localPlanItemId != null) {
+      final serverPlanItemId = await _db.resolveServerId(localPlanItemId.toString());
+      if (serverPlanItemId != null) {
+        payload['plan_item_id'] = serverPlanItemId;
+      }
+      payload.remove('_local_plan_item_id');
+    }
+
     final data = await _api.post('/visits/check-in', body: payload);
     final serverId = data['visit_id'] as int;
     await _db.setIdMapping(
@@ -404,9 +429,56 @@ class SyncEngine {
 
     visit = await _db.getPendingVisit(localId);
     if (visit?.completeJson != null) {
-      await _api.post('/visits/$serverId/complete',
-          body: jsonDecode(visit!.completeJson!) as Map<String, dynamic>);
+      final completeData =
+          jsonDecode(visit!.completeJson!) as Map<String, dynamic>;
+      await _api.post('/visits/$serverId/complete', body: completeData);
       await _db.clearVisitField(localId, 'complete_json');
+      // Follow-ups cache refresh happens here (per-visit, conditional on
+      // follow_up_date). Leads cache refresh is batched in _syncVisits()
+      // after the full pass to avoid parallel writes racing on the prefs key.
+      if (completeData.containsKey('follow_up_date')) {
+        unawaited(_refreshFollowUpsCache());
+      }
+    }
+  }
+
+  Future<void> _refreshVetCache() async {
+    try {
+      final data = await _api.getList('/vet-requests');
+      final prefs = _ref.read(sharedPreferencesProvider);
+      await prefs.setString('cached_vet_requests', jsonEncode(data));
+    } catch (_) {
+      // Best-effort: vet screen will re-fetch when opened online.
+    }
+  }
+
+  Future<void> _refreshLeadsCache() async {
+    try {
+      final data = await _api.getList('/leads/my');
+      final prefs = _ref.read(sharedPreferencesProvider);
+      await prefs.setString('cached_my_leads', jsonEncode(data));
+    } catch (_) {
+      // Best-effort: leads screen will re-fetch when opened online.
+    }
+  }
+
+  Future<void> _refreshFollowUpsCache() async {
+    try {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      String ymd(DateTime d) =>
+          '${d.year.toString().padLeft(4, '0')}-'
+          '${d.month.toString().padLeft(2, '0')}-'
+          '${d.day.toString().padLeft(2, '0')}';
+      final data = await _api.getList('/follow-ups/my', query: {
+        'date_from': ymd(today),
+        'date_to': ymd(today.add(const Duration(days: 7))),
+      });
+      final prefs = _ref.read(sharedPreferencesProvider);
+      await prefs.setString('cached_my_follow_ups', jsonEncode(data));
+    } catch (_) {
+      // Best-effort: if this fails the user just needs to open the
+      // follow-ups screen once while online to get the updated list.
     }
   }
 
@@ -539,10 +611,35 @@ class SyncEngine {
         // unresolved farmer on a normal visit.
         if (!allResolved) continue;
 
-        await _api.post('/visit-plans', body: {
+        // Collect local item IDs before stripping them from the payload.
+        final localItemIds = [
+          for (final item in resolvedItems) item['_local_item_id'] as int?,
+        ];
+        for (final item in resolvedItems) {
+          item.remove('_local_item_id');
+        }
+
+        final response = await _api.post('/visit-plans', body: {
           'plan_date': plan.planDate,
           'items': resolvedItems,
         });
+
+        // Store plan_item local→server ID mappings so _checkInPendingVisit can
+        // inject the real plan_item_id when syncing visits from offline plans.
+        final serverItems =
+            ((response['items'] as List?)?.cast<Map<String, dynamic>>()) ?? [];
+        for (var i = 0; i < localItemIds.length && i < serverItems.length; i++) {
+          final localItemId = localItemIds[i];
+          final serverItemId = serverItems[i]['id'] as int?;
+          if (localItemId != null && serverItemId != null) {
+            await _db.setIdMapping(
+              localId: localItemId.toString(),
+              entityType: 'plan_item',
+              serverId: serverItemId,
+            );
+          }
+        }
+
         await _db.deletePendingVisitPlan(plan.planDate);
       } on ValidationException {
         await _db.markVisitPlanNeedsAttention(

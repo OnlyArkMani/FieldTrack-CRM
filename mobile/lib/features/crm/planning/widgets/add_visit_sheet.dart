@@ -7,6 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_exceptions.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../services/sync/connectivity_service.dart';
+import '../../../attendance/providers/upcoming_leaves_provider.dart'
+    show isLeaveDateCached;
 import '../../../../core/widgets/app_bottom_sheet.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
@@ -103,6 +106,16 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
   }
 
   void _add() {
+    final offline = !ref.read(connectivityServiceProvider).current;
+    if (offline) {
+      final planDate = ref.read(visitPlanProvider).date;
+      final prefs = ref.read(sharedPreferencesProvider);
+      if (isLeaveDateCached(prefs, planDate)) {
+        setState(() => _error = "You're on leave on that day — pick a different date.");
+        return;
+      }
+    }
+
     final farmer = _selected!;
     final id = -DateTime.now().microsecondsSinceEpoch;
     final slot = _time == null
@@ -304,6 +317,12 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
             hintText: 'e.g. 10 (optional)',
           ),
         ),
+        if (_error != null) ...[
+          const SizedBox(height: AppDimens.grid * 1.5),
+          Text(_error!,
+              style: AppTextStyles.caption
+                  .copyWith(color: Theme.of(context).colorScheme.error)),
+        ],
         const SizedBox(height: AppDimens.grid * 2.5),
         AppButton(
           label: 'Add to Plan',

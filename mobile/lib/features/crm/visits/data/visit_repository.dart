@@ -83,26 +83,32 @@ class VisitRepository {
         farmerName: farmerName ?? '',
       );
     }
+    // Only send plan_item_id if it's a real server ID (positive). A negative
+    // ID means the plan was created offline and hasn't synced yet — the server
+    // can't find it, so send target_order_bags instead so it creates an ad-hoc
+    // plan item and the target shows in admin.
+    final hasRealPlanItem = planItemId != null && planItemId > 0;
     final data = await _api.post('/visits/check-in', body: {
       'farmer_id': farmerId,
       'lat': lat,
       'lng': lng,
-      if (planItemId != null) 'plan_item_id': planItemId,
-      if (planItemId == null && targetOrderBags != null)
-        'target_order_bags': targetOrderBags,
-      if (planItemId == null && purpose != null) 'purpose': purpose,
+      if (hasRealPlanItem) 'plan_item_id': planItemId,
+      if (!hasRealPlanItem && targetOrderBags != null) 'target_order_bags': targetOrderBags,
+      if (!hasRealPlanItem && purpose != null) 'purpose': purpose,
     });
-    if (planItemId != null || purpose != null || targetOrderBags != null) {
-      unawaited(_prefs.setString(
-        _checkInContextKey(data['visit_id'] as int),
-        jsonEncode({
-          if (planItemId != null) 'plan_item_id': planItemId,
-          if (planItemId == null && targetOrderBags != null)
-            'target_order_bags': targetOrderBags,
-          if (planItemId == null && purpose != null) 'purpose': purpose,
-        }),
-      ));
-    }
+    // Always persist farmer_id so offline sub-actions (complete, notes, etc.)
+    // can store it on the pending row — without it, _pendingVisitInfo can't
+    // associate the row with this farmer and lead/visit status never reflects.
+    unawaited(_prefs.setString(
+      _checkInContextKey(data['visit_id'] as int),
+      jsonEncode({
+        'farmer_id': farmerId,
+        if (planItemId != null) 'plan_item_id': planItemId,
+        if (planItemId == null && targetOrderBags != null)
+          'target_order_bags': targetOrderBags,
+        if (planItemId == null && purpose != null) 'purpose': purpose,
+      }),
+    ));
     return CheckInResult.fromJson(data);
   }
 
@@ -145,14 +151,22 @@ class VisitRepository {
     }
 
     final localId = _uuid.v4();
-    final payload = {
+    // Same rule as the online path: only include plan_item_id if it's a real
+    // server ID. Negative means the plan was offline-created and not yet
+    // synced — send target_order_bags so the server can create an ad-hoc
+    // plan item when this check-in eventually syncs.
+    final hasRealPlanItem = planItemId != null && planItemId > 0;
+    final payload = <String, dynamic>{
       'lat': lat,
       'lng': lng,
-      if (planItemId != null) 'plan_item_id': planItemId,
-      if (planItemId == null && targetOrderBags != null)
-        'target_order_bags': targetOrderBags,
-      if (planItemId == null && purpose != null) 'purpose': purpose,
       'client_id': localId,
+      if (hasRealPlanItem) 'plan_item_id': planItemId,
+      // Stash the negative local ID so sync_engine can resolve it to the real
+      // server plan_item_id once the plan syncs, and so _applyPendingVisitProgress
+      // can immediately mark this item COMPLETED/IN_PROGRESS on the plan screen.
+      if (!hasRealPlanItem && planItemId != null) '_local_plan_item_id': planItemId,
+      if (!hasRealPlanItem && targetOrderBags != null) 'target_order_bags': targetOrderBags,
+      if (!hasRealPlanItem && purpose != null) 'purpose': purpose,
     };
 
     await _db.insertPendingVisit(
@@ -191,14 +205,14 @@ class VisitRepository {
   /// checked in online (real id; row created on first offline sub-action).
   Future<String> _resolvePendingVisitLocalId(int visitId) async {
     if (visitId >= 0) {
-      // Seeds the placeholder row's check-in payload with the plan_item_id
-      // remembered at check-in time (see checkIn's online branch) — a
-      // no-op if a row already exists (getOrCreatePendingVisitForServerId
-      // only uses this on first creation).
-      final context = _prefs.getString(_checkInContextKey(visitId));
+      final contextStr = _prefs.getString(_checkInContextKey(visitId));
+      final ctx = contextStr != null
+          ? jsonDecode(contextStr) as Map<String, dynamic>
+          : null;
       return _db.getOrCreatePendingVisitForServerId(
         visitId,
-        checkInPayloadJson: context,
+        checkInPayloadJson: contextStr,
+        farmerServerId: ctx?['farmer_id'] as int?,
       );
     }
     final unsynced = await _db.getAllUnsyncedVisits();
@@ -503,6 +517,22 @@ class VisitRepository {
           village: f['village'] as String?,
           customerType: CustomerType.fromWire(f['customer_type'] as String?),
         );
+      }
+      // Farmer synced away (deleted from pending_farmers) — look it up in
+      // id_mappings so the visit detail is not missing farmer info.
+      final serverId = await _db.resolveServerId(farmerLocalId);
+      if (serverId != null) {
+        final json = await _db.getCachedFarmerJson(serverId);
+        if (json != null) {
+          final f = jsonDecode(json) as Map<String, dynamic>;
+          return (
+            id: serverId,
+            name: (f['name'] as String?) ?? 'Unknown',
+            village: f['village'] as String?,
+            customerType: CustomerType.fromWire(f['customer_type'] as String?),
+          );
+        }
+        return (id: serverId, name: 'Unknown', village: null, customerType: CustomerType.farmer);
       }
     }
     return null;

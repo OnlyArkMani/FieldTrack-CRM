@@ -16,6 +16,7 @@ import '../../farmers/models/farmer.dart'
     show CustomerType, LeadStatus, LivestockProfile;
 import '../../farmers/providers/farmer_provider.dart';
 import '../../farmers/utils.dart';
+import '../../followups/data/follow_up_repository.dart' show myFollowUpsProvider;
 import '../../leads/data/lead_repository.dart' show myLeadsProvider;
 import '../../planning/providers/visit_plan_provider.dart';
 import '../../planning/widgets/plan_item_card.dart' show purposeLabel;
@@ -40,10 +41,18 @@ const _visitPurposes = [
 /// (Notes → Livestock → Order → Lead). Progress is saved to the backend after
 /// each step; notes auto-save every 30s.
 class VisitFlowScreen extends ConsumerStatefulWidget {
-  const VisitFlowScreen({super.key, required this.farmerId, this.planItemId});
+  const VisitFlowScreen({
+    super.key,
+    required this.farmerId,
+    this.planItemId,
+    this.planTargetOrderBags,
+    this.planPurpose,
+  });
 
   final int farmerId;
   final int? planItemId;
+  final int? planTargetOrderBags;
+  final String? planPurpose;
 
   @override
   ConsumerState<VisitFlowScreen> createState() => _VisitFlowScreenState();
@@ -164,7 +173,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
     }
     final pos = await Geolocator.getCurrentPosition(
       locationSettings:
-          const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 15)),
+          const LocationSettings(accuracy: LocationAccuracy.medium, timeLimit: Duration(seconds: 45)),
     );
     return (lat: pos.latitude, lng: pos.longitude);
   }
@@ -191,8 +200,8 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
         planItemId: widget.planItemId,
         targetOrderBags: widget.planItemId == null
             ? int.tryParse(_targetBags.text.trim())
-            : null,
-        purpose: widget.planItemId == null ? _purpose : null,
+            : widget.planTargetOrderBags,
+        purpose: widget.planItemId == null ? _purpose : widget.planPurpose,
         farmerName: ref.read(farmerDetailProvider(widget.farmerId)).value?.name,
       );
       if (!mounted) return;
@@ -558,6 +567,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       ref.read(farmerListProvider.notifier).refresh(isRefresh: true);
       ref.read(visitPlanProvider.notifier).load();
       ref.invalidate(myLeadsProvider);
+      ref.invalidate(myFollowUpsProvider);
       ref.invalidate(vetRequestsProvider);
       if (!mounted) return;
       HapticFeedback.heavyImpact();

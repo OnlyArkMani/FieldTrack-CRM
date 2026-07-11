@@ -826,6 +826,7 @@ class DatabaseHelper {
   Future<String> getOrCreatePendingVisitForServerId(
     int serverId, {
     String? checkInPayloadJson,
+    int? farmerServerId,
   }) async {
     final existing = await getPendingVisitByServerId(serverId);
     if (existing != null) return existing.localId;
@@ -834,6 +835,7 @@ class DatabaseHelper {
       localId: localId,
       checkInPayloadJson: checkInPayloadJson ?? '{}',
       visitServerId: serverId,
+      farmerServerId: farmerServerId,
     );
     return localId;
   }
@@ -1291,6 +1293,29 @@ class DatabaseHelper {
       where: 'local_id = ?',
       whereArgs: [localId],
     );
+  }
+
+  /// Wipes every user-specific SQLite table. Called only when a *different*
+  /// employee logs in — prevents the previous user's pending queue from
+  /// syncing under the new session.
+  Future<void> clearAllUserData() async {
+    final db = await database;
+    await db.transaction((txn) async {
+      for (final table in [
+        'cached_farmers',
+        'pending_visits',
+        'pending_farmers',
+        'id_mappings',
+        'pending_visit_plans',
+        'pending_plan_item_actions',
+        'pending_leave_requests',
+        'pending_locations',
+        'pending_attendance_sessions',
+        'local_attendance_state',
+      ]) {
+        await txn.delete(table);
+      }
+    });
   }
 }
 

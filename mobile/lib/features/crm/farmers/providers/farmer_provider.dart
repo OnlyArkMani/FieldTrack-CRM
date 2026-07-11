@@ -166,7 +166,7 @@ final farmerListProvider =
 /// Single farmer full profile. AsyncNotifier gives loading/error/data for free;
 /// `updateLeadStatus` mutates then reloads so the profile card reflects the new
 /// status immediately.
-class FarmerDetailNotifier extends FamilyAsyncNotifier<FarmerDetail, int> {
+class FarmerDetailNotifier extends AutoDisposeFamilyAsyncNotifier<FarmerDetail, int> {
   FarmerRepository get _repo => ref.read(farmerRepositoryProvider);
 
   @override
@@ -190,7 +190,7 @@ class FarmerDetailNotifier extends FamilyAsyncNotifier<FarmerDetail, int> {
 }
 
 final farmerDetailProvider =
-    AsyncNotifierProvider.family<FarmerDetailNotifier, FarmerDetail, int>(
+    AsyncNotifierProvider.autoDispose.family<FarmerDetailNotifier, FarmerDetail, int>(
         FarmerDetailNotifier.new);
 
 /// Full livestock history (newest first) for the dedicated history screen.

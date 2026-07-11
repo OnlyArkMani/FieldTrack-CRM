@@ -135,7 +135,7 @@ class _TodayRoute extends ConsumerWidget {
         child: MapShimmer(),
       ),
       error: (e, _) => ErrorStateView(
-        message: e.toString(),
+        message: 'No internet connection',
         onRetry: () => ref.invalidate(todayRouteProvider),
       ),
       data: (route) {
@@ -213,6 +213,12 @@ class _TodayRoute extends ConsumerWidget {
                   onTap: () =>
                       ref.read(showZonesProvider.notifier).state = !showZones,
                 ),
+              ),
+            if (route?.isFromCache == true)
+              Positioned(
+                top: AppDimens.grid * 2,
+                left: AppDimens.grid * 2,
+                child: _OfflineBadge(cachedAt: route!.cachedAt),
               ),
             Positioned(
               left: AppDimens.grid * 2,
@@ -544,6 +550,41 @@ class _SheetRow extends StatelessWidget {
                 textAlign: TextAlign.right),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _OfflineBadge extends StatelessWidget {
+  const _OfflineBadge({this.cachedAt});
+  final DateTime? cachedAt;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final label = cachedAt != null ? 'Offline · ${_relative(cachedAt!)}' : 'Offline';
+    return Material(
+      color: colors.card.withValues(alpha: 0.93),
+      borderRadius: BorderRadius.circular(999),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.grid * 1.25, vertical: AppDimens.grid * 0.75),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.wifi_off_rounded,
+                size: 14, color: colors.textSecondary),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: AppTextStyles.caption
+                  .copyWith(color: colors.textSecondary, fontWeight: FontWeight.w600),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }

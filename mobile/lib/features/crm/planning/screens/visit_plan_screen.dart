@@ -354,7 +354,9 @@ class VisitPlanScreen extends ConsumerWidget {
     }
     context.push(
       '/visit/start/${item.farmerId}'
-      '${item.isFollowUp ? '' : '?plan_item=${item.id}'}',
+      '${item.isFollowUp ? '' : '?plan_item=${item.id}'
+          '${item.targetOrderBags != null ? '&target_bags=${item.targetOrderBags}' : ''}'
+          '${item.purpose != null ? '&purpose=${Uri.encodeComponent(item.purpose!)}' : ''}'}',
     );
   }
 
@@ -378,6 +380,7 @@ class VisitPlanScreen extends ConsumerWidget {
     PlanItem item,
   ) {
     notifier.removeAt(index);
+    bool undone = false;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -385,10 +388,15 @@ class VisitPlanScreen extends ConsumerWidget {
           content: Text('${item.farmerName} removed'),
           action: SnackBarAction(
             label: 'Undo',
-            onPressed: () => notifier.insertAt(index, item),
+            onPressed: () {
+              undone = true;
+              notifier.insertAt(index, item);
+            },
           ),
         ),
-      );
+      ).closed.then((_) {
+        if (!undone) notifier.save();
+      });
   }
 }
 
@@ -508,7 +516,9 @@ class _CarryOverSection extends StatelessWidget {
                     onPressed: blockedReason != null
                         ? null
                         : () => context.push(
-                            '/visit/start/${item.farmerId}?plan_item=${item.id}'),
+                            '/visit/start/${item.farmerId}?plan_item=${item.id}'
+                            '${item.targetOrderBags != null ? '&target_bags=${item.targetOrderBags}' : ''}'
+                            '${item.purpose != null ? '&purpose=${Uri.encodeComponent(item.purpose!)}' : ''}'),
                   ),
                   IconButton(
                     tooltip: 'Reschedule',

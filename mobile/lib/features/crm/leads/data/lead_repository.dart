@@ -9,7 +9,8 @@ import '../../../../core/network/api_exceptions.dart';
 import '../../../../core/theme/app_theme.dart' show sharedPreferencesProvider;
 import '../../../../local_db/database_helper.dart';
 import '../../../auth/providers/auth_provider.dart';
-import '../../farmers/models/farmer.dart' show CustomerType, LeadStatus;
+import '../../farmers/models/farmer.dart'
+    show CustomerType, LeadStatus, placeholderIdFromLocalId;
 import '../models/lead.dart';
 
 final leadRepositoryProvider = Provider<LeadRepository>((ref) {
@@ -89,16 +90,24 @@ class LeadRepository {
 
   Future<List<LeadItem>> _pendingLeadChanges() async {
     final visits = await _db.getAllUnsyncedVisits();
-    final result = <LeadItem>[];
+    final items = <LeadItem>[];
     for (final v in visits) {
       if (v.completeJson == null) continue;
       final complete = jsonDecode(v.completeJson!) as Map<String, dynamic>;
       final status = LeadStatus.fromWire(complete['lead_status'] as String?);
       if (status == null) continue;
       final farmer = await _resolveFarmerDisplay(v.farmerServerId, v.farmerLocalId);
-      if (farmer == null || farmer.id == null) continue; // no farmer id, nothing to key the lead by
-      result.add(LeadItem(
-        farmerId: farmer.id!,
+      if (farmer == null) continue;
+      // Offline-created farmers have no server id yet. Use the same stable
+      // negative placeholder that the farmers list uses so tapping the lead
+      // navigates to the pending farmer detail correctly.
+      final farmerId = farmer.id ??
+          (v.farmerLocalId != null
+              ? placeholderIdFromLocalId(v.farmerLocalId!)
+              : null);
+      if (farmerId == null) continue;
+      items.add(LeadItem(
+        farmerId: farmerId,
         farmerName: farmer.name,
         customerType: farmer.customerType,
         village: farmer.village,
@@ -109,7 +118,7 @@ class LeadRepository {
         followUpTime: complete['follow_up_time'] as String?,
       ));
     }
-    return result;
+    return items;
   }
 
   Future<
@@ -142,6 +151,22 @@ class LeadRepository {
           village: f['village'] as String?,
           customerType: CustomerType.fromWire(f['customer_type'] as String?),
         );
+      }
+      // Farmer synced away (deleted from pending_farmers) — look it up in
+      // id_mappings so the lead item is not silently dropped.
+      final serverId = await _db.resolveServerId(farmerLocalId);
+      if (serverId != null) {
+        final json = await _db.getCachedFarmerJson(serverId);
+        if (json != null) {
+          final f = jsonDecode(json) as Map<String, dynamic>;
+          return (
+            id: serverId,
+            name: (f['name'] as String?) ?? 'Unknown',
+            village: f['village'] as String?,
+            customerType: CustomerType.fromWire(f['customer_type'] as String?),
+          );
+        }
+        return (id: serverId, name: 'Unknown', village: null, customerType: CustomerType.farmer);
       }
     }
     return null;

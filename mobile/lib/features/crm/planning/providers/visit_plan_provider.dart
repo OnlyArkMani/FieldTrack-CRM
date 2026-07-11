@@ -1,7 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_exceptions.dart';
+import '../../../../core/theme/app_theme.dart' show sharedPreferencesProvider;
 import '../../../../services/sync/connectivity_service.dart';
+import '../../../attendance/providers/upcoming_leaves_provider.dart'
+    show isLeaveDateCached;
 import '../../../auth/providers/auth_provider.dart';
 import '../data/visit_plan_repository.dart';
 import '../models/visit_plan.dart';
@@ -244,6 +247,17 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
         return false;
       }
     }
+    // Offline cross-day move: check cached leave dates before queuing.
+    if (offline && planDate != null) {
+      final prefs = ref.read(sharedPreferencesProvider);
+      if (isLeaveDateCached(prefs, planDate)) {
+        state = state.copyWith(
+          error: "You're on leave on that day — pick a different date.",
+        );
+        return false;
+      }
+    }
+
     try {
       await _repo.updateItem(
         item.id,

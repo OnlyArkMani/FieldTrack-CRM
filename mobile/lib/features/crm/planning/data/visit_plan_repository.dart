@@ -42,18 +42,31 @@ class VisitPlanRepository {
   static String _teamPlansCacheKey(DateTime d) => 'cached_team_plans_${ymd(d)}';
 
   Future<MyPlan> myPlan(DateTime date) async {
-    MyPlan base;
+    // Bug this fixes (same class as the Round 4 Leads/Vet throw-before-merge
+    // bug): a missing cache used to throw immediately, before ever reaching
+    // the merge steps below — so a plan-item action queued against a day
+    // that was never opened online (e.g. the target date of a cross-day
+    // move) could never surface here, since there was no base plan to
+    // synthesize onto. Absence of a cache now only means "no base plan," it
+    // no longer skips the merge; only throws if there's truly nothing (no
+    // cache/server response AND nothing pending) to show.
+    MyPlan? base;
+    ApiException? networkError;
     try {
       final data = await _api.get('/visit-plans/my/${ymd(date)}');
       unawaited(_prefs.setString(_myPlanCacheKey(date), jsonEncode(data)));
       base = MyPlan.fromJson(data);
     } on NoConnectionException catch (e) {
-      base = _cachedMyPlan(date) ?? (throw e);
+      base = _cachedMyPlan(date);
+      networkError = e;
     } on TimeoutException catch (e) {
-      base = _cachedMyPlan(date) ?? (throw e);
+      base = _cachedMyPlan(date);
+      networkError = e;
     }
-    final withVisits = await _applyPendingVisitProgress(base);
-    return _applyPendingPlanItemActions(withVisits);
+    final withVisits = await _applyPendingVisitProgress(base ?? MyPlan(planDate: date));
+    final result = await _applyPendingPlanItemActions(withVisits);
+    if (base == null && result.items.isEmpty) throw networkError!;
+    return result;
   }
 
   /// Neither a fresh server response nor a cached one can know about a
@@ -143,7 +156,12 @@ class VisitPlanRepository {
       final checkIn = v.checkInPayloadJson.isEmpty || v.checkInPayloadJson == '{}'
           ? const <String, dynamic>{}
           : jsonDecode(v.checkInPayloadJson) as Map<String, dynamic>;
-      final planItemId = checkIn['plan_item_id'] as int?;
+      // plan_item_id: real server ID (online check-in or resolved after sync).
+      // _local_plan_item_id: negative timestamp set during offline check-in
+      // from an offline-created plan. The synthesized PlanItem in the plan list
+      // already carries that same negative ID, so matching by it works here.
+      final planItemId =
+          (checkIn['plan_item_id'] as int?) ?? (checkIn['_local_plan_item_id'] as int?);
       if (planItemId == null) continue;
       statusByPlanItemId[planItemId] = v.completeJson != null ? 'COMPLETED' : 'IN_PROGRESS';
     }
@@ -198,75 +216,87 @@ class VisitPlanRepository {
 
   /// Upsert the day's plan. Items are sent in their current order; the server
   /// stores sequence_order and flips status to SUBMITTED.
+  ///
+  /// Falls back to the offline queue on network failure even if
+  /// ConnectivityService.current says online — that cached value can be stale
+  /// by up to 30s + 3s ping, so a device that just went offline may still read
+  /// current=true for a short window.
   Future<MyPlan> savePlan(DateTime date, List<PlanItem> items) async {
     final itemInputs = [
       for (var i = 0; i < items.length; i++) items[i].toInput(i),
     ];
-    if (!_connectivity.current) {
-      // A farmer_id here can be a placeholder (an offline-created farmer,
-      // not yet synced). By the time this plan itself syncs, that farmer
-      // may have already synced AND been removed from pending_farmers — so
-      // the placeholder can no longer be resolved by scanning the unsynced
-      // set the way VisitRepository does. Stash the farmer's local_id
-      // alongside the placeholder so the sync engine can resolve it via
-      // id_mappings regardless (that mapping persists permanently).
-      final unsynced = await _db.getAllUnsyncedFarmers();
-      // Fixes the farmer-race gap: id_mappings now gets a row the moment a
-      // farmer is created offline (see
-      // DatabaseHelper.insertIdMappingPlaceholder), not only once it syncs,
-      // so this scan still finds the local_id even if the farmer synced
-      // away in a blip between being created and this plan being saved —
-      // pending_farmers alone can no longer answer that by then.
-      final allFarmerLocalIds = await _db.getFarmerIdMappingLocalIds();
-      String? findLocalId(int placeholderId) {
-        for (final f in unsynced) {
-          if (placeholderIdFromLocalId(f.localId) == placeholderId) return f.localId;
-        }
-        for (final localId in allFarmerLocalIds) {
-          if (placeholderIdFromLocalId(localId) == placeholderId) return localId;
-        }
-        return null;
+    if (_connectivity.current) {
+      try {
+        final data = await _api.post('/visit-plans',
+            body: {'plan_date': ymd(date), 'items': itemInputs});
+        return MyPlan.fromJson(data);
+      } on NoConnectionException {
+        // stale connectivity cache — fall through to offline save below
+      } on TimeoutException {
+        // stale connectivity cache — fall through to offline save below
       }
-      final offlineItems = [
-        for (final input in itemInputs)
-          {
-            ...input,
-            if ((input['farmer_id'] as int) < 0)
-              '_farmer_local_id': findLocalId(input['farmer_id'] as int),
-          },
-      ];
-      await _db.upsertPendingVisitPlan(
-        planDate: ymd(date),
-        itemsJson: jsonEncode(offlineItems),
-      );
-      // Optimistic: same items back with an incremented sequence + SUBMITTED
-      // status, so the screen's "saved" state (isSaved: plan.isSubmitted &&
-      // !dirty) reflects the save immediately, same as the online path.
-      final optimistic = MyPlan(
-        planDate: date,
-        status: 'SUBMITTED',
-        submittedAt: DateTime.now(),
-        items: [
-          for (var i = 0; i < items.length; i++)
-            items[i].copyWith(sequenceOrder: i),
-        ],
-      );
-      // Bug this fixes: without this, myPlan(date)'s offline fallback found
-      // no cache for a date that was only ever saved offline (never
-      // successfully fetched from the server), threw, and the screen's
-      // clearPlan-on-failed-fetch behavior made the just-saved plan appear
-      // to vanish the moment you navigated back to it. Cache the optimistic
-      // result exactly like an online fetch would, so it's found on return.
-      unawaited(
-          _prefs.setString(_myPlanCacheKey(date), jsonEncode(optimistic.toJson())));
-      return optimistic;
     }
-    final body = {
-      'plan_date': ymd(date),
-      'items': itemInputs,
-    };
-    final data = await _api.post('/visit-plans', body: body);
-    return MyPlan.fromJson(data);
+    // A farmer_id here can be a placeholder (an offline-created farmer,
+    // not yet synced). By the time this plan itself syncs, that farmer
+    // may have already synced AND been removed from pending_farmers — so
+    // the placeholder can no longer be resolved by scanning the unsynced
+    // set the way VisitRepository does. Stash the farmer's local_id
+    // alongside the placeholder so the sync engine can resolve it via
+    // id_mappings regardless (that mapping persists permanently).
+    final unsynced = await _db.getAllUnsyncedFarmers();
+    // Fixes the farmer-race gap: id_mappings now gets a row the moment a
+    // farmer is created offline (see
+    // DatabaseHelper.insertIdMappingPlaceholder), not only once it syncs,
+    // so this scan still finds the local_id even if the farmer synced
+    // away in a blip between being created and this plan being saved —
+    // pending_farmers alone can no longer answer that by then.
+    final allFarmerLocalIds = await _db.getFarmerIdMappingLocalIds();
+    String? findLocalId(int placeholderId) {
+      for (final f in unsynced) {
+        if (placeholderIdFromLocalId(f.localId) == placeholderId) return f.localId;
+      }
+      for (final localId in allFarmerLocalIds) {
+        if (placeholderIdFromLocalId(localId) == placeholderId) return localId;
+      }
+      return null;
+    }
+    final offlineItems = [
+      for (var i = 0; i < itemInputs.length; i++)
+        {
+          ...itemInputs[i],
+          // Stash the negative local item ID so the sync engine can store the
+          // server ID in id_mappings after the plan POSTs, enabling the visit
+          // check-in to inject the real plan_item_id when it syncs later.
+          if (items[i].id < 0) '_local_item_id': items[i].id,
+          if ((itemInputs[i]['farmer_id'] as int) < 0)
+            '_farmer_local_id': findLocalId(itemInputs[i]['farmer_id'] as int),
+        },
+    ];
+    await _db.upsertPendingVisitPlan(
+      planDate: ymd(date),
+      itemsJson: jsonEncode(offlineItems),
+    );
+    // Optimistic: same items back with an incremented sequence + SUBMITTED
+    // status, so the screen's "saved" state (isSaved: plan.isSubmitted &&
+    // !dirty) reflects the save immediately, same as the online path.
+    final optimistic = MyPlan(
+      planDate: date,
+      status: 'SUBMITTED',
+      submittedAt: DateTime.now(),
+      items: [
+        for (var i = 0; i < items.length; i++)
+          items[i].copyWith(sequenceOrder: i),
+      ],
+    );
+    // Bug this fixes: without this, myPlan(date)'s offline fallback found
+    // no cache for a date that was only ever saved offline (never
+    // successfully fetched from the server), threw, and the screen's
+    // clearPlan-on-failed-fetch behavior made the just-saved plan appear
+    // to vanish the moment you navigated back to it. Cache the optimistic
+    // result exactly like an online fetch would, so it's found on return.
+    unawaited(
+        _prefs.setString(_myPlanCacheKey(date), jsonEncode(optimistic.toJson())));
+    return optimistic;
   }
 
   /// Every caller of updateItemStatus/updateItem/carryOver/skipItem

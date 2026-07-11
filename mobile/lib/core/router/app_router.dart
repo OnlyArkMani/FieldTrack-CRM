@@ -200,8 +200,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           key: state.pageKey,
           child: VisitFlowScreen(
             farmerId: int.tryParse(state.pathParameters['farmerId'] ?? '') ?? 0,
-            planItemId:
-                int.tryParse(state.uri.queryParameters['plan_item'] ?? ''),
+            planItemId: int.tryParse(state.uri.queryParameters['plan_item'] ?? ''),
+            planTargetOrderBags: int.tryParse(state.uri.queryParameters['target_bags'] ?? ''),
+            planPurpose: state.uri.queryParameters['purpose'],
           ),
         ),
       ),

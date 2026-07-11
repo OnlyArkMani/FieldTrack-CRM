@@ -112,9 +112,18 @@ class VetRepository {
         CustomerType customerType
       })?> _resolveFarmerDisplay(int? farmerServerId, String? farmerLocalId) async {
     if (farmerServerId != null) {
-      final json = await _db.getCachedFarmerJson(farmerServerId);
+      // Try SQLite cache first — populated by farmer list/detail loads.
+      String? json = await _db.getCachedFarmerJson(farmerServerId);
+      // Cache miss: fetch live (online) and store for future offline use.
       if (json == null) {
-        return (id: farmerServerId, name: 'Unknown', village: null, customerType: CustomerType.farmer);
+        try {
+          final data = await _api.get('/farmers/$farmerServerId');
+          json = jsonEncode(data);
+          unawaited(_db.upsertCachedFarmer(farmerServerId, json));
+        } catch (_) {
+          // Offline and not cached — nothing we can do.
+          return (id: farmerServerId, name: 'Unknown', village: null, customerType: CustomerType.farmer);
+        }
       }
       final f = jsonDecode(json) as Map<String, dynamic>;
       return (

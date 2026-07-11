@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_exceptions.dart';
 import '../../../../core/theme/app_theme.dart' show sharedPreferencesProvider;
+import '../../../../local_db/database_helper.dart';
+import '../../farmers/models/farmer.dart' show placeholderIdFromLocalId;
 import '../models/follow_up.dart';
 
 final followUpRepositoryProvider = Provider<FollowUpRepository>((ref) {
@@ -17,11 +19,14 @@ final followUpRepositoryProvider = Provider<FollowUpRepository>((ref) {
 });
 
 /// Wrapper over the /follow-ups API. `my()` falls back to the last
-/// successful response when offline — same pattern as leads/farmers.
+/// successful response when offline — same pattern as leads/farmers —
+/// AND merges in any follow-ups from offline-completed visits that
+/// haven't synced yet.
 class FollowUpRepository {
   FollowUpRepository(this._api, this._prefs);
   final ApiClient _api;
   final SharedPreferences _prefs;
+  final _db = DatabaseHelper.instance;
   static const _cacheKey = 'cached_my_follow_ups';
 
   static String _ymd(DateTime d) =>
@@ -34,6 +39,8 @@ class FollowUpRepository {
     DateTime? dateTo,
     String? status,
   }) async {
+    List<FollowUpItem>? base;
+    ApiException? networkError;
     try {
       final data = await _api.getList('/follow-ups/my', query: {
         if (dateFrom != null) 'date_from': _ymd(dateFrom),
@@ -41,14 +48,29 @@ class FollowUpRepository {
         if (status != null) 'status': status,
       });
       unawaited(_prefs.setString(_cacheKey, jsonEncode(data)));
-      return data
+      base = data
           .map((e) => FollowUpItem.fromJson(e as Map<String, dynamic>))
           .toList();
     } on NoConnectionException catch (e) {
-      return _cachedFollowUps() ?? (throw e);
+      base = _cachedFollowUps();
+      networkError = e;
     } on TimeoutException catch (e) {
-      return _cachedFollowUps() ?? (throw e);
+      base = _cachedFollowUps();
+      networkError = e;
     }
+
+    final pending = await _pendingFollowUps(
+      dateFrom: dateFrom,
+      dateTo: dateTo,
+      status: status,
+    );
+    if (base == null && pending.isEmpty) throw networkError!;
+    if (pending.isEmpty) return base!;
+    return [
+      ...pending,
+      ...(base ?? const <FollowUpItem>[])
+          .where((f) => !pending.any((p) => p.farmerId == f.farmerId)),
+    ];
   }
 
   List<FollowUpItem>? _cachedFollowUps() {
@@ -62,6 +84,62 @@ class FollowUpRepository {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<List<FollowUpItem>> _pendingFollowUps({
+    DateTime? dateFrom,
+    DateTime? dateTo,
+    String? status,
+  }) async {
+    final visits = await _db.getAllUnsyncedVisits();
+    final result = <FollowUpItem>[];
+    for (final v in visits) {
+      if (v.completeJson == null) continue;
+      final complete = jsonDecode(v.completeJson!) as Map<String, dynamic>;
+      final dateStr = complete['follow_up_date'] as String?;
+      if (dateStr == null) continue; // visit had no follow-up
+      final scheduledDate = DateTime.tryParse(dateStr);
+      if (scheduledDate == null) continue;
+      if (dateFrom != null && scheduledDate.isBefore(dateFrom)) continue;
+      if (dateTo != null && scheduledDate.isAfter(dateTo)) continue;
+      if (status != null && status != 'PENDING') continue; // pending visits always create PENDING follow-ups
+
+      final farmerName = await _resolveFarmerName(v.farmerServerId, v.farmerLocalId);
+      // Use the server id when available; for offline-created farmers use the
+      // same stable negative placeholder as the farmers list so tapping
+      // navigates to the pending farmer detail rather than doing nothing.
+      final farmerId = v.farmerServerId ??
+          (v.farmerLocalId != null
+              ? placeholderIdFromLocalId(v.farmerLocalId!)
+              : null);
+      result.add(FollowUpItem(
+        id: -(v.visitServerId ?? v.localId.hashCode.abs()),
+        farmerId: farmerId,
+        farmerName: farmerName,
+        scheduledDate: scheduledDate,
+        scheduledTime: complete['follow_up_time'] as String?,
+        purpose: complete['follow_up_purpose'] as String?,
+        status: 'PENDING',
+      ));
+    }
+    return result;
+  }
+
+  Future<String?> _resolveFarmerName(int? farmerServerId, String? farmerLocalId) async {
+    if (farmerServerId != null) {
+      final json = await _db.getCachedFarmerJson(farmerServerId);
+      if (json != null) {
+        return (jsonDecode(json) as Map<String, dynamic>)['name'] as String?;
+      }
+      return 'Unknown';
+    }
+    if (farmerLocalId != null) {
+      final row = await _db.getPendingFarmer(farmerLocalId);
+      if (row != null) {
+        return (jsonDecode(row.payloadJson) as Map<String, dynamic>)['name'] as String?;
+      }
+    }
+    return null;
   }
 
   Future<void> acknowledge(int id) async {
