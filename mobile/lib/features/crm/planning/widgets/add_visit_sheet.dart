@@ -29,6 +29,16 @@ const visitPurposes = [
   'RELATIONSHIP_VISIT',
 ];
 
+/// Field staff work roughly 4am (early-morning milk collection rounds) to
+/// 8pm — kept in sync with `_TIME_SLOT_MIN`/`_TIME_SLOT_MAX` in
+/// app/schemas/crm.py.
+const timeSlotErrorMessage = 'Please select a time between 4:00 AM and 8:00 PM.';
+
+bool isValidTimeSlot(TimeOfDay t) {
+  final minutes = t.hour * 60 + t.minute;
+  return minutes >= 4 * 60 && minutes <= 20 * 60;
+}
+
 /// Add-a-visit flow: search farmers → pick one → set time + purpose → add.
 class AddVisitSheet {
   AddVisitSheet._();
@@ -106,6 +116,11 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
   }
 
   void _add() {
+    if (_time == null) {
+      setState(() => _error = 'Please select a time slot.');
+      return;
+    }
+
     final offline = !ref.read(connectivityServiceProvider).current;
     if (offline) {
       final planDate = ref.read(visitPlanProvider).date;
@@ -226,7 +241,7 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
           ],
         ),
         const SizedBox(height: AppDimens.grid),
-        Text('Time slot',
+        Text('Time slot *',
             style:
                 AppTextStyles.bodyMedium.copyWith(color: scheme.onSurface)),
         const SizedBox(height: AppDimens.grid),
@@ -237,13 +252,24 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
               context: context,
               initialTime: _time ?? const TimeOfDay(hour: 9, minute: 0),
             );
-            if (picked != null) setState(() => _time = picked);
+            if (picked == null) return;
+            if (!isValidTimeSlot(picked)) {
+              setState(() => _error = timeSlotErrorMessage);
+              return;
+            }
+            setState(() {
+              _time = picked;
+              _error = null;
+            });
           },
           child: Container(
             padding: const EdgeInsets.all(AppDimens.grid * 1.5),
             decoration: BoxDecoration(
               border: Border.all(
-                  color: colors.textSecondary.withValues(alpha: 0.25)),
+                color: _time == null
+                    ? scheme.error.withValues(alpha: 0.5)
+                    : colors.textSecondary.withValues(alpha: 0.25),
+              ),
               borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
             ),
             child: Row(
@@ -252,7 +278,7 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
                     size: 18, color: colors.textSecondary),
                 const SizedBox(width: AppDimens.grid),
                 Text(
-                  _time == null ? 'Any time (optional)' : _time!.format(context),
+                  _time == null ? 'Select a time' : _time!.format(context),
                   style: AppTextStyles.body.copyWith(
                     color: _time == null
                         ? colors.textSecondary

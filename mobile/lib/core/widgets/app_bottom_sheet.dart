@@ -18,6 +18,11 @@ class AppBottomSheet {
     double initialSize = 0.5,
     double minSize = 0.3,
     double maxSize = 0.92,
+
+    /// Optional widget pinned below the scrollable [child] (e.g. a primary
+    /// submit button) — stays visible without scrolling, unlike content
+    /// passed via [child].
+    Widget? footer,
   }) {
     return showModalBottomSheet<T>(
       context: context,
@@ -79,6 +84,17 @@ class AppBottomSheet {
                         children: [child],
                       ),
                     ),
+                    if (footer != null)
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          AppDimens.grid * 2,
+                          0,
+                          AppDimens.grid * 2,
+                          AppDimens.grid * 2 +
+                              MediaQuery.of(context).viewInsets.bottom,
+                        ),
+                        child: footer,
+                      ),
                   ],
                 ),
               ),
