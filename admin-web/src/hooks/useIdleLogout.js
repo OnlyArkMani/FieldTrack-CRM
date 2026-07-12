@@ -4,10 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '@/services/api/client';
 import { useAuthStore } from '@/store/authStore';
 
-// checklist #70 — 30-minute inactivity timeout. Mounted once for the
+// checklist #70 — 2-hour inactivity timeout. Mounted once for the
 // authenticated app shell (see App.jsx's <Protected> wrapper), not the
 // login page itself.
-const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
 
 export function useIdleLogout() {
