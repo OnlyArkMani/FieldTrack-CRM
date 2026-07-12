@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_exceptions.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../services/sync/connectivity_service.dart';
@@ -18,6 +19,7 @@ import '../../farmers/models/farmer.dart';
 import '../../farmers/utils.dart';
 import '../../farmers/widgets/customer_type_chip.dart';
 import '../../farmers/widgets/lead_status_badge.dart';
+import '../../farmers/widgets/quick_add_customer_sheet.dart';
 import '../models/visit_plan.dart';
 import '../providers/visit_plan_provider.dart';
 import 'plan_item_card.dart' show purposeLabel;
@@ -115,6 +117,12 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
     }
   }
 
+  Future<void> _addCustomer() async {
+    final created = await QuickAddCustomerSheet.show(context);
+    if (created == null || !mounted) return;
+    setState(() => _selected = created);
+  }
+
   void _add() {
     if (_time == null) {
       setState(() => _error = 'Please select a time slot.');
@@ -180,6 +188,20 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
             hintText: 'Search farmers by name or village',
             prefixIcon: Icon(Icons.search_rounded,
                 size: 20, color: colors.textSecondary),
+          ),
+        ),
+        const SizedBox(height: AppDimens.grid * 1.5),
+        OutlinedButton.icon(
+          onPressed: _addCustomer,
+          icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+          label: const Text('Add customer'),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(44),
+            foregroundColor: AppPalette.amber,
+            side: BorderSide(color: AppPalette.amber.withValues(alpha: 0.55)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+            ),
           ),
         ),
         const SizedBox(height: AppDimens.grid * 1.5),
