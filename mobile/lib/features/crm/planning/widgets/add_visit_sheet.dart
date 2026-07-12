@@ -75,6 +75,7 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
   TimeOfDay? _time;
   String _purpose = 'FIRST_VISIT';
   final _targetBagsController = TextEditingController();
+  bool _saving = false;
 
   @override
   void initState() {
@@ -123,7 +124,7 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
     setState(() => _selected = created);
   }
 
-  void _add() {
+  Future<void> _add() async {
     if (_time == null) {
       setState(() => _error = 'Please select a time slot.');
       return;
@@ -141,12 +142,15 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
 
     final farmer = _selected!;
     final id = -DateTime.now().microsecondsSinceEpoch;
-    final slot = _time == null
-        ? null
-        : '${_time!.hour.toString().padLeft(2, '0')}:'
-            '${_time!.minute.toString().padLeft(2, '0')}:00';
+    final slot = '${_time!.hour.toString().padLeft(2, '0')}:'
+        '${_time!.minute.toString().padLeft(2, '0')}:00';
     final targetBags = int.tryParse(_targetBagsController.text.trim());
-    ref.read(visitPlanProvider.notifier).addItem(
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    final ok = await ref.read(visitPlanProvider.notifier).addItem(
           PlanItem(
             id: id,
             farmerId: farmer.id,
@@ -162,8 +166,16 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
             status: 'PLANNED',
           ),
         );
-    HapticFeedback.selectionClick();
-    Navigator.of(context).pop();
+    if (!mounted) return;
+    if (ok) {
+      HapticFeedback.selectionClick();
+      Navigator.of(context).pop();
+    } else {
+      setState(() {
+        _saving = false;
+        _error = ref.read(visitPlanProvider).error ?? 'Could not save visit';
+      });
+    }
   }
 
   @override
@@ -375,7 +387,8 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
         AppButton(
           label: 'Add to Plan',
           icon: Icons.add_rounded,
-          onPressed: _add,
+          isLoading: _saving,
+          onPressed: _saving ? null : _add,
         ),
         SizedBox(
             height: AppDimens.grid + MediaQuery.of(context).viewInsets.bottom),

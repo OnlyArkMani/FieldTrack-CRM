@@ -172,10 +172,20 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
     setDate(state.date.subtract(const Duration(days: 1)));
   }
 
-  void addItem(PlanItem item) {
+  /// Adds a stop and immediately persists the day's plan (there's no
+  /// per-item create endpoint, so this reuses the same bulk `save()`/
+  /// `savePlan()` path a manual "Save Plan" tap uses — same call, just
+  /// triggered right away instead of waiting for the user to tap Save).
+  /// "Save Plan" still works afterward for any other pending edits
+  /// (reorder, etc.) — it's a no-op resave when nothing else is dirty.
+  Future<bool> addItem(PlanItem item) async {
     // Skip if this farmer is already in the plan.
-    if (state.items.any((i) => i.farmerId == item.farmerId)) return;
+    if (state.items.any((i) => i.farmerId == item.farmerId)) {
+      state = state.copyWith(error: 'This farmer is already in the plan');
+      return false;
+    }
     state = state.copyWith(items: [...state.items, item], dirty: true);
+    return save();
   }
 
   /// Removes the active item at [index] (index into activeItems) and returns
