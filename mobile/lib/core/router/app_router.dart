@@ -33,6 +33,7 @@ import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/edit_profile_screen.dart';
 import '../../features/reports/screens/reports_screen.dart';
 import '../../features/splash/splash_screen.dart';
+import '../../features/sync/screens/needs_attention_screen.dart';
 import '../../features/teams/screens/team_list_screen.dart';
 import 'transitions.dart';
 
@@ -199,8 +200,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           key: state.pageKey,
           child: VisitFlowScreen(
             farmerId: int.tryParse(state.pathParameters['farmerId'] ?? '') ?? 0,
-            planItemId:
-                int.tryParse(state.uri.queryParameters['plan_item'] ?? ''),
+            planItemId: int.tryParse(state.uri.queryParameters['plan_item'] ?? ''),
+            planTargetOrderBags: int.tryParse(state.uri.queryParameters['target_bags'] ?? ''),
+            planPurpose: state.uri.queryParameters['purpose'],
           ),
         ),
       ),
@@ -305,6 +307,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/profile/edit',
         pageBuilder: (context, state) =>
             WaterPage(key: state.pageKey, child: const EditProfileScreen()),
+      ),
+
+      GoRoute(
+        path: '/needs-attention',
+        pageBuilder: (context, state) =>
+            WaterPage(key: state.pageKey, child: const NeedsAttentionScreen()),
       ),
     ],
   );

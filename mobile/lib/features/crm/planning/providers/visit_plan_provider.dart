@@ -1,6 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_exceptions.dart';
+import '../../../../core/theme/app_theme.dart' show sharedPreferencesProvider;
+import '../../../../services/sync/connectivity_service.dart';
+import '../../../attendance/providers/upcoming_leaves_provider.dart'
+    show isLeaveDateCached;
 import '../../../auth/providers/auth_provider.dart';
 import '../data/visit_plan_repository.dart';
 import '../models/visit_plan.dart';
@@ -44,11 +48,12 @@ class VisitPlanState {
     String? error,
     bool clearError = false,
     bool? dirty,
+    bool clearPlan = false,
   }) =>
       VisitPlanState(
         date: date ?? this.date,
-        plan: plan ?? this.plan,
-        items: items ?? this.items,
+        plan: clearPlan ? null : (plan ?? this.plan),
+        items: clearPlan ? const [] : (items ?? this.items),
         isLoading: isLoading ?? this.isLoading,
         isSaving: isSaving ?? this.isSaving,
         error: clearError ? null : (error ?? this.error),
@@ -90,6 +95,10 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
       state.items.where((i) => i.isCarryOver && !isDone(i)).toList();
 
   /// Reschedule a missed item onto [targetDate] (source skipped server-side).
+  /// Offline-capable: VisitPlanRepository.carryOver() queues the action and
+  /// never throws for a plain connectivity failure, so this reaches
+  /// `load()` either way — the source item drops out of today's carry-over
+  /// section immediately; the target day won't show it until sync completes.
   Future<bool> rescheduleCarryOver(
     PlanItem item,
     DateTime targetDate, {
@@ -106,6 +115,8 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
   }
 
   /// Drop a missed item (marks it SKIPPED) so it stops carrying over.
+  /// Offline-capable — see rescheduleCarryOver's note; VisitPlanRepository
+  /// .skipItem() queues the same way.
   Future<bool> dropCarryOver(PlanItem item) async {
     try {
       await _repo.skipItem(item.id);
@@ -128,9 +139,15 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
   bool get canGoPrev => state.date.isAfter(_dateOnly(DateTime.now()));
 
   Future<void> load() async {
-    state = state.copyWith(isLoading: true, clearError: true);
+    // Bug this fixes: previously plan/items were left untouched on a failed
+    // fetch, so switching to a date with no cached plan (offline) kept
+    // showing whichever OTHER date's plan happened to be loaded last —
+    // wrong day's stops rendered under the newly-selected date's header.
+    final loadedForDate = state.date;
+    state = state.copyWith(isLoading: true, clearError: true, clearPlan: true);
     try {
-      final plan = await _repo.myPlan(state.date);
+      final plan = await _repo.myPlan(loadedForDate);
+      if (state.date != loadedForDate) return; // date changed again mid-fetch
       state = state.copyWith(
         plan: plan,
         items: plan.items,
@@ -138,12 +155,13 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
         dirty: false,
       );
     } on ApiException catch (e) {
-      state = state.copyWith(isLoading: false, error: e.message);
+      if (state.date != loadedForDate) return;
+      state = state.copyWith(isLoading: false, error: e.message, clearPlan: true);
     }
   }
 
   void setDate(DateTime date) {
-    state = state.copyWith(date: _dateOnly(date), isLoading: true);
+    state = state.copyWith(date: _dateOnly(date), isLoading: true, clearPlan: true);
     load();
   }
 
@@ -154,10 +172,20 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
     setDate(state.date.subtract(const Duration(days: 1)));
   }
 
-  void addItem(PlanItem item) {
+  /// Adds a stop and immediately persists the day's plan (there's no
+  /// per-item create endpoint, so this reuses the same bulk `save()`/
+  /// `savePlan()` path a manual "Save Plan" tap uses — same call, just
+  /// triggered right away instead of waiting for the user to tap Save).
+  /// "Save Plan" still works afterward for any other pending edits
+  /// (reorder, etc.) — it's a no-op resave when nothing else is dirty.
+  Future<bool> addItem(PlanItem item) async {
     // Skip if this farmer is already in the plan.
-    if (state.items.any((i) => i.farmerId == item.farmerId)) return;
+    if (state.items.any((i) => i.farmerId == item.farmerId)) {
+      state = state.copyWith(error: 'This farmer is already in the plan');
+      return false;
+    }
     state = state.copyWith(items: [...state.items, item], dirty: true);
+    return save();
   }
 
   /// Removes the active item at [index] (index into activeItems) and returns
@@ -187,6 +215,17 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
   /// Edit a still-PLANNED item's time/purpose/target bags/day. Reloads the
   /// currently viewed date afterward — if [planDate] moved the item to a
   /// different day, it simply drops out of this list.
+  ///
+  /// Offline, same-day edits (no [planDate]) go through the same
+  /// already-offline-capable `savePlan()` path instead of the single-item
+  /// PATCH endpoint — a full-day resave produces the same end state as a
+  /// targeted edit for this case. Moving an item to a *different* day
+  /// offline queues via VisitPlanRepository.updateItem's
+  /// pending_plan_item_actions path instead (falls through to the generic
+  /// call below); the item disappears from today's list and is synthesized
+  /// onto the target day immediately (see
+  /// VisitPlanRepository._applyPendingPlanItemActions) — no need to wait
+  /// for the move to actually sync to see it show up there.
   Future<bool> editItem(
     PlanItem item, {
     String? timeSlot,
@@ -194,6 +233,41 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
     int? targetOrderBags,
     DateTime? planDate,
   }) async {
+    final offline = !ref.read(connectivityServiceProvider).current;
+    if (offline && planDate == null) {
+      final updated = state.items
+          .map((i) => i.id != item.id
+              ? i
+              : i.copyWith(
+                  timeSlot: timeSlot,
+                  purpose: purpose,
+                  targetOrderBags: targetOrderBags,
+                ))
+          .toList();
+      state = state.copyWith(items: updated, dirty: true);
+      try {
+        final toSave = updated
+            .where((i) => !i.isFollowUp && !i.isCarryOver && !isDone(i))
+            .toList();
+        final plan = await _repo.savePlan(state.date, toSave);
+        state = state.copyWith(plan: plan, items: plan.items, dirty: false);
+        return true;
+      } on ApiException catch (e) {
+        state = state.copyWith(error: e.message);
+        return false;
+      }
+    }
+    // Offline cross-day move: check cached leave dates before queuing.
+    if (offline && planDate != null) {
+      final prefs = ref.read(sharedPreferencesProvider);
+      if (isLeaveDateCached(prefs, planDate)) {
+        state = state.copyWith(
+          error: "You're on leave on that day — pick a different date.",
+        );
+        return false;
+      }
+    }
+
     try {
       await _repo.updateItem(
         item.id,
@@ -201,6 +275,7 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
         purpose: purpose,
         targetOrderBags: targetOrderBags,
         planDate: planDate,
+        sourceItem: item,
       );
       await load();
       return true;

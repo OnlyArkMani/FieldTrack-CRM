@@ -15,6 +15,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../sync/providers/needs_attention_provider.dart';
 
 final _appVersionProvider = FutureProvider<String>((ref) async {
   final info = await PackageInfo.fromPlatform();
@@ -51,6 +52,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final themeMode = ref.watch(themeModeProvider);
     final version = ref.watch(_appVersionProvider);
     final gpsInterval = ref.watch(_gpsIntervalProvider);
+    final needsAttentionCount =
+        ref.watch(needsAttentionProvider).valueOrNull?.length ?? 0;
     final scheme = Theme.of(context).colorScheme;
     final colors = context.appColors;
 
@@ -150,6 +153,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     icon: Icons.assessment_outlined,
                     title: 'Reports',
                     onTap: () => context.push('/reports'),
+                  ),
+                  const Divider(),
+                  _SettingsTile(
+                    icon: Icons.sync_problem_rounded,
+                    iconColor: needsAttentionCount > 0 ? scheme.error : null,
+                    title: 'Needs Attention',
+                    trailing: needsAttentionCount > 0
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: AppDimens.grid, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: scheme.error,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              '$needsAttentionCount',
+                              style: AppTextStyles.caption.copyWith(
+                                color: scheme.onError,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          )
+                        : Icon(Icons.chevron_right_rounded,
+                            color: colors.textSecondary),
+                    onTap: () => context.push('/needs-attention'),
                   ),
                 ],
               ),

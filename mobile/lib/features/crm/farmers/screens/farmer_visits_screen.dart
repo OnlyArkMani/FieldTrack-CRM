@@ -7,6 +7,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/shimmer_card.dart';
 import '../../../../core/widgets/state_views.dart';
+import '../../../../core/widgets/sync_status_badge.dart';
 import '../models/farmer.dart';
 import '../providers/farmer_provider.dart';
 import 'farmer_detail_screen.dart' show visitStatusColor, prettyPurpose;
@@ -102,6 +103,10 @@ class _VisitCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                if (visit.syncStatus != null) ...[
+                  const SizedBox(height: 4),
+                  SyncStatusBadge(syncStatus: visit.syncStatus, compact: true),
+                ],
               ],
             ),
           ),

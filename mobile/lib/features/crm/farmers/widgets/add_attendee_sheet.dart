@@ -19,18 +19,24 @@ class AddAttendeeSheet {
   AddAttendeeSheet._();
 
   static Future<AttendeeInput?> show(BuildContext context) {
+    final formKey = GlobalKey<_AddAttendeeFormState>();
     return AppBottomSheet.show<AttendeeInput>(
       context,
       title: 'Add a farmer',
-      initialSize: 0.42,
-      maxSize: 0.7,
-      child: const _AddAttendeeForm(),
+      initialSize: 0.6,
+      maxSize: 0.6,
+      child: _AddAttendeeForm(key: formKey),
+      footer: AppButton(
+        label: 'Add farmer',
+        icon: Icons.check_rounded,
+        onPressed: () => formKey.currentState?._confirm(),
+      ),
     );
   }
 }
 
 class _AddAttendeeForm extends StatefulWidget {
-  const _AddAttendeeForm();
+  const _AddAttendeeForm({super.key});
 
   @override
   State<_AddAttendeeForm> createState() => _AddAttendeeFormState();
@@ -116,14 +122,6 @@ class _AddAttendeeFormState extends State<_AddAttendeeForm> {
           prefixIcon: Icons.home_work_rounded,
           onSubmitted: (_) => _confirm(),
         ),
-        const SizedBox(height: AppDimens.grid * 2.5),
-        AppButton(
-          label: 'Add farmer',
-          icon: Icons.check_rounded,
-          onPressed: _confirm,
-        ),
-        SizedBox(
-            height: AppDimens.grid + MediaQuery.of(context).viewInsets.bottom),
       ],
     );
   }

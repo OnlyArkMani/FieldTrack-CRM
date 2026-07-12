@@ -171,6 +171,8 @@ class ApiClient {
         return UnauthorizedException(detail, code);
       case 403:
         return ForbiddenException(detail);
+      case 409:
+        return ConflictException(detail, code);
       case 422:
         return ValidationException(detail);
       case 429:

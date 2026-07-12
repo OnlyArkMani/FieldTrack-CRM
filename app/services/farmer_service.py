@@ -197,6 +197,14 @@ class FarmerService:
         if not payload.name.strip():
             raise bad_request("Name is required")
 
+        # Idempotent replay: the mobile offline queue retries a create whose
+        # response it never saw. If this client_id already made it in, hand
+        # back that row instead of inserting a duplicate.
+        if payload.client_id:
+            existing = await self.repo.get_by_client_id(payload.client_id)
+            if existing is not None:
+                return FarmerResponse.model_validate(existing)
+
         team_id = await self._resolve_team_id(payload.team_id, user=user)
 
         farmer = Farmer(
@@ -217,6 +225,7 @@ class FarmerService:
             current_feed_price_per_bag=payload.current_feed_price_per_bag,
             notes=payload.notes,
             is_active=True,
+            client_id=payload.client_id,
         )
         self.repo.add(farmer)
         await self.db.commit()
@@ -229,7 +238,23 @@ class FarmerService:
     ) -> FarmerBatchCreateResponse:
         """One team lookup, one shared location, one commit for every
         attendee — a failure partway through rolls the whole batch back
-        instead of leaving a partial meet on record."""
+        instead of leaving a partial meet on record.
+
+        Idempotent replay: since the whole batch commits as one transaction,
+        it either fully landed last time or not at all — so if every
+        attendee's client_id is already present, the batch already
+        succeeded and we just hand back those rows instead of re-inserting."""
+        client_ids = [a.client_id for a in payload.attendees if a.client_id]
+        if client_ids and len(client_ids) == len(payload.attendees):
+            existing = await self.repo.get_by_client_ids(client_ids)
+            if len(existing) == len(client_ids):
+                by_client_id = {f.client_id: f for f in existing}
+                ordered = [by_client_id[cid] for cid in client_ids]
+                return FarmerBatchCreateResponse(
+                    created=[FarmerResponse.model_validate(f) for f in ordered],
+                    count=len(ordered),
+                )
+
         team_id = await self._resolve_team_id(payload.team_id, user=user)
 
         farmers = [
@@ -249,6 +274,7 @@ class FarmerService:
                 total_cattle=0,
                 notes=payload.notes,
                 is_active=True,
+                client_id=attendee.client_id,
             )
             for attendee in payload.attendees
         ]

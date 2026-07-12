@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_exceptions.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_card.dart';
@@ -28,10 +29,17 @@ class LivestockHistoryScreen extends ConsumerWidget {
       body: SafeArea(
         child: async.when(
           loading: () => const ShimmerList(count: 4),
-          error: (e, _) => ErrorStateView(
-            message: e.toString(),
-            onRetry: () => ref.invalidate(livestockHistoryProvider(farmerId)),
-          ),
+          error: (e, _) => e is NoConnectionException || e is TimeoutException
+              ? const EmptyStateView(
+                  icon: Icons.cloud_off_rounded,
+                  title: 'No livestock history saved offline yet',
+                  message:
+                      'Open this screen once while online to keep it available offline.',
+                )
+              : ErrorStateView(
+                  message: e.toString(),
+                  onRetry: () => ref.invalidate(livestockHistoryProvider(farmerId)),
+                ),
           data: (rows) {
             if (rows.isEmpty) {
               return const EmptyStateView(

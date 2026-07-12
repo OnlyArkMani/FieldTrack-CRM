@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
@@ -6,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/network/api_client.dart';
 import '../../core/network/api_exceptions.dart';
+import '../../core/storage/token_storage.dart';
+import '../../core/theme/app_theme.dart' show sharedPreferencesProvider;
 import '../../local_db/database_helper.dart';
 import '../location/location_service.dart';
 import 'connectivity_service.dart';
@@ -39,7 +42,12 @@ class SyncEngine {
 
   static const _locationBatchSize = 50;
   static const _sessionBatchSize = 200;
-  static const _periodicInterval = Duration(minutes: 5);
+  // 60 s: the primary sync trigger is the instant-on-reconnect connectivity
+  // listener, but if that ever misses (race between state changes, or the radio
+  // subscription was temporarily dead due to a platform error), this periodic
+  // timer is the safety net. 5 min was too long — users would see "pending sync"
+  // for up to 5 min after getting internet back even though everything is fine.
+  static const _periodicInterval = Duration(seconds: 60);
   static const _failureNotificationThreshold = 3;
   static const _backoffSchedule = <Duration>[
     Duration(seconds: 30),
@@ -135,17 +143,37 @@ class SyncEngine {
   }
 
   Future<bool> _isOnline() async {
-    if (_connectivity.current) return true;
-    return _connectivity.checkNow();
+    try {
+      if (_connectivity.current) return true;
+      return await _connectivity.checkNow();
+    } catch (_) {
+      // Platform channel error (e.g. DeadSystemException on Android) —
+      // treat as offline so the sync pass aborts cleanly instead of crashing.
+      return false;
+    }
   }
 
-  /// Ordered: sessions first (attendance must exist before its locations are
-  /// meaningful), then locations in batches.
+  /// Ordered: independent user-level actions first (profile, leave), then
+  /// farmers (a visit or plan item checked in / referencing an
+  /// offline-created farmer needs that farmer's real id — see
+  /// docs/OFFLINE_SYNC_PLAN.md), then visit plans and visits, then sessions
+  /// (attendance must exist before its locations are meaningful), then
+  /// locations in batches.
   Future<void> _runSequence() async {
     // Give previously-failed rows another chance each pass.
+    await _db.requeueFailedFarmers();
+    await _db.requeueFailedVisits();
+    await _db.requeueFailedVisitPlans();
+    await _db.requeueFailedLeaveRequests();
     await _db.requeueFailedSessions();
     await _db.requeueFailed();
 
+    await _syncProfileUpdate();
+    await _syncLeaveRequests();
+    await _syncFarmers();
+    await _syncVisitPlans();
+    await _syncPlanItemActions();
+    await _syncVisits();
     await _syncSessions();
     await _syncLocations();
 
@@ -155,6 +183,314 @@ class SyncEngine {
       sessions: ses,
       isOffline: !_connectivity.current,
     );
+  }
+
+  // ── Farmers (offline create queue) ───────────────────────────────────
+  Future<void> _syncFarmers() async {
+    final pending = await _db.getPendingFarmers();
+    // Rows with no batch_group_id sync individually (today's path); a
+    // Farmer Meet's attendees share one and go out together via
+    // _syncFarmerBatchGroup so the response's created[] maps 1:1 back to
+    // each row (see FarmerRepository.createBatch's offline branch).
+    final individual = <PendingFarmer>[];
+    final groups = <String, List<PendingFarmer>>{};
+    for (final f in pending) {
+      final groupId = f.batchGroupId;
+      if (groupId == null) {
+        individual.add(f);
+      } else {
+        (groups[groupId] ??= []).add(f);
+      }
+    }
+
+    for (final farmer in individual) {
+      final payload = jsonDecode(farmer.payloadJson) as Map<String, dynamic>;
+      try {
+        final data = await _api.post('/farmers', body: payload);
+        final serverId = data['id'] as int;
+        await _db.setIdMapping(
+          localId: farmer.localId,
+          entityType: 'farmer',
+          serverId: serverId,
+        );
+        await _db.upsertCachedFarmer(serverId, jsonEncode(data));
+        await _db.deletePendingFarmer(farmer.localId);
+      } on ValidationException {
+        // 422: this payload will never succeed as-is. Stop auto-retrying it
+        // and surface it — the user has to edit and resubmit (see
+        // FarmerRepository.updatePending). Isolated to this row; the rest
+        // of the batch keeps syncing.
+        await _db.markFarmerNeedsAttention(
+            farmer.localId, 'validation rejected (422)');
+      } catch (e) {
+        // Network/5xx/401: transient. Bump the retry counter (capped —
+        // markFarmerTransientFailure escalates to needs_attention past the
+        // limit) and let the exception propagate so the pass aborts and
+        // backoff arms, same as the session/location sync.
+        await _db.markFarmerTransientFailure(farmer.localId, _message(e));
+        rethrow;
+      }
+    }
+
+    for (final group in groups.values) {
+      await _syncFarmerBatchGroup(group);
+    }
+  }
+
+  /// One Farmer Meet's attendees, still ordered oldest-first (matches how
+  /// they were created — `getPendingFarmers()` orders by `created_at ASC`).
+  /// The backend's batch create runs as one transaction — it either fully
+  /// succeeds or fully fails, so every row in the group is resolved the
+  /// same way, no partial-batch state to reconcile.
+  Future<void> _syncFarmerBatchGroup(List<PendingFarmer> group) async {
+    final payloads =
+        group.map((f) => jsonDecode(f.payloadJson) as Map<String, dynamic>).toList();
+    // Shared venue fields were duplicated onto every row at creation time
+    // (see FarmerRepository.createBatch) — any row in the group has them.
+    final venue = payloads.first;
+    final body = {
+      'attendees': [
+        for (var i = 0; i < group.length; i++)
+          {
+            'name': payloads[i]['name'],
+            if ((payloads[i]['phone'] as String?)?.isNotEmpty ?? false)
+              'phone': payloads[i]['phone'],
+            'village': payloads[i]['village'],
+            'client_id': group[i].localId,
+          },
+      ],
+      if (venue['_venue_village'] != null) 'village': venue['_venue_village'],
+      if (venue['district'] != null) 'district': venue['district'],
+      if (venue['address'] != null) 'address': venue['address'],
+      if (venue['pincode'] != null) 'pincode': venue['pincode'],
+      if (venue['landmark'] != null) 'landmark': venue['landmark'],
+      if (venue['notes'] != null) 'notes': venue['notes'],
+      if (venue['team_id'] != null) 'team_id': venue['team_id'],
+    };
+
+    try {
+      final data = await _api.post('/farmers/batch', body: body);
+      final created = (data['created'] as List<dynamic>?) ?? [];
+      // Backend returns created[] in the same order the client_ids were
+      // sent (farmer_service.create_farmers_batch's idempotent-replay path
+      // reconstructs this order explicitly; a fresh create preserves
+      // insertion order naturally).
+      for (var i = 0; i < group.length && i < created.length; i++) {
+        final row = created[i] as Map<String, dynamic>;
+        final serverId = row['id'] as int;
+        await _db.setIdMapping(
+          localId: group[i].localId,
+          entityType: 'farmer',
+          serverId: serverId,
+        );
+        await _db.upsertCachedFarmer(serverId, jsonEncode(row));
+        await _db.deletePendingFarmer(group[i].localId);
+      }
+    } on ValidationException {
+      for (final f in group) {
+        await _db.markFarmerNeedsAttention(f.localId, 'validation rejected (422)');
+      }
+    } catch (e) {
+      for (final f in group) {
+        await _db.markFarmerTransientFailure(f.localId, _message(e));
+      }
+      rethrow;
+    }
+  }
+
+  // ── Visits (offline check-in + sub-actions) ───────────────────────────
+  Future<void> _syncVisits() async {
+    final pending = await _db.getPendingVisits();
+    bool anyCompleted = false;
+    bool anyVet = false;
+    for (final visit in pending) {
+      try {
+        var serverId = visit.visitServerId;
+        if (serverId == null) {
+          serverId = await _checkInPendingVisit(visit);
+          if (serverId == null) continue; // farmer not resolvable yet
+        }
+        final hadComplete = (await _db.getPendingVisit(visit.localId))?.completeJson != null;
+        final hadVet = (await _db.getPendingVisit(visit.localId))?.vetJson != null;
+        await _syncVisitSubActions(visit.localId, serverId);
+        if (hadComplete) anyCompleted = true;
+        if (hadVet) anyVet = true;
+
+        // Re-read: sub-action syncing clears fields as it goes, so this
+        // reflects what's actually still outstanding.
+        final refreshed = await _db.getPendingVisit(visit.localId);
+        if (refreshed != null && _db.visitFullySynced(refreshed)) {
+          await _db.deletePendingVisit(visit.localId);
+        }
+      } on ValidationException {
+        // Isolated to this visit; the rest of the batch keeps syncing.
+        await _db.markVisitNeedsAttention(
+            visit.localId, 'validation rejected (422)');
+      } catch (e) {
+        await _db.markVisitTransientFailure(visit.localId, _message(e));
+        rethrow;
+      }
+    }
+    // Refresh read caches once after the whole pass rather than once per
+    // visit — prevents parallel writes racing on the same prefs key.
+    if (anyCompleted) unawaited(_refreshLeadsCache());
+    if (anyVet) unawaited(_refreshVetCache());
+  }
+
+  /// Posts check-in for a visit that hasn't synced yet. Returns the new
+  /// server id, or null if its farmer isn't resolvable this pass (checked
+  /// in against an offline-created farmer that hasn't synced itself yet —
+  /// _syncFarmers() ran first in the same pass, so this usually resolves
+  /// same-pass; if not, next pass retries, no error needed).
+  Future<int?> _checkInPendingVisit(PendingVisit visit) async {
+    var farmerId = visit.farmerServerId;
+    if (farmerId == null && visit.farmerLocalId != null) {
+      farmerId = await _db.resolveServerId(visit.farmerLocalId!);
+    }
+    if (farmerId == null) return null;
+
+    final payload = {
+      ...jsonDecode(visit.checkInPayloadJson) as Map<String, dynamic>,
+      'farmer_id': farmerId,
+    };
+
+    // If this visit was checked in offline from an offline-created plan item,
+    // the check-in payload has '_local_plan_item_id' (negative) instead of
+    // 'plan_item_id'. Resolve it to the real server ID now that the plan has
+    // synced and stored the mapping.
+    final localPlanItemId = payload['_local_plan_item_id'] as int?;
+    if (localPlanItemId != null) {
+      final serverPlanItemId = await _db.resolveServerId(localPlanItemId.toString());
+      if (serverPlanItemId != null) {
+        payload['plan_item_id'] = serverPlanItemId;
+      }
+      payload.remove('_local_plan_item_id');
+    }
+
+    final data = await _api.post('/visits/check-in', body: payload);
+    final serverId = data['visit_id'] as int;
+    await _db.setIdMapping(
+      localId: visit.localId,
+      entityType: 'visit',
+      serverId: serverId,
+    );
+    return serverId;
+  }
+
+  /// Fixed order, matching the guided flow: location-remark, then notes,
+  /// then livestock/org-answers, then vet, then every queued order, then
+  /// complete last (the backend expects the visit's other data to already
+  /// exist before it's marked complete). Each field is cleared the moment
+  /// it lands — a failure partway through leaves the rest queued for next
+  /// pass rather than blocking or re-sending what already succeeded.
+  Future<void> _syncVisitSubActions(String localId, int serverId) async {
+    var visit = await _db.getPendingVisit(localId);
+    if (visit == null) return;
+
+    if (visit.locationRemarkJson != null) {
+      await _api.post('/visits/$serverId/location-remark',
+          body: jsonDecode(visit.locationRemarkJson!) as Map<String, dynamic>);
+      await _db.clearVisitField(localId, 'location_remark_json');
+    }
+
+    visit = await _db.getPendingVisit(localId);
+    if (visit?.notesJson != null) {
+      await _api.patch('/visits/$serverId/notes',
+          body: jsonDecode(visit!.notesJson!) as Map<String, dynamic>);
+      await _db.clearVisitField(localId, 'notes_json');
+    }
+
+    visit = await _db.getPendingVisit(localId);
+    if (visit?.livestockJson != null) {
+      await _api.patch('/visits/$serverId/livestock',
+          body: jsonDecode(visit!.livestockJson!) as Map<String, dynamic>);
+      await _db.clearVisitField(localId, 'livestock_json');
+    }
+
+    visit = await _db.getPendingVisit(localId);
+    if (visit?.orgAnswersJson != null) {
+      await _api.patch('/visits/$serverId/org-answers',
+          body: jsonDecode(visit!.orgAnswersJson!) as Map<String, dynamic>);
+      await _db.clearVisitField(localId, 'org_answers_json');
+    }
+
+    visit = await _db.getPendingVisit(localId);
+    if (visit?.vetJson != null) {
+      await _api.patch('/visits/$serverId/vet',
+          body: jsonDecode(visit!.vetJson!) as Map<String, dynamic>);
+      await _db.clearVisitField(localId, 'vet_json');
+    }
+
+    visit = await _db.getPendingVisit(localId);
+    final ordersJson = visit?.ordersJson;
+    if (ordersJson != null) {
+      final orders = jsonDecode(ordersJson) as List<dynamic>;
+      // Remove each order from the queue immediately after it lands — not
+      // after the whole batch — so a failure on order #3 doesn't leave #1
+      // and #2 still queued to be (wrongly) resent next pass. Each order
+      // also now carries its own client_id (alembic 0026), so even a lost
+      // response after a successful create is a safe no-op server-side on
+      // retry, not a duplicate.
+      for (final order in orders) {
+        await _api.post('/visits/$serverId/orders',
+            body: order as Map<String, dynamic>);
+        await _db.removeSyncedVisitOrders(localId, 1);
+      }
+    }
+
+    visit = await _db.getPendingVisit(localId);
+    if (visit?.completeJson != null) {
+      final completeData =
+          jsonDecode(visit!.completeJson!) as Map<String, dynamic>;
+      await _api.post('/visits/$serverId/complete', body: completeData);
+      await _db.clearVisitField(localId, 'complete_json');
+      // Follow-ups cache refresh happens here (per-visit, conditional on
+      // follow_up_date). Leads cache refresh is batched in _syncVisits()
+      // after the full pass to avoid parallel writes racing on the prefs key.
+      if (completeData.containsKey('follow_up_date')) {
+        unawaited(_refreshFollowUpsCache());
+      }
+    }
+  }
+
+  Future<void> _refreshVetCache() async {
+    try {
+      final data = await _api.getList('/vet-requests');
+      final prefs = _ref.read(sharedPreferencesProvider);
+      await prefs.setString('cached_vet_requests', jsonEncode(data));
+    } catch (_) {
+      // Best-effort: vet screen will re-fetch when opened online.
+    }
+  }
+
+  Future<void> _refreshLeadsCache() async {
+    try {
+      final data = await _api.getList('/leads/my');
+      final prefs = _ref.read(sharedPreferencesProvider);
+      await prefs.setString('cached_my_leads', jsonEncode(data));
+    } catch (_) {
+      // Best-effort: leads screen will re-fetch when opened online.
+    }
+  }
+
+  Future<void> _refreshFollowUpsCache() async {
+    try {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      String ymd(DateTime d) =>
+          '${d.year.toString().padLeft(4, '0')}-'
+          '${d.month.toString().padLeft(2, '0')}-'
+          '${d.day.toString().padLeft(2, '0')}';
+      final data = await _api.getList('/follow-ups/my', query: {
+        'date_from': ymd(today),
+        'date_to': ymd(today.add(const Duration(days: 7))),
+      });
+      final prefs = _ref.read(sharedPreferencesProvider);
+      await prefs.setString('cached_my_follow_ups', jsonEncode(data));
+    } catch (_) {
+      // Best-effort: if this fails the user just needs to open the
+      // follow-ups screen once while online to get the updated list.
+    }
   }
 
   // ── Attendance sessions ──────────────────────────────────────────────
@@ -214,6 +550,153 @@ class SyncEngine {
       // Other ApiExceptions (network / 5xx / 401) propagate → backoff.
     }
     await _db.pruneSynced();
+  }
+
+  // ── Profile edit (single pending slot) ────────────────────────────────
+  Future<void> _syncProfileUpdate() async {
+    final tokens = _ref.read(tokenStorageProvider);
+    final pendingJson = tokens.pendingProfileUpdateJson;
+    if (pendingJson == null) return;
+    try {
+      final data = await _api.patch('/auth/me',
+          body: jsonDecode(pendingJson) as Map<String, dynamic>);
+      await tokens.saveUserJson(jsonEncode(data));
+      await tokens.clearPendingProfileUpdate();
+    } on ValidationException {
+      // A rejected profile edit has no per-row status to flip (single
+      // slot, not a table) — leave it queued; the user will see the
+      // rejection surface next time they open Edit Profile and resubmit,
+      // which overwrites this slot either way.
+    }
+    // Other ApiExceptions propagate → backoff, same as everything else.
+  }
+
+  // ── Leave requests ─────────────────────────────────────────────────────
+  Future<void> _syncLeaveRequests() async {
+    final pending = await _db.getPendingLeaveRequests();
+    for (final leave in pending) {
+      try {
+        await _api.post('/attendance/leave', body: {'date': leave.leaveDate});
+        await _db.deletePendingLeaveRequest(leave.leaveDate);
+      } on ValidationException {
+        await _db.markLeaveRequestNeedsAttention(
+            leave.leaveDate, 'validation rejected (422)');
+      } catch (e) {
+        await _db.markLeaveRequestTransientFailure(leave.leaveDate, _message(e));
+        rethrow;
+      }
+    }
+  }
+
+  // ── Visit plans ────────────────────────────────────────────────────────
+  Future<void> _syncVisitPlans() async {
+    final pending = await _db.getPendingVisitPlans();
+    for (final plan in pending) {
+      try {
+        final items = jsonDecode(plan.itemsJson) as List<dynamic>;
+        final resolvedItems = <Map<String, dynamic>>[];
+        var allResolved = true;
+        for (final raw in items) {
+          final item = Map<String, dynamic>.from(raw as Map<String, dynamic>);
+          final farmerId = item['farmer_id'] as int;
+          if (farmerId < 0) {
+            final localId = item['_farmer_local_id'] as String?;
+            final serverId = localId == null ? null : await _db.resolveServerId(localId);
+            if (serverId == null) {
+              allResolved = false;
+              break;
+            }
+            item['farmer_id'] = serverId;
+          }
+          item.remove('_farmer_local_id');
+          resolvedItems.add(item);
+        }
+        // Not every referenced farmer has synced yet — try again next pass,
+        // no error (same reasoning as _syncVisits skipping an unresolved
+        // farmer). If `_farmer_local_id` was never captured (the farmer
+        // synced away before this plan was saved — see
+        // VisitPlanRepository.savePlan), this never resolves; a known gap,
+        // not silently swallowed — retry_count still climbs via the catch
+        // block below once this starts throwing instead of skipping. For
+        // now it just retries indefinitely at zero cost, same as an
+        // unresolved farmer on a normal visit.
+        if (!allResolved) continue;
+
+        // Collect local item IDs before stripping them from the payload.
+        final localItemIds = [
+          for (final item in resolvedItems) item['_local_item_id'] as int?,
+        ];
+        for (final item in resolvedItems) {
+          item.remove('_local_item_id');
+        }
+
+        final response = await _api.post('/visit-plans', body: {
+          'plan_date': plan.planDate,
+          'items': resolvedItems,
+        });
+
+        // Store plan_item local→server ID mappings so _checkInPendingVisit can
+        // inject the real plan_item_id when syncing visits from offline plans.
+        final serverItems =
+            ((response['items'] as List?)?.cast<Map<String, dynamic>>()) ?? [];
+        for (var i = 0; i < localItemIds.length && i < serverItems.length; i++) {
+          final localItemId = localItemIds[i];
+          final serverItemId = serverItems[i]['id'] as int?;
+          if (localItemId != null && serverItemId != null) {
+            await _db.setIdMapping(
+              localId: localItemId.toString(),
+              entityType: 'plan_item',
+              serverId: serverItemId,
+            );
+          }
+        }
+
+        await _db.deletePendingVisitPlan(plan.planDate);
+      } on ValidationException {
+        await _db.markVisitPlanNeedsAttention(
+            plan.planDate, 'validation rejected (422)');
+      } catch (e) {
+        await _db.markVisitPlanTransientFailure(plan.planDate, _message(e));
+        rethrow;
+      }
+    }
+  }
+
+  /// Single-item plan mutations queued offline (skip / carry-over /
+  /// cross-day move / status update) — see VisitPlanRepository's offline
+  /// branches and _applyPendingPlanItemActions. These only ever target
+  /// items that already have a real server id (skip/carry-over/edit act on
+  /// items already visible in a submitted plan), so there's no farmer- or
+  /// visit-plan-resolution dependency to wait on the way _syncVisits has.
+  Future<void> _syncPlanItemActions() async {
+    final pending = await _db.getPendingPlanItemActions();
+    for (final action in pending) {
+      try {
+        final payload = jsonDecode(action.payloadJson) as Map<String, dynamic>;
+        switch (action.action) {
+          case 'skip':
+            await _api.post('/visit-plans/items/${action.itemId}/skip');
+          case 'carry_over':
+            await _api.post(
+                '/visit-plans/items/${action.itemId}/carry-over', body: payload);
+          case 'update_item':
+            await _api.patch('/visit-plans/items/${action.itemId}', body: payload);
+          case 'update_status':
+            final planId = payload['plan_id'] as int;
+            await _api.patch(
+              '/visit-plans/$planId/items/${action.itemId}',
+              body: {'status': payload['status']},
+            );
+        }
+        await _db.deletePendingPlanItemAction(action.localId);
+      } on ValidationException {
+        await _db.markPlanItemActionNeedsAttention(
+            action.localId, 'validation rejected (422)');
+      } catch (e) {
+        await _db.markPlanItemActionTransientFailure(action.localId, _message(e));
+        rethrow;
+      }
+    }
   }
 
   // ── Backoff ──────────────────────────────────────────────────────────

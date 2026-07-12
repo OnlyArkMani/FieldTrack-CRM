@@ -83,6 +83,10 @@ class Customer(Base, TimestampMixin):
     current_feed_price_per_bag: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     notes: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Client-generated UUID (mobile offline queue). NULL for rows created
+    # online. Lets a retried offline create be a safe no-op — see migration
+    # 0025 and FarmerService.create_farmer/create_farmers_batch.
+    client_id: Mapped[str | None] = mapped_column(String(36))
 
     visits: Mapped[list["Visit"]] = relationship(back_populates="farmer")
 
@@ -198,6 +202,9 @@ class Visit(Base, TimestampMixin):
     vet_cattle_count: Mapped[int | None] = mapped_column(Integer)
     vet_notes: Mapped[str | None] = mapped_column(Text)
     vet_status: Mapped[str | None] = mapped_column(String(20))
+    # Client-generated UUID (mobile offline queue). NULL for rows created
+    # online. See migration 0025 and VisitService.check_in.
+    client_id: Mapped[str | None] = mapped_column(String(36))
 
     farmer: Mapped["Customer | None"] = relationship(back_populates="visits")
     notes: Mapped[list["VisitNote"]] = relationship(
@@ -326,6 +333,11 @@ class VisitOrder(Base):
     approved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     rejection_reason: Mapped[str | None] = mapped_column(Text)
+    # Client-generated UUID from the mobile offline queue — lets a retried
+    # create (lost response, app killed mid-sync) be a safe no-op instead of
+    # a duplicate order. NULL for orders created through the normal (online)
+    # path. See alembic 0026.
+    client_id: Mapped[str | None] = mapped_column(String(36))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

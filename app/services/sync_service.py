@@ -28,6 +28,7 @@ from app.models.attendance import Attendance, AttendanceSession
 from app.models.enums import AttendanceStatus, SessionType
 from app.models.user import User
 from app.repositories.attendance_repository import AttendanceRepository
+from app.core.redis import Keys, get_redis
 from app.schemas.sync import (
     AttendanceSessionSyncIn,
     AttendanceSessionSyncResult,
@@ -109,6 +110,33 @@ class SyncService:
                           "errors": len(errors)},
             )
             await self.db.commit()
+            # Update Redis state for every attendance we touched so that
+            # GET /attendance/today reflects the synced state immediately
+            # (without this, the Redis fast-path returns stale NULL until
+            # the next transition or a full DB load).
+            redis = await get_redis()
+            from app.services.attendance_service import _STATE_FOR_TYPE, _seconds_to_midnight
+            from datetime import datetime, timezone as _tz
+            for aid in touched:
+                att = await self.repo.get_by_id(aid)
+                if att is None or not att.sessions:
+                    continue
+                # Only update Redis for today's attendance row — future/past
+                # dates don't have an active state key.
+                today = datetime.now(_tz.utc).date()
+                if att.date != today:
+                    continue
+                last = max(att.sessions, key=lambda s: s.timestamp)
+                state = _STATE_FOR_TYPE.get(last.type)
+                if state is None:
+                    continue
+                key = Keys.attendance_state(user.id)
+                await redis.hset(key, mapping={
+                    "state": state,
+                    "attendance_id": str(att.id),
+                    "since": last.timestamp.isoformat(),
+                })
+                await redis.expire(key, _seconds_to_midnight(datetime.now(_tz.utc)))
 
         return AttendanceSessionSyncResult(
             processed=processed, skipped=skipped, errors=errors

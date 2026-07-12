@@ -8,7 +8,8 @@ import '../../../../core/widgets/app_bottom_sheet.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../models/visit_plan.dart';
 import '../providers/visit_plan_provider.dart';
-import 'add_visit_sheet.dart' show visitPurposes;
+import 'add_visit_sheet.dart'
+    show visitPurposes, isValidTimeSlot, timeSlotErrorMessage;
 import 'plan_item_card.dart' show purposeLabel;
 
 /// Edit a still-planned stop: time, day, purpose, target bags. Only reachable
@@ -68,6 +69,9 @@ class _EditVisitFlowState extends ConsumerState<_EditVisitFlow> {
     super.dispose();
   }
 
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
   static TimeOfDay? _parseTimeSlot(String? slot) {
     if (slot == null || slot.length < 5) return null;
     final hour = int.tryParse(slot.substring(0, 2));
@@ -77,6 +81,11 @@ class _EditVisitFlowState extends ConsumerState<_EditVisitFlow> {
   }
 
   Future<void> _save() async {
+    if (_time == null) {
+      setState(() => _error = 'Please select a time slot.');
+      return;
+    }
+
     setState(() {
       _saving = true;
       _error = null;
@@ -86,12 +95,18 @@ class _EditVisitFlowState extends ConsumerState<_EditVisitFlow> {
         : '${_time!.hour.toString().padLeft(2, '0')}:'
             '${_time!.minute.toString().padLeft(2, '0')}:00';
     final targetBags = int.tryParse(_targetBagsController.text.trim());
+    final dayChanged = !_sameDay(_day, widget.currentDay);
     final ok = await ref.read(visitPlanProvider.notifier).editItem(
           widget.item,
           timeSlot: slot,
           purpose: _purpose,
           targetOrderBags: targetBags,
-          planDate: _day,
+          // Only non-null when the day actually changed — VisitPlanNotifier
+          // .editItem/VisitPlanRepository.updateItem both key their
+          // same-day-vs-cross-day handling off this being null, so passing
+          // the unchanged day here would wrongly treat every edit as a
+          // cross-day move.
+          planDate: dayChanged ? _day : null,
         );
     if (!mounted) return;
     if (ok) {
@@ -150,7 +165,7 @@ class _EditVisitFlowState extends ConsumerState<_EditVisitFlow> {
           ),
         ),
         const SizedBox(height: AppDimens.grid * 2),
-        Text('Time slot',
+        Text('Time slot *',
             style: AppTextStyles.bodyMedium.copyWith(color: scheme.onSurface)),
         const SizedBox(height: AppDimens.grid),
         InkWell(
@@ -160,13 +175,24 @@ class _EditVisitFlowState extends ConsumerState<_EditVisitFlow> {
               context: context,
               initialTime: _time ?? const TimeOfDay(hour: 9, minute: 0),
             );
-            if (picked != null) setState(() => _time = picked);
+            if (picked == null) return;
+            if (!isValidTimeSlot(picked)) {
+              setState(() => _error = timeSlotErrorMessage);
+              return;
+            }
+            setState(() {
+              _time = picked;
+              _error = null;
+            });
           },
           child: Container(
             padding: const EdgeInsets.all(AppDimens.grid * 1.5),
             decoration: BoxDecoration(
               border: Border.all(
-                  color: colors.textSecondary.withValues(alpha: 0.25)),
+                color: _time == null
+                    ? scheme.error.withValues(alpha: 0.5)
+                    : colors.textSecondary.withValues(alpha: 0.25),
+              ),
               borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
             ),
             child: Row(
@@ -175,7 +201,7 @@ class _EditVisitFlowState extends ConsumerState<_EditVisitFlow> {
                     size: 18, color: colors.textSecondary),
                 const SizedBox(width: AppDimens.grid),
                 Text(
-                  _time == null ? 'Any time (optional)' : _time!.format(context),
+                  _time == null ? 'Select a time' : _time!.format(context),
                   style: AppTextStyles.body.copyWith(
                     color:
                         _time == null ? colors.textSecondary : scheme.onSurface,

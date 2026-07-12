@@ -38,6 +38,14 @@ class RateLimitedException extends ApiException {
   final int? retryAfterSeconds;
 }
 
+/// HTTP 409 — server state conflicts with the request (e.g. attendance
+/// already started, duplicate farmer). The caller should re-fetch current
+/// state and reconcile rather than treating this as a fatal error.
+class ConflictException extends ApiException {
+  const ConflictException(String message, [String code = 'CONFLICT'])
+      : super(message, code);
+}
+
 class ValidationException extends ApiException {
   const ValidationException(String message)
       : super(message, 'VALIDATION_ERROR');

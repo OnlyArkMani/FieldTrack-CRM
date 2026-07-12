@@ -5,8 +5,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_exceptions.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../services/sync/connectivity_service.dart';
+import '../../../attendance/providers/upcoming_leaves_provider.dart'
+    show isLeaveDateCached;
 import '../../../../core/widgets/app_bottom_sheet.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
@@ -15,6 +19,7 @@ import '../../farmers/models/farmer.dart';
 import '../../farmers/utils.dart';
 import '../../farmers/widgets/customer_type_chip.dart';
 import '../../farmers/widgets/lead_status_badge.dart';
+import '../../farmers/widgets/quick_add_customer_sheet.dart';
 import '../models/visit_plan.dart';
 import '../providers/visit_plan_provider.dart';
 import 'plan_item_card.dart' show purposeLabel;
@@ -25,6 +30,16 @@ const visitPurposes = [
   'ORDER_COLLECTION',
   'RELATIONSHIP_VISIT',
 ];
+
+/// Field staff work roughly 4am (early-morning milk collection rounds) to
+/// 8pm — kept in sync with `_TIME_SLOT_MIN`/`_TIME_SLOT_MAX` in
+/// app/schemas/crm.py.
+const timeSlotErrorMessage = 'Please select a time between 4:00 AM and 8:00 PM.';
+
+bool isValidTimeSlot(TimeOfDay t) {
+  final minutes = t.hour * 60 + t.minute;
+  return minutes >= 4 * 60 && minutes <= 20 * 60;
+}
 
 /// Add-a-visit flow: search farmers → pick one → set time + purpose → add.
 class AddVisitSheet {
@@ -60,6 +75,7 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
   TimeOfDay? _time;
   String _purpose = 'FIRST_VISIT';
   final _targetBagsController = TextEditingController();
+  bool _saving = false;
 
   @override
   void initState() {
@@ -102,15 +118,39 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
     }
   }
 
-  void _add() {
+  Future<void> _addCustomer() async {
+    final created = await QuickAddCustomerSheet.show(context);
+    if (created == null || !mounted) return;
+    setState(() => _selected = created);
+  }
+
+  Future<void> _add() async {
+    if (_time == null) {
+      setState(() => _error = 'Please select a time slot.');
+      return;
+    }
+
+    final offline = !ref.read(connectivityServiceProvider).current;
+    if (offline) {
+      final planDate = ref.read(visitPlanProvider).date;
+      final prefs = ref.read(sharedPreferencesProvider);
+      if (isLeaveDateCached(prefs, planDate)) {
+        setState(() => _error = "You're on leave on that day — pick a different date.");
+        return;
+      }
+    }
+
     final farmer = _selected!;
     final id = -DateTime.now().microsecondsSinceEpoch;
-    final slot = _time == null
-        ? null
-        : '${_time!.hour.toString().padLeft(2, '0')}:'
-            '${_time!.minute.toString().padLeft(2, '0')}:00';
+    final slot = '${_time!.hour.toString().padLeft(2, '0')}:'
+        '${_time!.minute.toString().padLeft(2, '0')}:00';
     final targetBags = int.tryParse(_targetBagsController.text.trim());
-    ref.read(visitPlanProvider.notifier).addItem(
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    final ok = await ref.read(visitPlanProvider.notifier).addItem(
           PlanItem(
             id: id,
             farmerId: farmer.id,
@@ -126,8 +166,16 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
             status: 'PLANNED',
           ),
         );
-    HapticFeedback.selectionClick();
-    Navigator.of(context).pop();
+    if (!mounted) return;
+    if (ok) {
+      HapticFeedback.selectionClick();
+      Navigator.of(context).pop();
+    } else {
+      setState(() {
+        _saving = false;
+        _error = ref.read(visitPlanProvider).error ?? 'Could not save visit';
+      });
+    }
   }
 
   @override
@@ -152,6 +200,20 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
             hintText: 'Search farmers by name or village',
             prefixIcon: Icon(Icons.search_rounded,
                 size: 20, color: colors.textSecondary),
+          ),
+        ),
+        const SizedBox(height: AppDimens.grid * 1.5),
+        OutlinedButton.icon(
+          onPressed: _addCustomer,
+          icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+          label: const Text('Add customer'),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(44),
+            foregroundColor: AppPalette.amber,
+            side: BorderSide(color: AppPalette.amber.withValues(alpha: 0.55)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+            ),
           ),
         ),
         const SizedBox(height: AppDimens.grid * 1.5),
@@ -213,7 +275,7 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
           ],
         ),
         const SizedBox(height: AppDimens.grid),
-        Text('Time slot',
+        Text('Time slot *',
             style:
                 AppTextStyles.bodyMedium.copyWith(color: scheme.onSurface)),
         const SizedBox(height: AppDimens.grid),
@@ -224,13 +286,24 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
               context: context,
               initialTime: _time ?? const TimeOfDay(hour: 9, minute: 0),
             );
-            if (picked != null) setState(() => _time = picked);
+            if (picked == null) return;
+            if (!isValidTimeSlot(picked)) {
+              setState(() => _error = timeSlotErrorMessage);
+              return;
+            }
+            setState(() {
+              _time = picked;
+              _error = null;
+            });
           },
           child: Container(
             padding: const EdgeInsets.all(AppDimens.grid * 1.5),
             decoration: BoxDecoration(
               border: Border.all(
-                  color: colors.textSecondary.withValues(alpha: 0.25)),
+                color: _time == null
+                    ? scheme.error.withValues(alpha: 0.5)
+                    : colors.textSecondary.withValues(alpha: 0.25),
+              ),
               borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
             ),
             child: Row(
@@ -239,7 +312,7 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
                     size: 18, color: colors.textSecondary),
                 const SizedBox(width: AppDimens.grid),
                 Text(
-                  _time == null ? 'Any time (optional)' : _time!.format(context),
+                  _time == null ? 'Select a time' : _time!.format(context),
                   style: AppTextStyles.body.copyWith(
                     color: _time == null
                         ? colors.textSecondary
@@ -304,11 +377,18 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
             hintText: 'e.g. 10 (optional)',
           ),
         ),
+        if (_error != null) ...[
+          const SizedBox(height: AppDimens.grid * 1.5),
+          Text(_error!,
+              style: AppTextStyles.caption
+                  .copyWith(color: Theme.of(context).colorScheme.error)),
+        ],
         const SizedBox(height: AppDimens.grid * 2.5),
         AppButton(
           label: 'Add to Plan',
           icon: Icons.add_rounded,
-          onPressed: _add,
+          isLoading: _saving,
+          onPressed: _saving ? null : _add,
         ),
         SizedBox(
             height: AppDimens.grid + MediaQuery.of(context).viewInsets.bottom),

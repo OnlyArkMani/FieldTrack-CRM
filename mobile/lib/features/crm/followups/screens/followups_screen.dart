@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/network/api_exceptions.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_card.dart';
@@ -35,10 +36,17 @@ class FollowUpsScreen extends ConsumerWidget {
       body: SafeArea(
         child: async.when(
           loading: () => const ShimmerList(count: 5),
-          error: (e, _) => ErrorStateView(
-            message: e.toString(),
-            onRetry: () => ref.invalidate(myFollowUpsProvider),
-          ),
+          error: (e, _) => e is NoConnectionException || e is TimeoutException
+              ? const EmptyStateView(
+                  icon: Icons.cloud_off_rounded,
+                  title: 'No follow-ups saved offline yet',
+                  message:
+                      'Open this screen once while online to keep follow-ups available offline.',
+                )
+              : ErrorStateView(
+                  message: e.toString(),
+                  onRetry: () => ref.invalidate(myFollowUpsProvider),
+                ),
           data: (items) {
             final byDay = <String, int>{};
             for (final f in items) {

@@ -264,6 +264,12 @@ class AttendanceNotifier extends Notifier<AttendanceUiState> {
       }
     } on _LocationException catch (e) {
       _rollback(snapshot, e.message);
+    } on ConflictException {
+      // Server rejected because state already exists (e.g. the sync engine
+      // uploaded an offline session before the user tapped Start). Re-fetch
+      // the real server state and show it — never treat this as a user error.
+      state = state.copyWith(isSubmitting: false, clearPending: true, clearError: true);
+      await load(silent: true);
     } on ApiException catch (e) {
       _rollback(snapshot, e.message);
     }

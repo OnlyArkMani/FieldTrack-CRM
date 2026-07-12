@@ -16,12 +16,16 @@ import '../../farmers/models/farmer.dart'
     show CustomerType, LeadStatus, LivestockProfile;
 import '../../farmers/providers/farmer_provider.dart';
 import '../../farmers/utils.dart';
+import '../../followups/data/follow_up_repository.dart' show myFollowUpsProvider;
+import '../../leads/data/lead_repository.dart' show myLeadsProvider;
 import '../../planning/providers/visit_plan_provider.dart';
 import '../../planning/widgets/plan_item_card.dart' show purposeLabel;
+import '../../vet/data/vet_repository.dart' show vetRequestsProvider;
 import '../data/visit_repository.dart';
 import '../models/visit.dart';
 import '../widgets/step_indicator.dart';
 import '../widgets/visit_extras.dart';
+import '../../../../services/sync/connectivity_service.dart';
 
 const _breeds = ['Sahiwal', 'Murrah', 'HF Cross', 'Gir', 'Local', 'Other'];
 const _ageGroups = ['Calf', 'Heifer', 'Adult', 'Senior'];
@@ -38,10 +42,18 @@ const _visitPurposes = [
 /// (Notes → Livestock → Order → Lead). Progress is saved to the backend after
 /// each step; notes auto-save every 30s.
 class VisitFlowScreen extends ConsumerStatefulWidget {
-  const VisitFlowScreen({super.key, required this.farmerId, this.planItemId});
+  const VisitFlowScreen({
+    super.key,
+    required this.farmerId,
+    this.planItemId,
+    this.planTargetOrderBags,
+    this.planPurpose,
+  });
 
   final int farmerId;
   final int? planItemId;
+  final int? planTargetOrderBags;
+  final String? planPurpose;
 
   @override
   ConsumerState<VisitFlowScreen> createState() => _VisitFlowScreenState();
@@ -160,11 +172,26 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
         perm == LocationPermission.deniedForever) {
       return null;
     }
-    final pos = await Geolocator.getCurrentPosition(
-      locationSettings:
-          const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 15)),
-    );
-    return (lat: pos.latitude, lng: pos.longitude);
+    // In offline mode, Android can't use network-assisted GPS (A-GPS) so a
+    // raw satellite fix can take 30–90 s on the original 45 s timeout, making
+    // the loading spinner appear to freeze.  We try for 8 s instead; if we
+    // still can't get a fresh fix we fall back to the last cached position
+    // (always available once GPS has ever been used on the device), which is
+    // accurate enough for an offline check-in that will be verified server-side
+    // once connectivity is restored.
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 8),
+        ),
+      );
+      return (lat: pos.latitude, lng: pos.longitude);
+    } catch (_) {
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null) return (lat: last.latitude, lng: last.longitude);
+      rethrow; // no cached fix either — surface the error to the user
+    }
   }
 
   Future<void> _doCheckIn() async {
@@ -173,15 +200,37 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       _error = null;
     });
     try {
-      final pos = await _position();
-      if (!mounted) return;
-      if (pos == null) {
-        setState(() {
-          _busy = false;
-          _error = 'Location permission is required to check in.';
-        });
-        return;
+      // Try to get device GPS position. On failure (timeout or no cached fix)
+      // fall back to the farmer's stored coordinates when offline — the server
+      // runs the distance check server-side once the visit syncs, so using the
+      // farmer's own pin is safe for an offline check-in.
+      ({double lat, double lng}) pos;
+      try {
+        final p = await _position();
+        if (!mounted) return;
+        if (p == null) {
+          // Permission denied — only hard-block when online (server enforces
+          // distance). Offline we still want the visit queued.
+          final isOnline = ref.read(connectivityServiceProvider).current;
+          if (isOnline) {
+            setState(() {
+              _busy = false;
+              _error = 'Location permission is required to check in.';
+            });
+            return;
+          }
+          // Offline: fall through to farmer-coords fallback below.
+          throw Exception('permission_denied');
+        }
+        pos = p;
+      } catch (_) {
+        // GPS failed (timeout + no last-known-position) OR permission denied
+        // while offline → use the farmer's stored pin.
+        final farmer = ref.read(farmerDetailProvider(widget.farmerId)).value;
+        pos = (lat: farmer?.lat ?? 0.0, lng: farmer?.lng ?? 0.0);
       }
+
+      if (!mounted) return;
       final result = await _repo.checkIn(
         farmerId: widget.farmerId,
         lat: pos.lat,
@@ -189,13 +238,24 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
         planItemId: widget.planItemId,
         targetOrderBags: widget.planItemId == null
             ? int.tryParse(_targetBags.text.trim())
-            : null,
-        purpose: widget.planItemId == null ? _purpose : null,
+            : widget.planTargetOrderBags,
+        purpose: widget.planItemId == null ? _purpose : widget.planPurpose,
+        farmerName: ref.read(farmerDetailProvider(widget.farmerId)).value?.name,
       );
       if (!mounted) return;
       HapticFeedback.mediumImpact();
       _visitId = result.visitId;
       _checkIn = result;
+      if (result.isPending) {
+        // Checked in offline — the rest of the guided flow (notes,
+        // livestock, orders, complete) is offline-capable too (see
+        // docs/OFFLINE_SYNC_PLAN.md), so just continue normally. No
+        // location-warning distance to show yet — that's computed
+        // server-side once check-in syncs.
+        HapticFeedback.selectionClick();
+        _enterStep(1);
+        return;
+      }
       if (result.warningRequired) {
         setState(() {
           _busy = false;
@@ -537,9 +597,16 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       // Refresh downstream views. Always reload the plan so the completed stop
       // moves out of Active (and any fulfilled follow-up disappears) — this
       // matters for follow-up visits too, which carry no plan_item_id.
+      // Leads/vet requests are invalidated too — offline, both now read
+      // this visit's pending lead-status/vet data directly (see
+      // LeadRepository/VetRepository), but a screen already open before
+      // completing needs a nudge to actually re-fetch and pick that up.
       ref.invalidate(farmerDetailProvider(widget.farmerId));
       ref.read(farmerListProvider.notifier).refresh(isRefresh: true);
       ref.read(visitPlanProvider.notifier).load();
+      ref.invalidate(myLeadsProvider);
+      ref.invalidate(myFollowUpsProvider);
+      ref.invalidate(vetRequestsProvider);
       if (!mounted) return;
       HapticFeedback.heavyImpact();
       await _showSuccess();

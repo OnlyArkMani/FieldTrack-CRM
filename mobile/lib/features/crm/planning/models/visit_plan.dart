@@ -123,6 +123,32 @@ class PlanItem {
         originalDate: _dt(json['original_date']),
       );
 
+  /// Round-trips through [PlanItem.fromJson] — used to cache an offline
+  /// `savePlan()` result the same way an online fetch would be cached (see
+  /// [MyPlan.toJson]).
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'farmer_id': farmerId,
+        'farmer_name': farmerName,
+        'customer_type': customerType.wire,
+        'village': village,
+        'lat': lat,
+        'lng': lng,
+        'lead_status': leadStatus?.wire,
+        'last_visit_at': lastVisitAt?.toIso8601String(),
+        'last_visit_note': lastVisitNote,
+        'sequence_order': sequenceOrder,
+        'time_slot': timeSlot,
+        'purpose': purpose,
+        'notes': notes,
+        'target_order_bags': targetOrderBags,
+        'status': status,
+        'is_follow_up': isFollowUp,
+        'follow_up_id': followUpId,
+        'is_carry_over': isCarryOver,
+        'original_date': originalDate?.toIso8601String(),
+      };
+
   /// Body shape for POST /visit-plans items.
   Map<String, dynamic> toInput(int sequence) => {
         'farmer_id': farmerId,
@@ -220,4 +246,17 @@ class MyPlan {
             .toList(),
         isOnLeave: (json['is_on_leave'] as bool?) ?? false,
       );
+
+  /// Round-trips through [MyPlan.fromJson] — lets `savePlan()`'s offline
+  /// branch cache its optimistic result the same way `myPlan()` caches an
+  /// online fetch, so re-opening this date offline finds it instead of
+  /// falling through to "nothing cached" and appearing to vanish.
+  Map<String, dynamic> toJson() => {
+        if (id != null) 'id': id,
+        'plan_date': planDate.toIso8601String(),
+        'status': status,
+        'submitted_at': submittedAt?.toIso8601String(),
+        'items': items.map((i) => i.toJson()).toList(),
+        'is_on_leave': isOnLeave,
+      };
 }

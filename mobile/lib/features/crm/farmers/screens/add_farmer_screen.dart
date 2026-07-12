@@ -35,9 +35,9 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
   // Farmer Meet attendees — collected via AddAttendeeSheet, one per farmer.
   final List<AttendeeInput> _attendees = [];
 
+  final _address = TextEditingController();
   final _village = TextEditingController();
   final _district = TextEditingController();
-  final _address = TextEditingController();
   final _landmark = TextEditingController();
   final _pincode = TextEditingController();
   final _notes = TextEditingController();
@@ -46,8 +46,6 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
   bool _submitting = false;
   String? _nameError;
   String? _phoneError;
-  String? _villageError;
-  String? _districtError;
   String? _addressError;
   String? _pincodeError;
   String? _formError;
@@ -58,9 +56,9 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
   void dispose() {
     _name.dispose();
     _phone.dispose();
+    _address.dispose();
     _village.dispose();
     _district.dispose();
-    _address.dispose();
     _landmark.dispose();
     _pincode.dispose();
     _notes.dispose();
@@ -79,20 +77,14 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
   void _removeAttendee(int index) => setState(() => _attendees.removeAt(index));
 
   Future<void> _submit() async {
-    final village = _village.text.trim();
-    final district = _district.text.trim();
     final address = _address.text.trim();
     final pincode = _pincode.text.trim();
     final name = _name.text.trim();
     final phone = _phone.text.trim();
 
     setState(() {
-      _villageError = !_isFarmerMeet && village.isEmpty ? 'Village is required' : null;
-      _districtError = district.isEmpty ? 'District is required' : null;
-      _addressError = address.isEmpty ? 'Address is required' : null;
-      if (pincode.isEmpty) {
-        _pincodeError = 'PIN code is required';
-      } else if (pincode.length != 6) {
+      _addressError = !_isFarmerMeet && address.isEmpty ? 'Address is required' : null;
+      if (pincode.isNotEmpty && pincode.length != 6) {
         _pincodeError = 'PIN code must be exactly 6 digits';
       } else {
         _pincodeError = null;
@@ -114,11 +106,8 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
           : null;
     });
 
-    if ((!_isFarmerMeet && village.isEmpty) ||
-        district.isEmpty ||
-        address.isEmpty ||
-        pincode.isEmpty ||
-        pincode.length != 6 ||
+    if ((!_isFarmerMeet && address.isEmpty) ||
+        _pincodeError != null ||
         (_isFarmerMeet && _attendees.isEmpty) ||
         (!_isFarmerMeet &&
             (name.isEmpty ||
@@ -133,10 +122,7 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
       if (_isFarmerMeet) {
         final created = await ref.read(farmerRepositoryProvider).createBatch(
               attendees: _attendees,
-              district: district,
               address: address,
-              landmark: _landmark.text.trim(),
-              pincode: pincode,
               notes: _notes.text.trim(),
             );
         if (!mounted) return;
@@ -155,9 +141,9 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
               name: name,
               customerType: _type,
               phone: phone,
-              village: village,
-              district: district,
               address: address,
+              village: _village.text.trim(),
+              district: _district.text.trim(),
               landmark: _landmark.text.trim(),
               pincode: pincode,
               notes: _notes.text.trim(),
@@ -401,55 +387,53 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
                 ],
               ),
             ],
-            const SizedBox(height: AppDimens.grid * 2),
-            AppTextField(
-              label: 'Address *',
-              controller: _address,
-              hint: 'House / building',
-              errorText: _addressError,
-              textInputAction: TextInputAction.next,
-              prefixIcon: Icons.location_on_rounded,
-            ),
-            const SizedBox(height: AppDimens.grid * 2),
             if (!_isFarmerMeet) ...[
+              const SizedBox(height: AppDimens.grid * 2),
               AppTextField(
-                label: 'Village/Town/City *',
+                label: 'Address *',
+                controller: _address,
+                hint: 'Address',
+                errorText: _addressError,
+                textInputAction: TextInputAction.next,
+                prefixIcon: Icons.location_on_rounded,
+              ),
+              const SizedBox(height: AppDimens.grid * 2),
+              AppTextField(
+                label: 'Village/Town/City',
                 controller: _village,
-                errorText: _villageError,
                 textInputAction: TextInputAction.next,
                 prefixIcon: Icons.home_work_rounded,
               ),
               const SizedBox(height: AppDimens.grid * 2),
+              AppTextField(
+                label: 'District',
+                controller: _district,
+                textInputAction: TextInputAction.next,
+                prefixIcon: Icons.map_rounded,
+              ),
+              const SizedBox(height: AppDimens.grid * 2),
+              AppTextField(
+                label: 'Landmark',
+                controller: _landmark,
+                hint: 'Nearby landmark',
+                textInputAction: TextInputAction.next,
+                prefixIcon: Icons.push_pin_rounded,
+              ),
+              const SizedBox(height: AppDimens.grid * 2),
+              AppTextField(
+                label: 'PIN code',
+                controller: _pincode,
+                hint: '6-digit postal code',
+                errorText: _pincodeError,
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.next,
+                prefixIcon: Icons.markunread_mailbox_rounded,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(6),
+                ],
+              ),
             ],
-            AppTextField(
-              label: 'District *',
-              controller: _district,
-              errorText: _districtError,
-              textInputAction: TextInputAction.next,
-              prefixIcon: Icons.map_rounded,
-            ),
-            const SizedBox(height: AppDimens.grid * 2),
-            AppTextField(
-              label: 'Landmark',
-              controller: _landmark,
-              hint: 'Nearby landmark',
-              textInputAction: TextInputAction.next,
-              prefixIcon: Icons.push_pin_rounded,
-            ),
-            const SizedBox(height: AppDimens.grid * 2),
-            AppTextField(
-              label: 'PIN code *',
-              controller: _pincode,
-              hint: '6-digit postal code',
-              errorText: _pincodeError,
-              keyboardType: TextInputType.number,
-              textInputAction: TextInputAction.next,
-              prefixIcon: Icons.markunread_mailbox_rounded,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(6),
-              ],
-            ),
             const SizedBox(height: AppDimens.grid * 2),
             AppTextField(
               label: 'Notes',
@@ -458,21 +442,6 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
               textInputAction: TextInputAction.done,
               prefixIcon: Icons.notes_rounded,
             ),
-            if (_formError != null) ...[
-              const SizedBox(height: AppDimens.grid * 2),
-              Text(
-                _formError!,
-                style: AppTextStyles.caption
-                    .copyWith(color: Theme.of(context).colorScheme.error),
-              ),
-            ],
-            const SizedBox(height: AppDimens.grid * 3),
-            AppButton(
-              label: _attendees.length > 1 ? 'Save farmers' : 'Save customer',
-              icon: Icons.check_rounded,
-              isLoading: _submitting,
-              onPressed: _submitting ? null : _submit,
-            ),
             const SizedBox(height: AppDimens.grid),
             Text(
               '* Required',
@@ -480,6 +449,31 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
                   AppTextStyles.caption.copyWith(color: colors.textSecondary),
             ),
           ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppDimens.grid * 3),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_formError != null) ...[
+                Text(
+                  _formError!,
+                  style: AppTextStyles.caption
+                      .copyWith(color: Theme.of(context).colorScheme.error),
+                ),
+                const SizedBox(height: AppDimens.grid * 1.5),
+              ],
+              AppButton(
+                label:
+                    _attendees.length > 1 ? 'Save farmers' : 'Save customer',
+                icon: Icons.check_rounded,
+                isLoading: _submitting,
+                onPressed: _submitting ? null : _submit,
+              ),
+            ],
+          ),
         ),
       ),
     );
