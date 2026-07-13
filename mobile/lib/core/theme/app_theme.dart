@@ -250,6 +250,10 @@ abstract final class AppTheme {
             brightness == Brightness.light ? AppPalette.darkBg : extension.card,
         contentTextStyle:
             AppTextStyles.body.copyWith(color: AppPalette.textPrimaryDark),
+        // Without this, a SnackBarAction (e.g. "Undo") falls back to
+        // colorScheme.secondary (softPurple) — too low-contrast against this
+        // dark background to read.
+        actionTextColor: AppPalette.amber,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppDimens.buttonRadius),

@@ -52,10 +52,24 @@ class VisitPlanRepository {
     // cache/server response AND nothing pending) to show.
     MyPlan? base;
     ApiException? networkError;
+    // A whole-day resave (e.g. a delete-triggered save() that got queued
+    // because the device was offline, or the online POST hit a transient
+    // NoConnectionException/TimeoutException at save time) can still be
+    // sitting unsynced here even though we're online right now — the sync
+    // engine doesn't necessarily push it instantly. If so, the fetch below
+    // would return the server's stale, pre-edit data.
+    final queued = await _db.getPendingVisitPlan(ymd(date));
     try {
       final data = await _api.get('/visit-plans/my/${ymd(date)}');
-      unawaited(_prefs.setString(_myPlanCacheKey(date), jsonEncode(data)));
-      base = MyPlan.fromJson(data);
+      if (queued != null) {
+        // Trust the cached optimistic result savePlan() wrote when it
+        // queued this — it already reflects the edit — instead of the
+        // fetch above, and don't let that stale fetch clobber the cache.
+        base = _cachedMyPlan(date) ?? MyPlan.fromJson(data);
+      } else {
+        unawaited(_prefs.setString(_myPlanCacheKey(date), jsonEncode(data)));
+        base = MyPlan.fromJson(data);
+      }
     } on NoConnectionException catch (e) {
       base = _cachedMyPlan(date);
       networkError = e;

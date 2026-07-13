@@ -50,13 +50,19 @@ class VisitPlanScreen extends ConsumerWidget {
     // *why* instead of just going grey with no explanation.
     final attendanceState = ref.watch(attendanceProvider).state;
     final onLeaveThisDay = !state.isLoading && state.isOnLeave;
-    final visitBlockedReason = onLeaveThisDay
-        ? 'This day is marked as leave'
-        : attendanceState.isEnded
-            ? "You've checked out for today"
-            : attendanceState.isOnLeave
-                ? "You're on leave today"
-                : null;
+    // Viewing a future day (via the date selector's forward chevron) is for
+    // previewing/editing the plan ahead of time — visits can only actually
+    // be started once that day arrives. Past days are already unreachable
+    // (canGoPrev stops at today), so this only ever fires for the future.
+    final visitBlockedReason = !state.isLoading && !state.isToday
+        ? "You can only start a visit from today's plan"
+        : onLeaveThisDay
+            ? 'This day is marked as leave'
+            : attendanceState.isEnded
+                ? "You've checked out for today"
+                : attendanceState.isOnLeave
+                    ? "You're on leave today"
+                    : null;
     // An added/edited stop only exists locally until "Save Plan" is tapped —
     // starting a visit against it before that sends a plan_item_id the
     // server has never seen, so the visit's target/purpose land as null in
@@ -373,6 +379,13 @@ class VisitPlanScreen extends ConsumerWidget {
     );
   }
 
+  // The autosave-after-undo-window timer lives on the notifier itself, not
+  // here — this SnackBar is purely the Undo affordance now. It used to also
+  // schedule the deferred save via `.closed.then(...)`, but that ties the
+  // save to this ScaffoldMessenger's lifecycle, which gets torn down the
+  // moment the route pops (see the PopScope comment above) — so navigating
+  // away within the undo window silently dropped the save. The notifier's
+  // own Timer isn't tied to this widget and fires regardless.
   void _removeWithUndo(
     BuildContext context,
     VisitPlanNotifier notifier,
@@ -380,7 +393,6 @@ class VisitPlanScreen extends ConsumerWidget {
     PlanItem item,
   ) {
     notifier.removeAt(index);
-    bool undone = false;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -388,15 +400,10 @@ class VisitPlanScreen extends ConsumerWidget {
           content: Text('${item.farmerName} removed'),
           action: SnackBarAction(
             label: 'Undo',
-            onPressed: () {
-              undone = true;
-              notifier.insertAt(index, item);
-            },
+            onPressed: () => notifier.insertAt(index, item),
           ),
         ),
-      ).closed.then((_) {
-        if (!undone) notifier.save();
-      });
+      );
   }
 }
 
@@ -726,11 +733,11 @@ class _BottomBar extends StatelessWidget {
               label: 'Save Plan',
               icon: Icons.check_rounded,
               isLoading: state.isSaving,
-              onPressed: !blocked &&
-                      state.items.any((i) =>
-                          !i.isFollowUp && !VisitPlanNotifier.isDone(i))
-                  ? () => _save(context)
-                  : null,
+              // dirty, not "has at least one active item" — that used to
+              // disable this button the moment the last stop was removed,
+              // so there was no way to manually persist an intentionally
+              // emptied plan; an empty plan is a valid, save-able state.
+              onPressed: !blocked && state.dirty ? () => _save(context) : null,
             ),
           ),
         ],

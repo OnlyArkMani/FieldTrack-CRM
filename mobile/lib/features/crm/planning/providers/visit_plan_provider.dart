@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_exceptions.dart';
@@ -39,6 +41,11 @@ class VisitPlanState {
   /// server-side guard that blocks planning visits for a leave day.
   bool get isOnLeave => plan?.isOnLeave ?? false;
 
+  /// Visits can only be started for today's plan — not a future day being
+  /// previewed/edited ahead of time (past days are already unreachable via
+  /// canGoPrev, so this is really just the future-day guard).
+  bool get isToday => _dateOnly(date) == _dateOnly(DateTime.now());
+
   VisitPlanState copyWith({
     DateTime? date,
     MyPlan? plan,
@@ -62,9 +69,19 @@ class VisitPlanState {
 }
 
 class VisitPlanNotifier extends Notifier<VisitPlanState> {
+  // Undo-window timer for removeAt()/insertAt() — lives here, not on the
+  // screen's SnackBar, specifically because the screen tears its
+  // ScaffoldMessenger (and any pending SnackBar timer) down the moment the
+  // route pops, to stop snackbars leaking onto other screens. That teardown
+  // was silently killing the deferred autosave whenever the user navigated
+  // away within the undo window — this notifier isn't tied to that widget's
+  // lifecycle, so a Timer here fires reliably regardless of navigation.
+  Timer? _pendingRemovalSave;
+
   @override
   VisitPlanState build() {
     final date = _initialDate();
+    ref.onDispose(() => _pendingRemovalSave?.cancel());
     final auth = ref.watch(authProvider);
     if (auth.status != AuthStatus.authenticated) {
       return VisitPlanState(date: date);
@@ -160,7 +177,18 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
     }
   }
 
-  void setDate(DateTime date) {
+  Future<void> setDate(DateTime date) async {
+    // Flush any pending post-delete autosave for the day we're LEAVING
+    // before wiping its in-memory items below — otherwise the deferred
+    // save's Timer later fires against whatever date/items are current by
+    // then (the new day), never persisting the deletion for the original
+    // day at all. Reloading that day later then shows the "deleted" item
+    // still there, since the server was never told.
+    if (_pendingRemovalSave != null) {
+      _pendingRemovalSave!.cancel();
+      _pendingRemovalSave = null;
+      await save();
+    }
     state = state.copyWith(date: _dateOnly(date), isLoading: true, clearPlan: true);
     load();
   }
@@ -189,27 +217,47 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
   }
 
   /// Removes the active item at [index] (index into activeItems) and returns
-  /// it (for undo). Completed items are untouched.
+  /// it (for undo). Completed items are untouched. Schedules an autosave a
+  /// few seconds out — cancelled by insertAt() if the caller's UI offers an
+  /// Undo and it's tapped in time; otherwise it fires on its own regardless
+  /// of what screen is showing by then.
   PlanItem removeAt(int index) {
     final active = activeItems;
     final removed = active.removeAt(index);
     state = state.copyWith(items: [...active, ...completedItems], dirty: true);
+    _pendingRemovalSave?.cancel();
+    // Nulled out once it actually fires too — a fired Timer object is still
+    // non-null, so leaving this set would make every later setDate() think
+    // there's a removal still awaiting flush forever after the first ever
+    // delete, triggering a pointless extra save() on every date change.
+    _pendingRemovalSave = Timer(const Duration(seconds: 4), () {
+      _pendingRemovalSave = null;
+      save();
+    });
     return removed;
   }
 
+  /// Undoes a pending removeAt() — cancels the scheduled autosave so the
+  /// restored item is never sent as a deletion.
   void insertAt(int index, PlanItem item) {
+    _pendingRemovalSave?.cancel();
+    _pendingRemovalSave = null;
     final active = activeItems;
     active.insert(index.clamp(0, active.length), item);
     state = state.copyWith(items: [...active, ...completedItems], dirty: true);
   }
 
   /// Reorder within the active list only (completed stay in their section).
-  void reorder(int oldIndex, int newIndex) {
+  /// Immediately persists — same reasoning as addItem: reuses the existing
+  /// save()/savePlan() path right away instead of leaving it dirty until the
+  /// user taps "Save Plan" separately.
+  Future<bool> reorder(int oldIndex, int newIndex) {
     final active = activeItems;
     if (newIndex > oldIndex) newIndex -= 1;
     final moved = active.removeAt(oldIndex);
     active.insert(newIndex, moved);
     state = state.copyWith(items: [...active, ...completedItems], dirty: true);
+    return save();
   }
 
   /// Edit a still-PLANNED item's time/purpose/target bags/day. Reloads the
@@ -292,7 +340,14 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
     final toSave = state.items
         .where((i) => !i.isFollowUp && !i.isCarryOver && !isDone(i))
         .toList();
-    if (toSave.isEmpty || state.isSaving) return false;
+    // NOT `|| toSave.isEmpty` — that used to skip the API call entirely
+    // whenever the last remaining stop was removed, silently leaving the
+    // server's copy of the plan unchanged (still with the "deleted" item)
+    // and `dirty` stuck true forever, since nothing ever reached the
+    // dirty:false reset below. The backend's items list has no minimum
+    // length — an empty plan is a legitimate, save-able state (the day
+    // simply has nothing planned).
+    if (state.isSaving) return false;
     state = state.copyWith(isSaving: true, clearError: true);
     try {
       final plan = await _repo.savePlan(state.date, toSave);
