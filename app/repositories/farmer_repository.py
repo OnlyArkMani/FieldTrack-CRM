@@ -95,8 +95,10 @@ class FarmerRepository:
         lead_status: str | None = None,
         customer_type: str | None = None,
     ) -> tuple[list[tuple], int]:
-        """Keyset page (Farmer.id ASC). Returns rows of
-        (Farmer, team_name, lead_status, last_visit_at) + total count.
+        """Keyset page, newest first (Farmer.id DESC — new farmers get the
+        highest id, so this surfaces them on page 1 instead of the last
+        page). Returns rows of (Farmer, team_name, lead_status,
+        last_visit_at) + total count.
 
         Fetches limit+1 to detect has_more without a second query.
         """
@@ -118,8 +120,8 @@ class FarmerRepository:
             customer_type=customer_type,
         )
         if cursor_id is not None:
-            stmt = stmt.where(Farmer.id > cursor_id)
-        stmt = stmt.order_by(Farmer.id.asc()).limit(limit + 1)
+            stmt = stmt.where(Farmer.id < cursor_id)
+        stmt = stmt.order_by(Farmer.id.desc()).limit(limit + 1)
         rows = (await self.db.execute(stmt)).all()
 
         count_stmt = self._apply_list_filters(
