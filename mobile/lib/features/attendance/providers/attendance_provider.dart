@@ -359,7 +359,12 @@ class AttendanceNotifier extends Notifier<AttendanceUiState> {
         ),
       );
       return (pos.latitude, pos.longitude);
-    } catch (_) {
+    } catch (e) {
+      // Was a bare `catch (_)` — swallowed the real cause (e.g. OEM battery/
+      // Doze throttling killing the fix a few seconds in) behind one generic
+      // message, making field reports impossible to root-cause. Logged, not
+      // surfaced to the user — the message below stays the same.
+      debugPrint('Attendance GPS fetch failed (${e.runtimeType}): $e');
       throw const _LocationException(
           'Could not get your location. Move to open sky and retry.');
     }

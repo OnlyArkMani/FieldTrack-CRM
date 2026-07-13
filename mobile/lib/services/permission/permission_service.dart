@@ -3,7 +3,11 @@ import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart'
+    show Permission, PermissionActions;
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../location/permission_helper_service.dart';
 
 /// Outcome of the location-permission flow. The caller starts attendance only
 /// for [grantedFull] or [grantedForegroundOnly]; the two denied cases already
@@ -98,6 +102,12 @@ class PermissionService {
 
     // Step 4 — background ("always"). Soft prompt only; user can proceed.
     if (status == LocationPermission.always) {
+      // The actual fix for OEM battery/Doze throttling killing a fresh GPS
+      // fix a few seconds in — previously only requested by the dead
+      // PermissionHelperService.requestAllForTracking(), never from the flow
+      // that's actually wired to Check-In. Best-effort, not gated on the
+      // result: some OEMs auto-grant, some show a dialog, some no-op.
+      await _requestBatteryOptimizationExemption();
       return PermissionResult.grantedFull;
     }
 
@@ -115,6 +125,14 @@ class PermissionService {
       );
     }
     return PermissionResult.grantedForegroundOnly;
+  }
+
+  Future<void> _requestBatteryOptimizationExemption() async {
+    try {
+      await Permission.ignoreBatteryOptimizations.request();
+    } catch (_) {
+      /* best-effort — never block Check-In on this */
+    }
   }
 
   // ── Manufacturer autostart hint (Xiaomi/Oppo/Vivo/Realme) ────────────────
@@ -144,10 +162,11 @@ class PermissionService {
           'stop location updates in the background.',
       confirmLabel: 'Open Settings',
       onConfirm: () async {
-        // Best-effort: the app's system settings page (AutoStart lives near it
-        // on these ROMs). Falls back silently if unavailable.
+        // Deep-links straight to the OEM's autostart/battery screen when
+        // known (falls back to the app's own settings page internally if
+        // the component is missing on this OS version).
         try {
-          await Geolocator.openAppSettings();
+          await PermissionHelperService.instance.openManufacturerSettings();
         } catch (_) {/* ignore */}
       },
       dismissLabel: 'Got it',
