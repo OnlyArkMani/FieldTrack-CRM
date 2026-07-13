@@ -66,26 +66,19 @@ class ConnectivityService {
   Future<bool> _check() async {
     bool online;
     try {
-      // Isolated try-catch for the platform channel call — connectivity_plus
-      // can throw android.os.DeadSystemException (a native JNI error) when
-      // the Android system server is killed under memory pressure.  Without
-      // this guard the exception bypasses Dart's catch and crashes the app.
-      List<ConnectivityResult> radio;
-      try {
-        radio = await Connectivity().checkConnectivity();
-      } catch (_) {
-        // Native platform crash — treat as offline to avoid crashing the app.
-        radio = const [ConnectivityResult.none];
-      }
-
-      if (radio.contains(ConnectivityResult.none)) {
-        online = false;
-      } else {
-        final resp = await _dio.get('/health');
-        online = resp.statusCode != null &&
-            resp.statusCode! >= 200 &&
-            resp.statusCode! < 300;
-      }
+      // Always ping — never gate this on Connectivity().checkConnectivity()
+      // first. That used to short-circuit straight to "offline" whenever the
+      // radio reported ConnectivityResult.none, but that reading is known to
+      // go stale on some Android devices for an extended period after mobile
+      // data actually reconnects (radio state lagging real usable
+      // connectivity). Trusting it meant this method could conclude
+      // "offline" forever without ever trying the one check that would prove
+      // otherwise. The ping IS the source of truth; the radio is not
+      // consulted at all here.
+      final resp = await _dio.get('/health');
+      online = resp.statusCode != null &&
+          resp.statusCode! >= 200 &&
+          resp.statusCode! < 300;
     } catch (_) {
       online = false; // timeout / no route / server down => offline
     }

@@ -3,12 +3,23 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter/widgets.dart' show WidgetsBinding, WidgetsBindingObserver, AppLifecycleState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/network/api_client.dart';
 import '../../core/network/api_exceptions.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/theme/app_theme.dart' show sharedPreferencesProvider;
+import '../../features/attendance/providers/attendance_history_provider.dart';
+import '../../features/attendance/providers/attendance_provider.dart';
+import '../../features/attendance/providers/upcoming_leaves_provider.dart';
+import '../../features/crm/farmers/providers/farmer_provider.dart';
+import '../../features/crm/followups/data/follow_up_repository.dart';
+import '../../features/crm/leads/data/lead_repository.dart';
+import '../../features/crm/orders/data/order_repository.dart';
+import '../../features/crm/planning/providers/visit_plan_provider.dart';
+import '../../features/crm/vet/data/vet_repository.dart';
+import '../../features/crm/visits/data/visit_repository.dart';
 import '../../local_db/database_helper.dart';
 import '../location/location_service.dart';
 import 'connectivity_service.dart';
@@ -36,7 +47,7 @@ import 'sync_status_provider.dart';
 /// background-locator isolate keeps its own token-free LocationSyncService; the
 /// two never corrupt each other because the server dedupes and SQLite's
 /// sync_status flags are idempotent.
-class SyncEngine {
+class SyncEngine with WidgetsBindingObserver {
   SyncEngine(this._ref);
   final Ref _ref;
 
@@ -88,55 +99,95 @@ class SyncEngine {
     });
     // Heartbeat backstop while online.
     _periodic = Timer.periodic(_periodicInterval, (_) => unawaited(syncNow()));
+    // Android suspends the main isolate's timers/streams while the app is
+    // backgrounded (screen off, user switched apps) — that's not covered by
+    // the foreground GPS service, which protects its own isolate, not this
+    // one. So a connectivity change that happens while backgrounded is
+    // missed entirely until something wakes this isolate back up. Catch that
+    // on the way back to the foreground instead of waiting on the 60s
+    // heartbeat (which may itself have been frozen for longer than 60s).
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_refreshPendingCount());
     unawaited(syncNow());
   }
 
   void stop() {
+    WidgetsBinding.instance.removeObserver(this);
     _periodic?.cancel();
     _backoff?.cancel();
     _connSub?.cancel();
     _started = false;
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_connectivity.checkNow().then((_) => syncNow()));
+    }
+  }
+
   // ── The pass ─────────────────────────────────────────────────────────
   Future<void> syncNow() async {
     if (_running) return; // mutex — never two at once
-    if (!await _isOnline()) {
-      await _refreshPendingCount();
-      final (loc, ses) = await _counts();
-      await _updateForegroundNotification(online: false, pending: loc + ses);
-      return; // never sync offline
-    }
-
+    // Set the flag synchronously, BEFORE any await. _isOnline() is itself
+    // async and always yields at least one microtask even when it resolves
+    // "instantly" — without this, two near-simultaneous callers (e.g.
+    // app-resumed and connectivity-restored firing for the SAME reconnect
+    // event) could both read _running == false before either one set it,
+    // running _runSequence() twice in parallel on the same local rows (this
+    // did happen — a farmer got POSTed to the server twice in one reconnect
+    // event, and the collision 500'd). Every other line in this function
+    // must stay after this point to keep the check+set atomic.
     _running = true;
-    _backoff?.cancel();
-    _status.setSyncing();
     try {
-      await _runSequence();
-      _failureStreak = 0;
-      await SyncNotifications.instance.dismiss();
-      final (loc, ses) = await _counts();
-      final pending = loc + ses;
-      // A queue that just emptied (offline work successfully uploaded) gets a
-      // light confirmation tap — but only the transition, not every empty pass.
-      if (_lastPending > 0 && pending == 0) {
-        unawaited(HapticFeedback.lightImpact());
+      if (!await _isOnline()) {
+        await _refreshPendingCount();
+        final (loc, ses, _) = await _counts();
+        await _updateForegroundNotification(online: false, pending: loc + ses);
+        return; // never sync offline
       }
-      _lastPending = pending;
-      _status.setSuccess(locations: loc, sessions: ses);
-      await _updateForegroundNotification(online: true, pending: pending);
-    } catch (e) {
-      _failureStreak++;
-      final (loc, ses) = await _counts();
-      final pending = loc + ses;
-      _lastPending = pending;
-      _status.setFailure(_message(e), locations: loc, sessions: ses);
-      _armBackoff();
-      if (_failureStreak >= _failureNotificationThreshold) {
-        await SyncNotifications.instance.showSyncStuck(pendingCount: pending);
+
+      _backoff?.cancel();
+      _status.setSyncing();
+      // Watchdog: a hang ANYWHERE in the pass (the concrete case found was a
+      // platform-channel call with no native service to answer it, but this
+      // guards against any future one too) would otherwise leave `_running`
+      // stuck true forever — silently blocking every future sync attempt
+      // (heartbeat, reconnect, manual retry, everything) until the app is
+      // restarted. That was the actual cause of "only works after reopening
+      // the app". Guarantee the mutex always clears within a bounded time no
+      // matter what happens inside the try block.
+      final watchdog = Timer(const Duration(seconds: 45), () {
+        _running = false;
+      });
+      try {
+        await _runSequence();
+        _failureStreak = 0;
+        await SyncNotifications.instance.dismiss();
+        final (loc, ses, ent) = await _counts();
+        final pending = loc + ses + ent;
+        // A queue that just emptied (offline work successfully uploaded) gets a
+        // light confirmation tap — but only the transition, not every empty pass.
+        if (_lastPending > 0 && pending == 0) {
+          unawaited(HapticFeedback.lightImpact());
+        }
+        _lastPending = pending;
+        _status.setSuccess(locations: loc, sessions: ses, entities: ent);
+        await _updateForegroundNotification(online: true, pending: loc + ses);
+      } catch (e) {
+        _failureStreak++;
+        final (loc, ses, ent) = await _counts();
+        final pending = loc + ses + ent;
+        _lastPending = pending;
+        _status.setFailure(_message(e), locations: loc, sessions: ses, entities: ent);
+        _armBackoff();
+        if (_failureStreak >= _failureNotificationThreshold) {
+          await SyncNotifications.instance.showSyncStuck(pendingCount: pending);
+        }
+        debugPrint('Sync pass failed (streak $_failureStreak): $e');
+      } finally {
+        watchdog.cancel();
       }
-      debugPrint('Sync pass failed (streak $_failureStreak): $e');
     } finally {
       _running = false;
     }
@@ -168,6 +219,17 @@ class SyncEngine {
     await _db.requeueFailedSessions();
     await _db.requeueFailed();
 
+    // Snapshot what's queued before this pass touches it. A screen's cached
+    // provider only needs invalidating if this pass actually had something of
+    // that kind to push — an empty heartbeat pass (nothing queued) shouldn't
+    // force every open screen to refetch.
+    final hadFarmers = (await _db.getPendingFarmers()).isNotEmpty;
+    final hadVisits = (await _db.getPendingVisits()).isNotEmpty;
+    final hadVisitPlans = (await _db.getPendingVisitPlans()).isNotEmpty;
+    final hadPlanItemActions = (await _db.getPendingPlanItemActions()).isNotEmpty;
+    final hadLeaveRequests = (await _db.getPendingLeaveRequests()).isNotEmpty;
+    final hadSessions = (await _db.getPendingSessions()).isNotEmpty;
+
     await _syncProfileUpdate();
     await _syncLeaveRequests();
     await _syncFarmers();
@@ -177,12 +239,69 @@ class SyncEngine {
     await _syncSessions();
     await _syncLocations();
 
-    final (loc, ses) = await _counts();
+    final (loc, ses, ent) = await _counts();
     _status.setPending(
       locations: loc,
       sessions: ses,
+      entities: ent,
       isOffline: !_connectivity.current,
     );
+
+    // Only reached once every step above completed without throwing, so
+    // everything snapshotted as pending has now actually landed on the
+    // server — refetch the screens that show it instead of leaving them on
+    // stale cached state until the user happens to force-refresh.
+    _invalidateStaleScreens(
+      farmers: hadFarmers,
+      visits: hadVisits,
+      visitPlans: hadVisitPlans || hadPlanItemActions,
+      leaveRequests: hadLeaveRequests,
+      sessions: hadSessions,
+    );
+  }
+
+  /// autoDispose providers (farmer detail, my-leads, needs-attention, map)
+  /// already refetch fresh every time their screen is opened and don't need
+  /// this. These are the ones Riverpod otherwise keeps cached indefinitely.
+  void _invalidateStaleScreens({
+    required bool farmers,
+    required bool visits,
+    required bool visitPlans,
+    required bool leaveRequests,
+    required bool sessions,
+  }) {
+    if (farmers) {
+      _ref.invalidate(farmerListProvider);
+      _ref.invalidate(farmerVisitsProvider);
+    }
+    if (visits) {
+      _ref.invalidate(activeVisitProvider);
+      _ref.invalidate(visitDetailProvider);
+      _ref.invalidate(farmerVisitsProvider);
+      _ref.invalidate(myFollowUpsProvider);
+      _ref.invalidate(vetRequestsProvider);
+      _ref.invalidate(pendingOrdersProvider);
+      _ref.invalidate(myLeadsProvider);
+      // VisitPlanRepository._applyPendingVisitProgress patches a plan item's
+      // status (e.g. to COMPLETED) locally ONLY while its visit is still in
+      // the unsynced queue. The instant that visit syncs and its row is
+      // deleted, that local patch stops applying — without invalidating
+      // here, "Planned for today" would keep showing whatever it last
+      // fetched from the server (stale, from before this visit completed)
+      // instead of the server's now-current state.
+      _ref.invalidate(visitPlanProvider);
+    }
+    if (visitPlans) {
+      _ref.invalidate(visitPlanProvider);
+    }
+    if (leaveRequests) {
+      _ref.invalidate(upcomingLeavesProvider);
+      _ref.invalidate(attendanceHistoryProvider);
+    }
+    if (sessions) {
+      _ref.invalidate(attendanceProvider);
+      _ref.invalidate(attendanceHistoryProvider);
+    }
   }
 
   // ── Farmers (offline create queue) ───────────────────────────────────
@@ -309,6 +428,10 @@ class SyncEngine {
         if (serverId == null) {
           serverId = await _checkInPendingVisit(visit);
           if (serverId == null) continue; // farmer not resolvable yet
+          // Without this, visit_server_id in the DB stays null forever —
+          // visitFullySynced() can never be satisfied, so every future pass
+          // re-runs check-in from scratch instead of ever deleting this row.
+          await _db.setPendingVisitServerId(visit.localId, serverId);
         }
         final hadComplete = (await _db.getPendingVisit(visit.localId))?.completeJson != null;
         final hadVet = (await _db.getPendingVisit(visit.localId))?.vetJson != null;
@@ -708,17 +831,27 @@ class SyncEngine {
   }
 
   // ── Pending counts ───────────────────────────────────────────────────
-  Future<(int, int)> _counts() async {
+  // Locations/sessions have dedicated count queries; the rest only expose
+  // list getters, so length is the cheapest available count for them.
+  Future<(int, int, int)> _counts() async {
     final locations = await _db.getPendingLocationCount();
     final sessions = await _db.getPendingSessionCount();
-    return (locations, sessions);
+    final farmers = (await _db.getPendingFarmers()).length;
+    final visits = (await _db.getPendingVisits()).length;
+    final visitPlans = (await _db.getPendingVisitPlans()).length;
+    final planItemActions = (await _db.getPendingPlanItemActions()).length;
+    final leaveRequests = (await _db.getPendingLeaveRequests()).length;
+    final entities =
+        farmers + visits + visitPlans + planItemActions + leaveRequests;
+    return (locations, sessions, entities);
   }
 
   Future<void> _refreshPendingCount() async {
-    final (loc, ses) = await _counts();
+    final (loc, ses, ent) = await _counts();
     _status.setPending(
       locations: loc,
       sessions: ses,
+      entities: ent,
       isOffline: !_connectivity.current,
     );
   }

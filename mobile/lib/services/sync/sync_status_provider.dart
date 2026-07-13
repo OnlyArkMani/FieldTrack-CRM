@@ -9,6 +9,7 @@ class SyncState {
     this.pendingCount = 0,
     this.pendingLocationCount = 0,
     this.pendingSessionCount = 0,
+    this.pendingEntityCount = 0,
     this.isOffline = false,
     this.lastSyncTime,
     this.lastSuccessfulSync,
@@ -17,9 +18,14 @@ class SyncState {
   });
 
   final SyncPhase phase;
-  final int pendingCount; // locations + sessions
+  final int pendingCount; // locations + sessions + entities
   final int pendingLocationCount;
   final int pendingSessionCount;
+  // Farmers + visits + visit plans + plan-item actions + leave requests —
+  // without this, a stuck offline farmer/visit/leave-request with zero
+  // pending locations/sessions made the badge claim "Synced" while that
+  // item never reached the server.
+  final int pendingEntityCount;
   final bool isOffline; // from ConnectivityService
   final DateTime? lastSyncTime;
   final DateTime? lastSuccessfulSync;
@@ -38,6 +44,7 @@ class SyncState {
     int? pendingCount,
     int? pendingLocationCount,
     int? pendingSessionCount,
+    int? pendingEntityCount,
     bool? isOffline,
     DateTime? lastSyncTime,
     DateTime? lastSuccessfulSync,
@@ -50,6 +57,7 @@ class SyncState {
         pendingCount: pendingCount ?? this.pendingCount,
         pendingLocationCount: pendingLocationCount ?? this.pendingLocationCount,
         pendingSessionCount: pendingSessionCount ?? this.pendingSessionCount,
+        pendingEntityCount: pendingEntityCount ?? this.pendingEntityCount,
         isOffline: isOffline ?? this.isOffline,
         lastSyncTime: lastSyncTime ?? this.lastSyncTime,
         lastSuccessfulSync: lastSuccessfulSync ?? this.lastSuccessfulSync,
@@ -74,23 +82,30 @@ class SyncNotifier extends Notifier<SyncState> {
   void setPending({
     required int locations,
     required int sessions,
+    required int entities,
     bool? isOffline,
   }) =>
       state = state.copyWith(
-        pendingCount: locations + sessions,
+        pendingCount: locations + sessions + entities,
         pendingLocationCount: locations,
         pendingSessionCount: sessions,
+        pendingEntityCount: entities,
         isOffline: isOffline,
       );
 
   void setOffline(bool offline) => state = state.copyWith(isOffline: offline);
 
-  void setSuccess({required int locations, required int sessions}) =>
+  void setSuccess({
+    required int locations,
+    required int sessions,
+    required int entities,
+  }) =>
       state = state.copyWith(
         phase: SyncPhase.idle,
-        pendingCount: locations + sessions,
+        pendingCount: locations + sessions + entities,
         pendingLocationCount: locations,
         pendingSessionCount: sessions,
+        pendingEntityCount: entities,
         lastSyncTime: DateTime.now(),
         lastSuccessfulSync: DateTime.now(),
         clearError: true,
@@ -101,12 +116,14 @@ class SyncNotifier extends Notifier<SyncState> {
     String error, {
     required int locations,
     required int sessions,
+    required int entities,
   }) =>
       state = state.copyWith(
         phase: SyncPhase.failed,
-        pendingCount: locations + sessions,
+        pendingCount: locations + sessions + entities,
         pendingLocationCount: locations,
         pendingSessionCount: sessions,
+        pendingEntityCount: entities,
         lastError: error,
         consecutiveFailures: state.consecutiveFailures + 1,
       );

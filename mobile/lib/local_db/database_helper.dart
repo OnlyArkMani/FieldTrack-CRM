@@ -802,6 +802,17 @@ class DatabaseHelper {
     return PendingVisit.fromRow(rows.first);
   }
 
+  /// Persists the server id returned by a successful offline check-in onto
+  /// this row. Without this, visitFullySynced() (which requires
+  /// visit_server_id != null) can never be satisfied — every subsequent pass
+  /// re-reads visit_server_id as still null and re-runs check-in from
+  /// scratch, forever, instead of ever reaching deletePendingVisit().
+  Future<void> setPendingVisitServerId(String localId, int serverId) async {
+    final db = await database;
+    await db.update('pending_visits', {'visit_server_id': serverId},
+        where: 'local_id = ?', whereArgs: [localId]);
+  }
+
   Future<PendingVisit?> getPendingVisitByServerId(int serverId) async {
     final db = await database;
     final rows = await db.query('pending_visits',

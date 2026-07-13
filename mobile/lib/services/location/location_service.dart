@@ -281,13 +281,21 @@ class LocationService {
   static Future<void> updateTrackingNotification(String msg) async {
     if (kIsWeb) return;
     try {
+      // Timeout is critical, not cosmetic: when no locator service is
+      // running (e.g. not checked in), this platform-channel call has no
+      // native side to answer it and can hang forever with no exception —
+      // and SyncEngine.syncNow() awaits this as the last step before its
+      // finally block releases the sync mutex. An unbounded hang here means
+      // the mutex never clears, silently blocking every future sync attempt
+      // (heartbeat, reconnect, manual retry) until the app is restarted.
       await BackgroundLocator.updateNotificationText(
         title: 'FieldTrack',
         msg: msg,
         bigMsg: msg,
-      );
+      ).timeout(const Duration(seconds: 5));
     } catch (_) {
-      // Service not running / plugin unavailable — cosmetic, safe to ignore.
+      // Service not running / plugin unavailable / timed out — cosmetic,
+      // safe to ignore.
     }
   }
 }
