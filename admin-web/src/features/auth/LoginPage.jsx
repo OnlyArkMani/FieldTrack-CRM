@@ -1,12 +1,12 @@
-import { useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { LogIn } from 'lucide-react';
+import { useState } from "react";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { LogIn } from "lucide-react";
 
-import { api, apiErrorMessage } from '@/services/api/client';
-import { useAuthStore, selectIsAdmin } from '@/store/authStore';
-import Button from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import Card from '@/components/ui/Card';
+import { api, apiErrorMessage } from "@/services/api/client";
+import { useAuthStore, selectIsAdmin } from "@/store/authStore";
+import Button from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import Card from "@/components/ui/Card";
 
 export default function LoginPage() {
   const status = useAuthStore((s) => s.status);
@@ -14,34 +14,34 @@ export default function LoginPage() {
   const setSession = useAuthStore((s) => s.setSession);
   const navigate = useNavigate();
   const location = useLocation();
-  const idleLogout = location.state?.reason === 'idle';
+  const idleLogout = location.state?.reason === "idle";
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  if (status === 'authenticated' && isAdmin) return <Navigate to="/" replace />;
+  if (status === "authenticated" && isAdmin) return <Navigate to="/" replace />;
 
   const submit = async (e) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const { data } = await api.post('/auth/login', {
+      const { data } = await api.post("/auth/login", {
         email: email.trim().toLowerCase(),
         password,
-        client: 'web', // refresh token returned as httpOnly cookie
+        client: "web", // refresh token returned as httpOnly cookie
       });
-      if (data.user?.role !== 'ADMIN') {
-        setError('This dashboard is for administrators only.');
+      if (data.user?.role !== "ADMIN") {
+        setError("This dashboard is for administrators only.");
         setLoading(false);
         return;
       }
       setSession({ accessToken: data.access_token, user: data.user });
-      navigate('/', { replace: true });
+      navigate("/", { replace: true });
     } catch (err) {
-      setError(apiErrorMessage(err, 'Login failed'));
+      setError(apiErrorMessage(err, "Login failed"));
       setLoading(false);
     }
   };
@@ -53,16 +53,21 @@ export default function LoginPage() {
           <div className="grid h-11 w-11 place-items-center rounded-card bg-primary text-primary-fg text-xl font-bold">
             F
           </div>
-          <span className="text-2xl font-bold text-text-primary">FieldTrack</span>
+          <span className="text-2xl font-bold text-text-primary">
+            FieldTrack
+          </span>
         </div>
         <Card>
-          <h1 className="text-lg font-semibold text-text-primary">Admin sign in</h1>
+          <h1 className="text-lg font-semibold text-text-primary">
+            Admin sign in
+          </h1>
           <p className="mt-1 text-sm text-text-secondary">
             Manage employees, teams, attendance and live tracking.
           </p>
           {idleLogout && (
             <p className="mt-3 rounded-btn bg-primary/10 px-3 py-2 text-sm text-primary">
-              You were signed out after 30 minutes of inactivity. Please sign in again.
+              You were signed out after 2 hours of inactivity. Please sign in
+              again.
             </p>
           )}
           <form onSubmit={submit} className="mt-5 space-y-4">
@@ -83,7 +88,12 @@ export default function LoginPage() {
               required
             />
             {error && <p className="text-sm text-danger">{error}</p>}
-            <Button type="submit" loading={loading} icon={LogIn} className="w-full">
+            <Button
+              type="submit"
+              loading={loading}
+              icon={LogIn}
+              className="w-full"
+            >
               Sign in
             </Button>
           </form>
