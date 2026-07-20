@@ -50,9 +50,11 @@ export default function LoginPage() {
     <div className="grid min-h-screen place-items-center bg-bg p-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center justify-center gap-2">
-          <div className="grid h-11 w-11 place-items-center rounded-card bg-primary text-primary-fg text-xl font-bold">
-            F
-          </div>
+            <img
+              src="/favicon.png"
+              alt="Samarth Sathi logo"
+            className="h-11 w-11 rounded-card object-cover"
+            />
           <span className="text-2xl font-bold text-text-primary">
             Samarth Sathi
           </span>
