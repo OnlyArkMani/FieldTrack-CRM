@@ -94,9 +94,11 @@ function NavItems({ collapsed, onNavigate }) {
 function Brand({ collapsed }) {
   return (
     <div className={clsx('flex items-center gap-2 px-5 py-5', collapsed && 'justify-center px-2')}>
-      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-btn bg-primary text-primary-fg font-bold">
-        F
-      </div>
+      <img
+        src="/favicon.png"
+        alt="Samarth Sathi logo"
+        className="h-9 w-9 shrink-0 rounded-btn object-cover"
+      />
       {!collapsed && (
         <span className="text-lg font-bold text-text-primary">Samarth Sathi</span>
       )}
