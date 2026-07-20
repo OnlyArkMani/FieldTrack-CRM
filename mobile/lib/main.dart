@@ -58,7 +58,7 @@ Future<void> main() async {
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
       ],
-      child: const FieldTrackApp(),
+      child: const SamarthSathiApp(),
     ),
   );
 }

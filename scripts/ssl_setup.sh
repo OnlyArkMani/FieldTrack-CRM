@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# FieldTrack — obtain (or renew) a Let's Encrypt certificate for the domain
+# SamarthSathi — obtain (or renew) a Let's Encrypt certificate for the domain
 # Nginx serves the admin SPA + API on.
 #
 # Usage:

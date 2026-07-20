@@ -1,11 +1,11 @@
-# FieldTrack — Backend Architecture
+# SamarthSathi — Backend Architecture
 
 Foundation document. Every structural decision and its reasoning lives here.
 
 ## Directory structure
 
 ```
-FieldTrack/
+SamarthSathi/
 ├── docker-compose.yml      # postgres+postgis, redis, app, nginx
 ├── Dockerfile              # multi-stage, non-root, python:3.11-slim
 ├── .env.example            # all config — copy to .env, never commit .env

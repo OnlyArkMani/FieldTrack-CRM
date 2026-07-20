@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# FieldTrack — build the admin-web SPA and deploy it to the VPS.
+# SamarthSathi — build the admin-web SPA and deploy it to the VPS.
 #
 # Usage:
 #   ./scripts/build_admin.sh [user@host]

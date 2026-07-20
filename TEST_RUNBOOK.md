@@ -1,4 +1,4 @@
-# FieldTrack — Test & Run Runbook (CRM extension)
+# SamarthSathi — Test & Run Runbook (CRM extension)
 
 Covers rebuilding Docker, running migrations, backend tests, CRM endpoint smoke-tests,
 the admin web dashboard, and the Flutter app.
@@ -12,7 +12,7 @@ the admin web dashboard, and the Flutter app.
 | Redis    | **6380**  | localhost:6380 (internal 6379) |
 | App      | 8000      | internal only (behind Nginx)   |
 
-Run everything from the repo root: `C:\Projects\SamarthAgri\FieldTrack\FieldTrack`
+Run everything from the repo root: `C:\Projects\SamarthAgri\SamarthSathi\SamarthSathi`
 
 > **Image is prod-only.** The Docker image copies just `app/` + `alembic/`.
 > `scripts/` and `tests/` are **not** inside the container, so any

@@ -19,9 +19,8 @@ class TileCacheService {
 
   static const _storeName = 'fieldtrack_tiles';
   static const _maxDbSizeKiB = 200 * 1024; // 200 MB
-  static const _urlTemplate =
-      'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-  static const _userAgent = 'com.fieldtrack.mobile';
+  static const _urlTemplate = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  static const _userAgent = 'com.samarth.sathi';
 
   static const _store = FMTCStore(_storeName);
 

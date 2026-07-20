@@ -271,7 +271,7 @@ class EmployeeService:
         self.db.add(
             Notification(
                 user_id=user.id,
-                title="Welcome to FieldTrack",
+                title="Welcome to Samarth Sathi",
                 body=f"Hi {user.name}, your account is ready. Log in to get started.",
                 type="welcome",
             )
@@ -292,7 +292,7 @@ class EmployeeService:
             tokens = [t for t in (await self.db.execute(stmt)).scalars().all() if t]
             await FCMService().send_to_tokens(
                 tokens,
-                title="Welcome to FieldTrack",
+                title="Welcome to Samarth Sathi",
                 body=f"Hi {user.name}, your account is ready.",
                 data={"type": "welcome"},
             )

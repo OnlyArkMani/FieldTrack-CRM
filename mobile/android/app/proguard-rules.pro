@@ -1,4 +1,4 @@
-# FieldTrack — ProGuard/R8 rules for release builds.
+# SamarthSathi — ProGuard/R8 rules for release builds.
 #
 # minifyEnabled + shrinkResources (enabled in build.gradle.kts) remove unused
 # code and rename classes to save space. Plugins that use reflection or JNI

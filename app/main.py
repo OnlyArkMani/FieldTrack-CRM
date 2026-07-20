@@ -1,4 +1,4 @@
-"""FieldTrack API entrypoint."""
+"""Samarth Sathi API entrypoint."""
 import asyncio
 import logging
 from contextlib import asynccontextmanager

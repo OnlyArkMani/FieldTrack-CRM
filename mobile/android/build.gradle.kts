@@ -79,7 +79,7 @@ subprojects {
                 text = text.replace("Keys.ARG_PROVIDER to location.provider", "Keys.ARG_PROVIDER to (location.provider ?: \"\")")
                 if (text != before) {
                     parserFile.writeText(text)
-                    println("[FieldTrack] Patched background_locator_2 LocationParserUtil.kt for Kotlin 2.x")
+                    println("[Samarth Sathi] Patched background_locator_2 LocationParserUtil.kt for Kotlin 2.x")
                 }
             }
 
@@ -109,7 +109,7 @@ subprojects {
                             "Keys.CHANNEL_ID, notificationChannelName.ifBlank { \"Location tracking\" },"
                         )
                     )
-                    println("[FieldTrack] Patched background_locator_2 IsolateHolderService.kt (guaranteed non-empty notification channel name)")
+                    println("[Samarth Sathi] Patched background_locator_2 IsolateHolderService.kt (guaranteed non-empty notification channel name)")
                 }
             }
         }

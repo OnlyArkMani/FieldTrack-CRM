@@ -133,11 +133,11 @@ Client supplied the logo directly: `https://samarthagri.com/wp-content/uploads/2
 
 - `mobile/assets/images/app_icon.png` — replaced with the Samarth logo, letterboxed onto a 1024×1024 white-background square (aspect ratio preserved, no stretching, ~85% fill).
 - `mobile/assets/images/app_icon_foreground.png` — Samarth logo with the white background keyed out to transparent, scaled to ~60% fill to sit inside Android's adaptive-icon safe zone (so it isn't clipped by circular/rounded/squircle launcher masks).
-- `mobile/pubspec.yaml` — `adaptive_icon_background` changed from the old FieldTrack orange (`#f5a623`) to `#ffffff`, since the new logo already carries its own green/orange color and a white backdrop reads cleanly (the old orange would clash).
+- `mobile/pubspec.yaml` — `adaptive_icon_background` changed from the old SamarthSathi orange (`#f5a623`) to `#ffffff`, since the new logo already carries its own green/orange color and a white backdrop reads cleanly (the old orange would clash).
 - Regenerated all Android density buckets (`mipmap-*/launcher_icon.png`, `drawable-*/ic_launcher_foreground.png`, `mipmap-anydpi-v26/launcher_icon.xml`, `values/colors.xml`'s `ic_launcher_background`) via `dart run flutter_launcher_icons`. `AndroidManifest.xml` already points at `@mipmap/launcher_icon`, so no manifest change was needed. iOS is `false` in the launcher-icons config (Android-first per this repo, per `CLAUDE.md`) — not touched.
 - Verified visually: both the plain launcher icon and the adaptive foreground-on-white render correctly.
 
-**Deliberately NOT changed (flagged, not silently altered):** `mobile/lib/features/splash/splash_screen.dart` still shows a generic pin icon in a colored rounded square plus the "FieldTrack" wordmark and "Know where work happens." tagline — this is a separate in-app splash graphic/copy, not the launcher icon asset, and changing it means touching branding text, not just an image file. Ask the client whether they also want the in-app splash screen (and any app-bar branding) restyled to Samarth, since that's a design decision beyond a straight asset swap.
+**Deliberately NOT changed (flagged, not silently altered):** `mobile/lib/features/splash/splash_screen.dart` still shows a generic pin icon in a colored rounded square plus the "SamarthSathi" wordmark and "Know where work happens." tagline — this is a separate in-app splash graphic/copy, not the launcher icon asset, and changing it means touching branding text, not just an image file. Ask the client whether they also want the in-app splash screen (and any app-bar branding) restyled to Samarth, since that's a design decision beyond a straight asset swap.
 
 ## 11. Add "Sanjeevni" cattle feed type
 

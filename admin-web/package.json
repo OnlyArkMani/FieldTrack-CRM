@@ -1,9 +1,9 @@
 {
-  "name": "fieldtrack-admin",
+  "name": "samarth-sathi-admin",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "FieldTrack admin web dashboard (web-only, React + Vite + Tailwind)",
+  "description": "Samarth Sathi admin web dashboard (web-only, React + Vite + Tailwind)",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

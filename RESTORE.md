@@ -1,4 +1,4 @@
-# FieldTrack — Database Restore Procedure
+# SamarthSathi — Database Restore Procedure
 
 Use this if the production database is lost, corrupted, or you need to roll
 back to a previous day's data (e.g. after a bad migration or data-entry

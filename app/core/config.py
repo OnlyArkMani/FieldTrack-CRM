@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # App
     app_env: str = "development"
-    app_name: str = "FieldTrack"
+    app_name: str = "Samarth Sathi"
     debug: bool = False
     api_v1_prefix: str = "/api/v1"
     allowed_origins: str = ""  # comma-separated

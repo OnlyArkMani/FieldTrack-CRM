@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── FieldTrack design tokens ──────────────────────────────────────────────
+/* ── SamarthSathi design tokens ──────────────────────────────────────────────
    The same palette as the Flutter app, expressed as CSS variables so the
    `.dark` class on <html> flips the entire theme in one place. */
 :root {
@@ -46,7 +46,7 @@ body,
 
 body {
   margin: 0;
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   background: var(--ft-bg);
   color: var(--ft-text);
   -webkit-font-smoothing: antialiased;
@@ -68,6 +68,6 @@ body {
 
 /* Leaflet tiles should respect the card radius where embedded */
 .leaflet-container {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   background: var(--ft-surface);
 }

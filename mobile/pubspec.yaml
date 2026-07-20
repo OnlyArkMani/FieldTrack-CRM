@@ -1,4 +1,4 @@
-# FieldTrack mobile — Android-first, min SDK 21, low-end device friendly.
+# Samarth Sathi mobile — Android-first, min SDK 21, low-end device friendly.
 #
 # VERSION NOTE: caret pins below are known-good majors as of mid-2025.
 # Run `flutter pub outdated` once and bump patch versions before first build.
@@ -13,8 +13,8 @@
 #   shared_preferences. Acceptable for this threat model (no payment data);
 #   revisit if requirements change.
 
-name: fieldtrack_mobile
-description: FieldTrack employee tracking & attendance
+name: samarth_sathi
+description: Samarth Sathi employee tracking & attendance
 publish_to: "none"
 version: 0.1.0+1
 

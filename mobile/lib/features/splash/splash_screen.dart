@@ -69,7 +69,7 @@ class _SplashScreenState extends State<SplashScreen>
               ),
               const SizedBox(height: AppDimens.grid * 3),
               Text(
-                'FieldTrack',
+                'Samarth Sathi',
                 style: Theme.of(context).textTheme.displaySmall,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

@@ -1,5 +1,5 @@
 /** @type {import('tailwindcss').Config} */
-// The FieldTrack palette lives as CSS variables (see src/index.css) so a single
+// The Samarth Sathi palette lives as CSS variables (see src/index.css) so a single
 // `.dark` class flips the whole theme. Tailwind tokens point at those vars.
 export default {
   darkMode: 'class',

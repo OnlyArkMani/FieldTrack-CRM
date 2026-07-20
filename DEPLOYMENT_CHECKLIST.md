@@ -1,4 +1,4 @@
-# FieldTrack Production Deployment Checklist
+# SamarthSathi Production Deployment Checklist
 
 Copy this into a tracking issue/doc and check items off as you go.
 
@@ -75,15 +75,18 @@ Copy this into a tracking issue/doc and check items off as you go.
 ## Troubleshooting
 
 **Container won't start**
+
 ```bash
 docker compose -f docker-compose.prod.yml logs <service> --tail 100
 ```
+
 Most common causes: missing/incorrect value in `.env.prod` (the container
 exits immediately if a required setting is missing), or a port conflict
 (`docker compose ps` shows "unhealthy" if the healthcheck command itself is
 wrong — check the healthcheck's exact command runs inside the container).
 
 **Migrations failed / need to roll back**
+
 ```bash
 # See current and available revisions
 docker compose -f docker-compose.prod.yml run --rm app alembic current
@@ -92,12 +95,14 @@ docker compose -f docker-compose.prod.yml run --rm app alembic history
 # Roll back one revision
 docker compose -f docker-compose.prod.yml run --rm app alembic downgrade -1
 ```
+
 If a migration partially applied and `upgrade head` now fails, restore from
 the most recent backup (see `RESTORE.md`) rather than hand-editing the schema
 — PostGIS geometry columns are easy to get into an inconsistent state by
 editing manually.
 
 **Health check failing after deploy**
+
 1. `docker compose -f docker-compose.prod.yml logs app --tail 50` — look for
    a startup exception (bad env var, DB connection refused, Redis auth
    failure).
@@ -107,6 +112,7 @@ editing manually.
    image tag is running: `docker ps --format '{{.Image}}'`.
 
 **GPS not showing on the admin map**
+
 - Confirm the mobile device actually has location permission + "GPS Disabled"
   isn't shown in the live dashboard status.
 - Check Redis for recent location keys:
@@ -116,6 +122,7 @@ editing manually.
   should show status 101 (switching protocols), not a 4xx/connection error.
 
 **FCM not delivering**
+
 - Firebase console -> Cloud Messaging -> check delivery reports for the
   message.
 - Verify `FCM_SERVICE_ACCOUNT_FILE` points to a valid, non-expired service

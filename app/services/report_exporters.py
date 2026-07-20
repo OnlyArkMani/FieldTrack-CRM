@@ -3,7 +3,7 @@
 All three are SYNCHRONOUS and CPU-bound; callers run them via
 asyncio.to_thread (see run_report_job) so the event loop never stalls.
 
-PALETTE (FieldTrack brand — kept in sync with the apps' ThemeData):
+PALETTE (Samarth Sathi brand — kept in sync with the apps' ThemeData):
   amber  #F5A623  header fill / accents
   cream  #FFF8E7  zebra-stripe fill
   dark   #1A1A2E  body text
@@ -55,7 +55,7 @@ def _render_csv(data: ReportData) -> bytes:
     opens it with correct encoding."""
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow([f"FieldTrack — {data.title}"])
+    w.writerow([f"Samarth Sathi — {data.title}"])
     w.writerow([data.subtitle])
     if data.filters_text:
         w.writerow(["Filters: " + "  |  ".join(data.filters_text)])
@@ -114,7 +114,7 @@ def _render_excel(data: ReportData) -> bytes:
     # ── Summary sheet (first) ──
     ws = wb.active
     ws.title = "Summary"
-    ws["A1"] = f"FieldTrack — {data.title}"
+    ws["A1"] = f"Samarth Sathi — {data.title}"
     ws["A1"].font = title_font
     ws["A2"] = data.subtitle
     ws["A3"] = "  |  ".join(data.filters_text)
@@ -200,7 +200,7 @@ def _render_pdf(data: ReportData) -> bytes:
         leftMargin=12 * mm,
         rightMargin=12 * mm,
         title=data.title,
-        author="FieldTrack",
+        author="Samarth Sathi",
     )
 
     styles = getSampleStyleSheet()
@@ -223,7 +223,7 @@ def _render_pdf(data: ReportData) -> bytes:
     cell = ParagraphStyle("Cell", parent=styles["Normal"], fontSize=8, leading=10)
 
     elements: list = [
-        Paragraph("FieldTrack", brand),
+        Paragraph("Samarth Sathi", brand),
         Paragraph(data.title, h_title),
         Paragraph(data.subtitle, meta),
     ]
@@ -314,7 +314,7 @@ def _footer(canvas, doc) -> None:
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(colors.HexColor("#6B6B80"))
     width, _ = landscape(A4)
-    canvas.drawString(12 * mm, 8 * mm, "FieldTrack — Employee Tracking")
+    canvas.drawString(12 * mm, 8 * mm, "Samarth Sathi — Employee Tracking")
     canvas.drawRightString(width - 12 * mm, 8 * mm, f"Page {doc.page}")
     canvas.restoreState()
 

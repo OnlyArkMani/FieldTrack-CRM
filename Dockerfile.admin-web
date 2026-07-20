@@ -1,4 +1,4 @@
-# FieldTrack — admin dashboard static file server (dev).
+# SamarthSathi — admin dashboard static file server (dev).
 #
 # Plain static hosting only — no reverse proxy, no /api routing. The dev
 # host's own Nginx splits traffic by path (see the DEV_SETUP note in

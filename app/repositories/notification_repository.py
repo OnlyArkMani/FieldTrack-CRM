@@ -104,7 +104,7 @@ class NotificationRepository:
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def get_device_for_user(self, user_id: int) -> DeviceInfo | None:
-        """One representative device per user (latest seen). FieldTrack is a
+        """One representative device per user (latest seen). Samarth Sathi is a
         one-device-per-user product (see refresh-token single-session note);
         the newest row wins on the rare double-login."""
         stmt = (

@@ -863,8 +863,8 @@ class SyncEngine with WidgetsBindingObserver {
     required int pending,
   }) async {
     final text = online
-        ? 'FieldTrack · Tracking active · Synced ${_minsAgo()} min ago'
-        : 'FieldTrack · Tracking active · Saved locally ($pending points)';
+        ? 'Samarth Sathi · Tracking active · Synced ${_minsAgo()} min ago'
+        : 'Samarth Sathi · Tracking active · Saved locally ($pending points)';
     await LocationService.updateTrackingNotification(text);
   }
 

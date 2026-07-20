@@ -98,7 +98,7 @@ function Brand({ collapsed }) {
         F
       </div>
       {!collapsed && (
-        <span className="text-lg font-bold text-text-primary">FieldTrack</span>
+        <span className="text-lg font-bold text-text-primary">Samarth Sathi</span>
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Legacy launch splash (pre-Android 12): cream background + centered
-     FieldTrack logo. Android 12+ uses the windowSplashScreen* attrs in
+     Samarth Sathi logo. Android 12+ uses the windowSplashScreen* attrs in
      values-v31/styles.xml instead. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/splash_bg" />

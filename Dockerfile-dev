@@ -1,4 +1,4 @@
-# FieldTrack FastAPI image — multi-stage, non-root, slim.
+# SamarthSathi FastAPI image — multi-stage, non-root, slim.
 # DECISION: python:3.11-slim (not alpine) — manylinux wheels (asyncpg,
 # pydantic-core, shapely) install without compilation; alpine forces builds.
 

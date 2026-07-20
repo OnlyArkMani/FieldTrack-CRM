@@ -101,7 +101,7 @@ class FcmService {
           builder: (ctx) => AlertDialog(
             title: const Text('Stay in the loop'),
             content: const Text(
-              'FieldTrack sends attendance reminders and important updates from '
+              'Samarth Sathi sends attendance reminders and important updates from '
               'your manager. Allow notifications to receive them.',
             ),
             actions: [

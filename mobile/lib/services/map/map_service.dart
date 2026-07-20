@@ -10,8 +10,9 @@ import 'tile_cache_service.dart';
 class MapService {
   MapService._();
 
-  static const osmUrlTemplate = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-  static const userAgent = 'com.fieldtrack.mobile';
+  static const osmUrlTemplate =
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  static const userAgent = 'com.samarth.sathi';
 
   /// Minimum spacing between consecutive route points. GPS jitter produces
   /// clusters of near-identical fixes while standing still; dropping points
@@ -58,7 +59,10 @@ class MapService {
     final dLat = _rad(b.latitude - a.latitude);
     final dLng = _rad(b.longitude - a.longitude);
     final h = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(lat1) * math.cos(lat2) * math.sin(dLng / 2) * math.sin(dLng / 2);
+        math.cos(lat1) *
+            math.cos(lat2) *
+            math.sin(dLng / 2) *
+            math.sin(dLng / 2);
     final c = 2 * math.atan2(math.sqrt(h), math.sqrt(1 - h));
     return earthRadiusMeters * c;
   }

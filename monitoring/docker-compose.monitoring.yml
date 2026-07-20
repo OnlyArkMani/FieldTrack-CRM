@@ -1,4 +1,4 @@
-# FieldTrack — monitoring stack (Uptime Kuma, Prometheus, Grafana, node-exporter)
+# SamarthSathi — monitoring stack (Uptime Kuma, Prometheus, Grafana, node-exporter)
 #
 # Run alongside the main stack:
 #   docker compose -f docker-compose.prod.yml -f monitoring/docker-compose.monitoring.yml up -d

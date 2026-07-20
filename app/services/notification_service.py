@@ -267,7 +267,7 @@ class NotificationService:
         - Token already known: re-bind to this user (re-login on the same
           handset) and refresh metadata + last_seen.
         - New token: create a row.
-        Then null this user's OTHER tokens — FieldTrack is one-device-per-user
+        Then null this user's OTHER tokens — Samarth Sathi is one-device-per-user
         (mirrors the single-session refresh-token rule); a fresh registration
         means the previous device is no longer the live target."""
         from datetime import datetime, timezone

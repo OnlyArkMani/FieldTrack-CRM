@@ -129,7 +129,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     ),
                     const SizedBox(height: AppDimens.grid * 2),
                     Text(
-                      'FieldTrack',
+                      'Samarth Sathi',
                       style: Theme.of(context).textTheme.displaySmall,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

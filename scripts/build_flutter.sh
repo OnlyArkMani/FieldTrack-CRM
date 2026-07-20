@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# FieldTrack — build production Flutter release APKs.
+# SamarthSathi — build production Flutter release APKs.
 #
 # Run from a machine with the Flutter SDK installed (NOT the VPS — the VPS
 # never builds the mobile app, only the backend + admin web).

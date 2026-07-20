@@ -1,10 +1,10 @@
 /*
- * FieldTrack — k6 load/performance test.
+ * Samarth Sathi — k6 load/performance test.
  *
  * WHAT THIS TESTS
  *   Two back-to-back scenarios against the real stack (docker compose up):
  *     1. current_scale  — 20 concurrent employees (today's real headcount),
- *                          for 3 minutes. This is the load FieldTrack actually
+ *                          for 3 minutes. This is the load Samarth Sathi actually
  *                          carries right now.
  *     2. target_scale    — ramps 20 -> 100 concurrent employees and holds, to
  *                          validate the "zero architecture change to 100"

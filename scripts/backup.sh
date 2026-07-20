@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# FieldTrack — daily Postgres backup to Backblaze B2.
+# SamarthSathi — daily Postgres backup to Backblaze B2.
 #
 # Cron (set up by this script's instructions, or manually):
 #   0 2 * * * /opt/fieldtrack/app/scripts/backup.sh

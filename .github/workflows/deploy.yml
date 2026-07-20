@@ -1,4 +1,4 @@
-# FieldTrack CI/CD pipeline.
+# SamarthSathi CI/CD pipeline.
 #
 # Triggers:
 #   - Any push or PR to `main` runs the `test` job (fast feedback on PRs).
@@ -241,12 +241,12 @@ jobs:
         if: success()
         run: |
           curl -fsS -X POST -H "Content-Type: application/json" \
-            -d "{\"content\": \"✅ FieldTrack deploy succeeded — ${{ github.sha }} by ${{ github.actor }}\"}" \
+            -d "{\"content\": \"✅ SamarthSathi deploy succeeded — ${{ github.sha }} by ${{ github.actor }}\"}" \
             "${{ secrets.NOTIFY_WEBHOOK_URL }}" || true
 
       - name: Notify failure
         if: failure()
         run: |
           curl -fsS -X POST -H "Content-Type: application/json" \
-            -d "{\"content\": \"❌ FieldTrack deploy FAILED — ${{ github.sha }} by ${{ github.actor }}. Check the Actions log.\"}" \
+            -d "{\"content\": \"❌ SamarthSathi deploy FAILED — ${{ github.sha }} by ${{ github.actor }}. Check the Actions log.\"}" \
             "${{ secrets.NOTIFY_WEBHOOK_URL }}" || true

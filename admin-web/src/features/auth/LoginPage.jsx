@@ -54,7 +54,7 @@ export default function LoginPage() {
             F
           </div>
           <span className="text-2xl font-bold text-text-primary">
-            FieldTrack
+            Samarth Sathi
           </span>
         </div>
         <Card>

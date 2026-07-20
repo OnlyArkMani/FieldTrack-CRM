@@ -1,8 +1,8 @@
-# FieldTrack CRM — Employee Tracking, Attendance & Field Sales System
+# SamarthSathi CRM — Employee Tracking, Attendance & Field Sales System
 
 <div align="center">
 
-![FieldTrack CRM](https://img.shields.io/badge/FieldTrack%20CRM-Field%20Sales%20%26%20Tracking-F5A623?style=for-the-badge&logo=fastapi&logoColor=white)
+![SamarthSathi CRM](https://img.shields.io/badge/SamarthSathi%20CRM-Field%20Sales%20%26%20Tracking-F5A623?style=for-the-badge&logo=fastapi&logoColor=white)
 
 **Production-grade employee tracking, attendance management, and field CRM — built for agricultural sales teams. Real-time GPS, polygon geofencing, offline-first sync, FCM notifications, farmer/customer database, visit planning, lead pipeline, and daily sales reporting — engineered for 15-100 employees on a single VPS without architecture changes.**
 
@@ -18,7 +18,7 @@
 
 [Documentation](#documentation) | [Quick Start](#quick-start) | [API Reference](#api-endpoints) | [Architecture](#architecture) | [Deployment](#deployment)
 
-**GitHub:** https://github.com/OnlyArkMani/FieldTrack-CRM
+**GitHub:** https://github.com/OnlyArkMani/SamarthSathi-CRM
 
 </div>
 
@@ -42,7 +42,7 @@
 
 ## Overview
 
-**FieldTrack CRM** is a full-stack, production-grade system combining employee attendance tracking with a field sales CRM — purpose-built for agricultural sales teams. It ships a FastAPI backend with async PostgreSQL and Redis, a Flutter mobile app with offline-first architecture, and a React admin dashboard with real-time WebSocket updates.
+**SamarthSathi CRM** is a full-stack, production-grade system combining employee attendance tracking with a field sales CRM — purpose-built for agricultural sales teams. It ships a FastAPI backend with async PostgreSQL and Redis, a Flutter mobile app with offline-first architecture, and a React admin dashboard with real-time WebSocket updates.
 
 The core tracking layer handles attendance, GPS, geofencing, and reporting. The CRM layer adds a farmer/customer database, pre-day visit planning, in-field visit execution with livestock profiles and order capture, a Hot/Warm/Cold lead pipeline, and auto-generated Daily Sales Reports (DSR) on attendance end.
 
@@ -214,8 +214,8 @@ Admins set per-team GPS reporting intervals (moving cadence and stationary caden
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/OnlyArkMani/FieldTrack-CRM.git
-cd FieldTrack-CRM
+git clone https://github.com/OnlyArkMani/SamarthSathi-CRM.git
+cd SamarthSathi-CRM
 
 # 2. Create environment file
 cp .env.example .env
@@ -435,7 +435,7 @@ Full schema at `http://localhost:8090/api/v1/docs` (Swagger UI).
 ## Project Structure
 
 ```
-FieldTrack-CRM/
+SamarthSathi-CRM/
 ├── app/                               # FastAPI backend
 │   ├── main.py                        # Entry point, route registration
 │   ├── core/                          # Infrastructure (config, security, db, redis)
@@ -548,7 +548,7 @@ Headroom:       ~1.6 GB
 **Deploy:**
 
 ```bash
-git clone https://github.com/OnlyArkMani/FieldTrack-CRM.git /opt/fieldtrack/app
+git clone https://github.com/OnlyArkMani/SamarthSathi-CRM.git /opt/fieldtrack/app
 cp .env.prod.example .env.prod   # Fill real secrets
 docker compose -f docker-compose.prod.yml up -d
 docker compose -f docker-compose.prod.yml exec app alembic upgrade head
@@ -605,4 +605,4 @@ See `DEPLOYMENT_CHECKLIST.md` for the complete step-by-step guide.
 **Project Status:** Production Ready
 **Last Updated:** June 30, 2026
 **Current Version:** 0.3.0
-**Repository:** https://github.com/OnlyArkMani/FieldTrack-CRM
+**Repository:** https://github.com/OnlyArkMani/SamarthSathi-CRM

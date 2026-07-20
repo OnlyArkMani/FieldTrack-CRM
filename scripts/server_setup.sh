@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# FieldTrack — one-time VPS bootstrap.
+# SamarthSathi — one-time VPS bootstrap.
 #
 # Run ONCE as root on a fresh Ubuntu 22.04 VPS:
 #   curl -fsSL https://raw.githubusercontent.com/<you>/<repo>/main/scripts/server_setup.sh | bash
@@ -55,14 +55,14 @@ echo "$DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload nginx, /usr/bin
     > /etc/sudoers.d/90-fieldtrack-deploy
 chmod 440 /etc/sudoers.d/90-fieldtrack-deploy
 
-echo "==> Creating FieldTrack directory layout"
+echo "==> Creating SamarthSathi directory layout"
 mkdir -p /opt/fieldtrack
 mkdir -p /opt/fieldtrack/backups
 mkdir -p /var/www/fieldtrack
 mkdir -p /var/log/fieldtrack
 chown -R "$DEPLOY_USER":"$DEPLOY_USER" /opt/fieldtrack /var/www/fieldtrack /var/log/fieldtrack
 
-echo "==> Cloning FieldTrack repo to /opt/fieldtrack/app"
+echo "==> Cloning SamarthSathi repo to /opt/fieldtrack/app"
 if [ ! -d /opt/fieldtrack/app/.git ]; then
     sudo -u "$DEPLOY_USER" git clone "$REPO_URL" /opt/fieldtrack/app
 else
@@ -85,7 +85,7 @@ systemctl restart fail2ban
 
 echo ""
 echo "================================================================"
-echo " FieldTrack server setup complete."
+echo " SamarthSathi server setup complete."
 echo "================================================================"
 echo "Next steps:"
 echo "  1. Copy .env.prod.example -> /opt/fieldtrack/app/.env.prod and fill"

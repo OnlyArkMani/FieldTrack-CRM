@@ -27,19 +27,19 @@ dependencies {
 `android/app/src/main/AndroidManifest.xml` — every permission is commented
 with WHY. Summary:
 
-| Permission | Why |
-|---|---|
-| ACCESS_FINE/COARSE_LOCATION | GPS fixes |
-| ACCESS_BACKGROUND_LOCATION | fixes while app backgrounded (Android 10+) |
-| FOREGROUND_SERVICE(_LOCATION) | the persistent-notification service; _LOCATION mandatory on Android 14 |
-| RECEIVE_BOOT_COMPLETED | resume tracking after reboot |
-| REQUEST_IGNORE_BATTERY_OPTIMIZATIONS | Doze exemption prompt |
-| INTERNET / ACCESS_NETWORK_STATE / WAKE_LOCK | sync + locator cycles |
+| Permission                                  | Why                                                                     |
+| ------------------------------------------- | ----------------------------------------------------------------------- |
+| ACCESS_FINE/COARSE_LOCATION                 | GPS fixes                                                               |
+| ACCESS_BACKGROUND_LOCATION                  | fixes while app backgrounded (Android 10+)                              |
+| FOREGROUND_SERVICE(\_LOCATION)              | the persistent-notification service; \_LOCATION mandatory on Android 14 |
+| RECEIVE_BOOT_COMPLETED                      | resume tracking after reboot                                            |
+| REQUEST_IGNORE_BATTERY_OPTIMIZATIONS        | Doze exemption prompt                                                   |
+| INTERNET / ACCESS_NETWORK_STATE / WAKE_LOCK | sync + locator cycles                                                   |
 
 ## 3. Foreground notification
 
 Configured in `location_service.dart` (`AndroidNotificationSettings`):
-title **"FieldTrack is tracking your location"**, channel "Location tracking".
+title **"SamarthSathi is tracking your location"**, channel "Location tracking".
 
 **Deviation from spec, flagged:** background_locator_2 notifications do not
 support action buttons, so there is no literal "stop" button. The tap action
@@ -51,9 +51,10 @@ behind LocationService so the swap doesn't touch features.
 ## 4. Permission flow (in-app, before first START)
 
 `PermissionHelperService.requestAllForTracking()`:
+
 1. Fine location → 2. Background location ("Allow all the time" — Android
-sends users to settings on API 30+; expected) → 3. Battery-optimization
-exemption dialog.
+   sends users to settings on API 30+; expected) → 3. Battery-optimization
+   exemption dialog.
 
 Then `needsManufacturerStep()` → show `instructionsFor()` text with an
 "Open settings" button → `openManufacturerSettings()` deep-links to:
@@ -71,6 +72,7 @@ in a fallback cascade ending at the app's own settings page.
 ## 5. Verifying it actually survives (test checklist)
 
 On a real low-end device (one Xiaomi, one Samsung minimum):
+
 1. START attendance → notification appears → lock screen 30 min → points in
    local DB every ~5 min (flat, moving or stationary).
 2. Swipe app away from recents → notification stays → points keep coming.

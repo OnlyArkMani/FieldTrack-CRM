@@ -1,4 +1,4 @@
-# FieldTrack Monitoring Stack
+# SamarthSathi Monitoring Stack
 
 Start it alongside the main stack (run from `/opt/fieldtrack/app`):
 
@@ -11,6 +11,7 @@ docker compose -f docker-compose.prod.yml -f monitoring/docker-compose.monitorin
 **Uptime Kuma** (`/status`) — a simple uptime monitor with a public status
 page. After it starts, open `https://your-domain.com/status/`, create an
 admin account on first visit, then add a monitor:
+
 - Type: HTTP(s)
 - URL: `https://your-domain.com/api/v1/health`
 - Heartbeat interval: 60s
@@ -20,6 +21,7 @@ etc.) on outage — independent of Grafana, useful as a second opinion if
 Grafana itself is down.
 
 **Prometheus** (internal only, not exposed via Nginx) — scrapes:
+
 - `app:8000/metrics` every 15s for request count, latency, and error rate
   (added via `prometheus-fastapi-instrumentator`, already wired into
   `app/main.py`).

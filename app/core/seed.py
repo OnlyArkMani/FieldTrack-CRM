@@ -48,7 +48,7 @@ def generate_password(length: int = 20) -> str:
 
 async def seed_admin() -> None:
     email = os.environ.get("ADMIN_EMAIL", "admin@fieldtrack.local").strip().lower()
-    name = os.environ.get("ADMIN_NAME", "FieldTrack Admin").strip()
+    name = os.environ.get("ADMIN_NAME", "Samarth Sathi Admin").strip()
     phone = os.environ.get("ADMIN_PHONE", "").strip() or None
     # Optional: pass ADMIN_PASSWORD to use a chosen password instead of a random one.
     # If not set, a cryptographically random 20-char password is generated.
@@ -78,7 +78,7 @@ async def seed_admin() -> None:
         bar = "=" * 64
         print(
             f"\n{bar}\n"
-            f" FieldTrack admin created. SAVE THIS PASSWORD NOW — it is shown ONCE\n"
+            f" Samarth Sathi admin created. SAVE THIS PASSWORD NOW — it is shown ONCE\n"
             f" and is NOT stored in plaintext anywhere.\n"
             f"{bar}\n"
             f"   email:    {email}\n"

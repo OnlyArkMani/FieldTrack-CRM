@@ -6,7 +6,7 @@ import '../models/geofence.dart';
 
 /// flutter_map layers for the active geofences. Polygons render via
 /// PolygonLayer; circles via CircleLayer (true geographic circle, radius in
-/// metres) — both with the FieldTrack amber fill (15%) + 2px amber border.
+/// metres) — both with the Samarth Sathi amber fill (15%) + 2px amber border.
 /// Each zone also gets a centred label marker (small amber pill, white text).
 ///
 /// Returns a LIST of layers (polygon + circle + labels), so callers spread it

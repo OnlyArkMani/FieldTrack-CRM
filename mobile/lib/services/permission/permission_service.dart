@@ -61,7 +61,7 @@ class PermissionService {
       final proceed = await _rationaleSheet(
         context,
         title: 'Location Access Required',
-        body: 'FieldTrack needs your location to track your attendance and '
+        body: 'Samarth Sathi needs your location to track your attendance and '
             'field visits. Your location is only recorded during work hours.',
         confirmLabel: 'Allow Location',
       );
@@ -115,7 +115,7 @@ class PermissionService {
       await _rationaleSheet(
         context,
         title: 'Background Location',
-        body: "For accurate tracking while your screen is off, FieldTrack "
+        body: "For accurate tracking while your screen is off, Samarth Sathi "
             "needs 'Allow all the time' location access. Please select this "
             'option.',
         confirmLabel: 'Open Location Settings',
@@ -158,7 +158,7 @@ class PermissionService {
       context,
       title: 'Enable AutoStart',
       body: 'For uninterrupted tracking, please enable AutoStart for '
-          "FieldTrack in your phone's settings. Without it, the system may "
+          "Samarth Sathi in your phone's settings. Without it, the system may "
           'stop location updates in the background.',
       confirmLabel: 'Open Settings',
       onConfirm: () async {

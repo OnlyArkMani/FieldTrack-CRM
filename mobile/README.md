@@ -1,4 +1,4 @@
-# FieldTrack Mobile
+# SamarthSathi Mobile
 
 Flutter app for Employees and Managers. Android-first, **min SDK 21**,
 built for low-end devices. Admin uses the web dashboard only.

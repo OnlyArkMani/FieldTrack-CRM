@@ -56,82 +56,83 @@ class EmployeeDetailScreen extends ConsumerWidget {
           title: const Text('Employee',
               maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
-      floatingActionButton: detail.maybeWhen(
-        data: (employee) => canEdit
-            ? FloatingActionButton.extended(
-                onPressed: () => showEmployeeEditSheet(context, employee),
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                icon: const Icon(Icons.edit_rounded, size: 18),
-                label: const Text('Edit'),
-              )
-            : null,
-        orElse: () => null,
-      ),
-      body: SafeArea(
-        child: detail.when(
-          loading: () => ListView(
-            physics: const ClampingScrollPhysics(),
-            padding: const EdgeInsets.all(AppDimens.grid * 2),
-            children: const [
-              ShimmerCard(height: 132, lines: 3),
-              SizedBox(height: AppDimens.grid * 1.5),
-              ShimmerCard(),
-              SizedBox(height: AppDimens.grid * 1.5),
-              ShimmerCard(height: 200, lines: 1),
-            ],
-          ),
-          error: (e, _) => ErrorStateView(
-            message: e.toString(),
-            onRetry: () => ref.invalidate(employeeDetailProvider(employeeId)),
-          ),
-          data: (employee) => RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(employeeDetailProvider(employeeId));
-              ref.invalidate(attendanceSummaryProvider(employeeId));
-              ref.invalidate(lastLocationProvider(employeeId));
-            },
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(
-                AppDimens.grid * 2,
-                AppDimens.grid * 2,
-                AppDimens.grid * 2,
-                AppDimens.grid * 10, // clear the FAB
-              ),
-              children: [
-                _HeaderCard(employee: employee),
-                const SizedBox(height: AppDimens.grid * 1.5),
-                AppButton(
-                  label: 'View Trail',
-                  icon: Icons.timeline_rounded,
-                  variant: AppButtonVariant.secondary,
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => TrailReplayScreen(
-                        employeeId: employee.id,
-                        employeeName: employee.name,
-                        photoUrl: employee.profilePhotoUrl,
+        floatingActionButton: detail.maybeWhen(
+          data: (employee) => canEdit
+              ? FloatingActionButton.extended(
+                  onPressed: () => showEmployeeEditSheet(context, employee),
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  icon: const Icon(Icons.edit_rounded, size: 18),
+                  label: const Text('Edit'),
+                )
+              : null,
+          orElse: () => null,
+        ),
+        body: SafeArea(
+          child: detail.when(
+            loading: () => ListView(
+              physics: const ClampingScrollPhysics(),
+              padding: const EdgeInsets.all(AppDimens.grid * 2),
+              children: const [
+                ShimmerCard(height: 132, lines: 3),
+                SizedBox(height: AppDimens.grid * 1.5),
+                ShimmerCard(),
+                SizedBox(height: AppDimens.grid * 1.5),
+                ShimmerCard(height: 200, lines: 1),
+              ],
+            ),
+            error: (e, _) => ErrorStateView(
+              message: e.toString(),
+              onRetry: () => ref.invalidate(employeeDetailProvider(employeeId)),
+            ),
+            data: (employee) => RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(employeeDetailProvider(employeeId));
+                ref.invalidate(attendanceSummaryProvider(employeeId));
+                ref.invalidate(lastLocationProvider(employeeId));
+              },
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(
+                  AppDimens.grid * 2,
+                  AppDimens.grid * 2,
+                  AppDimens.grid * 2,
+                  AppDimens.grid * 10, // clear the FAB
+                ),
+                children: [
+                  _HeaderCard(employee: employee),
+                  const SizedBox(height: AppDimens.grid * 1.5),
+                  AppButton(
+                    label: 'View Trail',
+                    icon: Icons.timeline_rounded,
+                    variant: AppButtonVariant.secondary,
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => TrailReplayScreen(
+                          employeeId: employee.id,
+                          employeeName: employee.name,
+                          photoUrl: employee.profilePhotoUrl,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: AppDimens.grid * 1.5),
-                _StatusCard(employee: employee),
-                const SizedBox(height: AppDimens.grid * 1.5),
-                _ContactCard(employee: employee),
-                const SizedBox(height: AppDimens.grid * 1.5),
-                _TodayAttendanceCard(employeeId: employeeId, live: employee.live),
-                const SizedBox(height: AppDimens.grid * 1.5),
-                _LocationCard(employeeId: employeeId),
-              ],
+                  const SizedBox(height: AppDimens.grid * 1.5),
+                  _StatusCard(employee: employee),
+                  const SizedBox(height: AppDimens.grid * 1.5),
+                  _ContactCard(employee: employee),
+                  const SizedBox(height: AppDimens.grid * 1.5),
+                  _TodayAttendanceCard(
+                      employeeId: employeeId, live: employee.live),
+                  const SizedBox(height: AppDimens.grid * 1.5),
+                  _LocationCard(employeeId: employeeId),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
 
 class _HeaderCard extends StatelessWidget {
@@ -159,7 +160,8 @@ class _HeaderCard extends StatelessWidget {
               children: [
                 Text(
                   employee.name,
-                  style: AppTextStyles.heading.copyWith(color: scheme.onSurface),
+                  style:
+                      AppTextStyles.heading.copyWith(color: scheme.onSurface),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -268,10 +270,8 @@ class _StatusCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(AppDimens.grid * 1.5),
               decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .error
-                    .withValues(alpha: 0.12),
+                color:
+                    Theme.of(context).colorScheme.error.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
               ),
               child: Row(
@@ -282,8 +282,8 @@ class _StatusCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       'Mock GPS detected on this device',
-                      style: AppTextStyles.caption.copyWith(
-                          color: Theme.of(context).colorScheme.error),
+                      style: AppTextStyles.caption
+                          .copyWith(color: Theme.of(context).colorScheme.error),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -568,15 +568,14 @@ class _LocationCard extends ConsumerWidget {
                       initialCenter: center,
                       initialZoom: 15,
                       interactionOptions: const InteractionOptions(
-                        flags:
-                            InteractiveFlag.pinchZoom | InteractiveFlag.drag,
+                        flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
                       ),
                     ),
                     children: [
                       TileLayer(
                         urlTemplate:
                             'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.fieldtrack.mobile',
+                        userAgentPackageName: 'com.samarth.sathi',
                         maxZoom: 19,
                       ),
                       MarkerLayer(
@@ -723,8 +722,8 @@ class _MiniStat extends StatelessWidget {
               ),
               Text(
                 label,
-                style: AppTextStyles.caption
-                    .copyWith(color: colors.textSecondary),
+                style:
+                    AppTextStyles.caption.copyWith(color: colors.textSecondary),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),

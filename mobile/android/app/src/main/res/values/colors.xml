@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- FieldTrack brand palette (mirrors ThemeData in lib/core/theme). -->
+    <!-- Samarth Sathi brand palette (mirrors ThemeData in lib/core/theme). -->
     <color name="splash_bg">#ffffff</color>
     <color name="brand_amber">#F5A623</color> <!-- primary tile -->
     <color name="brand_pin">#1A1A2E</color>   <!-- dark pin on amber -->

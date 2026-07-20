@@ -185,7 +185,7 @@ class LocationService {
         wakeLockTime: 60, // minutes of wakelock per cycle batch
         androidNotificationSettings: const AndroidNotificationSettings(
           notificationChannelName: 'Location tracking',
-          notificationTitle: 'FieldTrack is tracking your location',
+          notificationTitle: 'Samarth Sathi is tracking your location',
           notificationMsg: 'Active during your attendance hours',
           notificationBigMsg:
               'Location tracking is active because your attendance is '
@@ -289,7 +289,7 @@ class LocationService {
       // the mutex never clears, silently blocking every future sync attempt
       // (heartbeat, reconnect, manual retry) until the app is restarted.
       await BackgroundLocator.updateNotificationText(
-        title: 'FieldTrack',
+        title: 'Samarth Sathi',
         msg: msg,
         bigMsg: msg,
       ).timeout(const Duration(seconds: 5));
@@ -408,7 +408,7 @@ Future<void> locationCallbackDispatcher(LocationDto location) async {
     final pending =
         await DatabaseHelper.instance.getPendingLocationCount();
     await LocationService.updateTrackingNotification(
-      'FieldTrack · Tracking active · Saved locally ($pending points)',
+      'Samarth Sathi · Tracking active · Saved locally ($pending points)',
     );
   } catch (_) {
     // ignore — notification text is cosmetic; the SQLite write above is what

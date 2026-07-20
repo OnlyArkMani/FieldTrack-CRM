@@ -54,7 +54,7 @@ class SyncNotifications {
       );
       await _plugin.show(
         _notificationId,
-        'FieldTrack — sync delayed',
+        'Samarth Sathi — sync delayed',
         '$pendingCount record(s) waiting to upload. We’ll keep retrying.',
         details,
       );

@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.fieldtrack.app"
+    namespace = "com.samarth.sathi"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -18,7 +18,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.fieldtrack.app"
+        applicationId = "com.samarth.sathi"
         // minSdk: spec floor is 21 (background_locator_2 / firebase_messaging
         // require >=21). Take the greater of 21 and whatever Flutter/plugins
         // demand so we never drop below the floor.

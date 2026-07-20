@@ -1,4 +1,4 @@
-# FieldTrack — Redis Key Schema
+# SamarthSathi — Redis Key Schema
 
 Single source of truth for every Redis key the system uses. The code mirror of
 this document is `app/core/redis.py` (`Keys` class) — keep both in sync.
@@ -140,14 +140,14 @@ Nginx sets X-Real-IP; the app trusts it because only Nginx can reach the app.
 
 ## Memory budget (worst case, 100 employees)
 
-| Pattern | Keys | Est. size |
-|---|---|---|
-| location | 100 | ~30 KB |
-| attendance state | 100 | ~15 KB |
-| blacklist | ~200/day live | ~20 KB |
-| ratelimit | ~100 × endpoints live | ~50 KB |
-| sync dedup | ~5k over 48 h | ~500 KB |
-| refresh allowlist | ~200 | ~20 KB |
+| Pattern           | Keys                  | Est. size |
+| ----------------- | --------------------- | --------- |
+| location          | 100                   | ~30 KB    |
+| attendance state  | 100                   | ~15 KB    |
+| blacklist         | ~200/day live         | ~20 KB    |
+| ratelimit         | ~100 × endpoints live | ~50 KB    |
+| sync dedup        | ~5k over 48 h         | ~500 KB   |
+| refresh allowlist | ~200                  | ~20 KB    |
 
 **Total ≪ 1 MB.** The 200 MB cap is pure headroom; Redis will idle on this
 workload at 100 employees — zero architecture change needed.

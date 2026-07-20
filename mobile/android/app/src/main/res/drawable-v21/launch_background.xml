@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Legacy launch splash (API 21-30): cream background + centered FieldTrack
+<!-- Legacy launch splash (API 21-30): cream background + centered Samarth Sathi
      logo. Android 12+ (API 31+) uses values-v31/styles.xml instead. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/splash_bg" />

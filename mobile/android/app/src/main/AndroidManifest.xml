@@ -43,7 +43,7 @@
     </queries>
 
     <application
-        android:label="FieldTrack"
+        android:label="Samarth Sathi"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
         android:enableOnBackInvokedCallback="true"
@@ -76,7 +76,7 @@
 
         <!-- ═══════════ background_locator_2 components ═══════════
              The foreground service that owns the persistent notification
-             ("FieldTrack is tracking your location") and the Dart isolate. -->
+             ("Samarth Sathi is tracking your location") and the Dart isolate. -->
         <service
             android:name="yukams.app.background_locator_2.IsolateHolderService"
             android:foregroundServiceType="location"
@@ -98,7 +98,7 @@
              FcmService._channelId). Icon + colour for the status-bar glyph. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="fieldtrack_push" />
+            android:value="samarth_sathi_push" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@mipmap/ic_launcher" />

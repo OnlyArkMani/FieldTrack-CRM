@@ -62,36 +62,36 @@ class PermissionHelperService {
     if (m.contains('xiaomi') || m.contains('redmi') || m.contains('poco')) {
       return 'MIUI stops background apps by default.\n\n'
           '1. Tap Open Settings below\n'
-          '2. Enable "Autostart" for FieldTrack\n'
-          '3. In Battery saver, set FieldTrack to "No restrictions"';
+          '2. Enable "Autostart" for Samarth Sathi\n'
+          '3. In Battery saver, set Samarth Sathi to "No restrictions"';
     }
     if (m.contains('oppo') || m.contains('realme')) {
       return 'ColorOS limits background apps.\n\n'
           '1. Tap Open Settings below\n'
-          '2. Enable "Auto-launch" for FieldTrack\n'
-          '3. Battery > FieldTrack > Allow background activity';
+          '2. Enable "Auto-launch" for Samarth Sathi\n'
+          '3. Battery > Samarth Sathi > Allow background activity';
     }
     if (m.contains('vivo')) {
       return 'FunTouch OS limits background apps.\n\n'
           '1. Tap Open Settings below\n'
-          '2. Enable autostart for FieldTrack\n'
-          '3. Battery > High background power consumption > allow FieldTrack';
+          '2. Enable autostart for Samarth Sathi\n'
+          '3. Battery > High background power consumption > allow Samarth Sathi';
     }
     if (m.contains('oneplus')) {
       return 'OxygenOS battery optimization can stop tracking.\n\n'
           '1. Tap Open Settings below\n'
-          '2. Battery > Battery optimization > FieldTrack > Don\'t optimize\n'
+          '2. Battery > Battery optimization > Samarth Sathi > Don\'t optimize\n'
           '3. Disable "Advanced optimization" if tracking still stops';
     }
     if (m.contains('samsung')) {
-      return 'Samsung may put FieldTrack to sleep.\n\n'
+      return 'Samsung may put Samarth Sathi to sleep.\n\n'
           '1. Tap Open Settings below\n'
           '2. Battery > Background usage limits\n'
-          '3. Make sure FieldTrack is NOT in "Sleeping apps" and add it to '
+          '3. Make sure Samarth Sathi is NOT in "Sleeping apps" and add it to '
           '"Never sleeping apps"';
     }
     return 'If tracking stops when the screen is off, open your battery '
-        'settings and exclude FieldTrack from optimization.';
+        'settings and exclude Samarth Sathi from optimization.';
   }
 
   /// Deep link to the OEM's autostart/battery screen. Every component name

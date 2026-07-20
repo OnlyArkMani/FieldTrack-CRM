@@ -1,4 +1,4 @@
-# FieldTrack — Prometheus scrape configuration.
+# SamarthSathi — Prometheus scrape configuration.
 # Mounted read-only into the prometheus container by
 # monitoring/docker-compose.monitoring.yml.
 

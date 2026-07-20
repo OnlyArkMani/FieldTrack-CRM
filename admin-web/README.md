@@ -1,6 +1,6 @@
-# FieldTrack Admin (web)
+# SamarthSathi Admin (web)
 
-The **web-only** admin dashboard for FieldTrack. Admins manage employees,
+The **web-only** admin dashboard for SamarthSathi. Admins manage employees,
 teams, attendance, live tracking and reports here — they do **not** use the
 mobile app.
 
@@ -9,7 +9,7 @@ Stack: **React 18 + Vite + TailwindCSS**, React Query (server state), Zustand
 
 ## Design system
 
-The same FieldTrack palette as the Flutter app, expressed as CSS variables in
+The same SamarthSathi palette as the Flutter app, expressed as CSS variables in
 `src/index.css` and surfaced through Tailwind tokens (`tailwind.config.js`):
 cream `#FFF8E7`, amber `#F5A623`, soft purple `#8B7FD4`, coral `#E8645A`,
 midnight `#1A1A2E`. Inter font, 12px card radius, dark/light toggle (the

@@ -71,7 +71,7 @@ export default function SettingsPage() {
       </div>
 
       <Card className="text-sm text-text-secondary">
-        FieldTrack Admin · web dashboard · v0.1.0
+        Samarth Sathi Admin · web dashboard · v0.1.0
       </Card>
     </div>
   );

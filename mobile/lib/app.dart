@@ -5,8 +5,8 @@ import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/app_messenger.dart';
 
-class FieldTrackApp extends ConsumerWidget {
-  const FieldTrackApp({super.key});
+class SamarthSathiApp extends ConsumerWidget {
+  const SamarthSathiApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -14,7 +14,7 @@ class FieldTrackApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
-      title: 'FieldTrack',
+      title: 'Samarth Sathi',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,

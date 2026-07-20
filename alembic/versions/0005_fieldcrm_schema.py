@@ -1,4 +1,4 @@
-"""FieldCRM schema — 10 new CRM tables layered on top of FieldTrack.
+"""FieldCRM schema — 10 new CRM tables layered on top of SamarthSathi.
 
 Adds the Customer/Farmer DB, Visit Planning, Visit Execution + Notes +
 Livestock, Lead Management, Daily Sales Report and per-team GPS config modules.
