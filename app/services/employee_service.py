@@ -374,6 +374,30 @@ class EmployeeService:
         await self.db.commit()
         return await self.get_detail(user.id)
 
+    # ── Password reset (admin) ───────────────────────────────────────────
+    async def update_password(
+        self,
+        user_id: int,
+        new_password: str,
+        *,
+        actor: User,
+        ip: str | None,
+    ) -> None:
+        user = await self.repo.get_by_id(user_id)
+        if user is None:
+            raise not_found("Employee not found")
+        user.password_hash = hash_password(new_password)
+        self.repo.add(user)
+        # Invalidate any live refresh token so the user must re-login.
+        await self.redis.delete(Keys.refresh_token(user.id))
+        self.repo.add_audit_log(
+            user_id=actor.id,
+            action="EMPLOYEE_PASSWORD_UPDATED",
+            entity_id=user.id,
+            ip_address=ip,
+        )
+        await self.db.commit()
+
     # ── Attendance summary (monthly) ─────────────────────────────────────
     async def attendance_summary(
         self, user_id: int, *, year: int, month: int
