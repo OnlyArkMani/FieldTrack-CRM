@@ -30,6 +30,7 @@ from app.schemas.employee import (
     EmployeeUpdate,
     GpsIntegrityOut,
     LocationHistoryOut,
+    PasswordUpdate,
 )
 from app.services.employee_service import EmployeeService
 
@@ -108,6 +109,22 @@ async def set_employee_status(
 ) -> EmployeeDetailOut:
     return await EmployeeService(db).set_status(
         employee_id, body, actor=admin, ip=_client_ip(request)
+    )
+
+
+@router.patch("/{employee_id}/password", status_code=204)
+async def update_employee_password(
+    employee_id: int,
+    body: PasswordUpdate,
+    request: Request,
+    admin: Annotated[User, Depends(get_current_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    await EmployeeService(db).update_password(
+        employee_id,
+        body.new_password,
+        actor=admin,
+        ip=_client_ip(request),
     )
 
 
