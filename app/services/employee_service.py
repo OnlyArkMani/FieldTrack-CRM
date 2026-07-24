@@ -19,7 +19,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -28,7 +28,7 @@ from app.core.redis import Keys, get_redis
 from app.core.security import hash_password
 from app.models.enums import AttendanceStatus, UserRole
 from app.models.misc import DeviceInfo, Notification
-from app.models.user import User
+from app.models.user import Team, User
 from app.repositories.employee_repository import EmployeeRepository
 from app.schemas.common import CursorPage, decode_cursor, encode_cursor
 from app.schemas.employee import (
@@ -374,6 +374,57 @@ class EmployeeService:
         await self.db.commit()
         return await self.get_detail(user.id)
 
+    # ── Password reset (admin) ───────────────────────────────────────────
+    async def update_password(
+        self,
+        user_id: int,
+        new_password: str,
+        *,
+        actor: User,
+        ip: str | None,
+    ) -> None:
+        user = await self.repo.get_by_id(user_id)
+        if user is None:
+            raise not_found("Employee not found")
+        user.password_hash = hash_password(new_password)
+        self.repo.add(user)
+        # Invalidate any live refresh token so the user must re-login.
+        await self.redis.delete(Keys.refresh_token(user.id))
+        self.repo.add_audit_log(
+            user_id=actor.id,
+            action="EMPLOYEE_PASSWORD_UPDATED",
+            entity_id=user.id,
+            ip_address=ip,
+        )
+        await self.db.commit()
+
+    # ── Delete employee (admin) ──────────────────────────────────────────
+    async def delete_employee(
+        self,
+        user_id: int,
+        *,
+        actor: User,
+        ip: str | None,
+    ) -> None:
+        user = await self.repo.get_by_id(user_id)
+        if user is None:
+            raise not_found("Employee not found")
+        if user.id == actor.id:
+            raise bad_request("You cannot delete your own account")
+        if user.role == UserRole.ADMIN:
+            raise bad_request("Admin accounts cannot be deleted")
+        # Kill active session immediately
+        await self.redis.delete(Keys.refresh_token(user.id))
+        self.repo.add_audit_log(
+            user_id=actor.id,
+            action="EMPLOYEE_DELETED",
+            entity_id=user.id,
+            ip_address=ip,
+            metadata={"email": user.email},
+        )
+        await self.db.execute(delete(User).where(User.id == user_id))
+        await self.db.commit()
+
     # ── Attendance summary (monthly) ─────────────────────────────────────
     async def attendance_summary(
         self, user_id: int, *, year: int, month: int
@@ -563,3 +614,41 @@ class EmployeeService:
         await self.db.commit()
         await self.db.refresh(user)
         return UserOut.model_validate(user)
+
+    # ── Database reset (dev/staging only) ───────────────────────────────
+    async def reset_database(self) -> dict[str, int]:
+        """Truncate all tables, then re-seed the default admin.
+        Order respects FK constraints (children before parents)."""
+        tables = [
+            "visit_org_answers", "follow_ups", "daily_reports", "leads",
+            "visit_orders", "visit_photos", "visit_notes", "visits",
+            "visit_plan_items", "visit_plans", "livestock_profiles",
+            "customers", "geofence_events", "geofences", "location_logs",
+            "attendance_sessions", "attendance", "gps_config",
+            "device_info", "notifications", "sync_queue", "audit_logs",
+            "settings",
+        ]
+        counts: dict[str, int] = {}
+        for table in tables:
+            result = await self.db.execute(text(f"DELETE FROM {table}"))
+            counts[table] = result.rowcount
+
+        counts["users"] = (await self.db.execute(delete(User))).rowcount
+        counts["teams"] = (await self.db.execute(delete(Team))).rowcount
+
+        # Re-seed the default admin
+        admin = User(
+            name="Admin User",
+            email="admin@fieldtrack.com",
+            phone="9000000001",
+            password_hash=hash_password("Admin@123"),
+            role=UserRole.ADMIN,
+            is_active=True,
+        )
+        self.db.add(admin)
+
+        # Clear all Redis keys
+        await self.redis.flushdb()
+
+        await self.db.commit()
+        return counts

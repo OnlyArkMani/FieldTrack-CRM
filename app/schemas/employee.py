@@ -75,6 +75,10 @@ class EmployeeStatusUpdate(BaseModel):
     is_active: bool
 
 
+class PasswordUpdate(BaseModel):
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 # ── Output ───────────────────────────────────────────────────────────────
 class TeamRef(BaseModel):
     model_config = ConfigDict(from_attributes=True)

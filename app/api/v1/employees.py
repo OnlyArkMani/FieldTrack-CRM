@@ -10,9 +10,10 @@ AUTHZ:
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.dependencies import (
     CurrentUser,
     get_current_admin,
@@ -30,6 +31,7 @@ from app.schemas.employee import (
     EmployeeUpdate,
     GpsIntegrityOut,
     LocationHistoryOut,
+    PasswordUpdate,
 )
 from app.services.employee_service import EmployeeService
 
@@ -111,6 +113,32 @@ async def set_employee_status(
     )
 
 
+@router.patch("/{employee_id}/password", status_code=204)
+async def update_employee_password(
+    employee_id: int,
+    body: PasswordUpdate,
+    request: Request,
+    admin: Annotated[User, Depends(get_current_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    await EmployeeService(db).update_password(
+        employee_id,
+        body.new_password,
+        actor=admin,
+        ip=_client_ip(request),
+    )
+
+
+@router.delete("/{employee_id}", status_code=204)
+async def delete_employee(
+    employee_id: int,
+    request: Request,
+    admin: Annotated[User, Depends(get_current_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    await EmployeeService(db).delete_employee(employee_id, actor=admin, ip=_client_ip(request))
+
+
 @router.get(
     "/{employee_id}/attendance-summary", response_model=AttendanceSummaryOut
 )
@@ -138,6 +166,18 @@ async def location_history(
     return await EmployeeService(db).location_history(
         employee_id, date_from=date_from, date_to=date_to, limit=limit
     )
+
+
+@router.delete("/reset-database", status_code=200)
+async def reset_database(
+    admin: Annotated[User, Depends(get_current_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Admin only. Truncates all data except the admin user. Blocked on production."""
+    if get_settings().is_production:
+        raise HTTPException(status_code=403, detail="Not allowed in production")
+    deleted = await EmployeeService(db).reset_database()
+    return {"detail": "Database reset successful", "deleted": deleted}
 
 
 @router.get("/{employee_id}/gps-integrity", response_model=GpsIntegrityOut)
