@@ -46,6 +46,9 @@ class LeadService:
             fu_time,
             emp_name,
             customer_type,
+            phone,
+            address,
+            district,
         ) = row
         warm_cold = lead.status in _WARM_COLD
         return LeadListItem(
@@ -53,6 +56,9 @@ class LeadService:
             farmer_name=name or "Unknown",
             customer_type=customer_type or "FARMER_MEET",
             village=village,
+            district=district,
+            phone=phone,
+            address=address,
             lead_status=lead.status,
             last_visit_at=last_visit,
             follow_up_date=fu_date if warm_cold else None,

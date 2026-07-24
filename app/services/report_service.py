@@ -745,12 +745,15 @@ class ReportService:
         )
 
         columns = [
-            "Farmer", "Village", "Status", "Employee",
-            "Last Visit", "Follow-up Date", "Reason",
+            "Farmer", "Phone", "Village", "District", "Address", "Status",
+            "Employee", "Last Visit", "Follow-up Date", "Reason",
         ]
         table_rows: list[list[Any]] = []
         hot = warm = cold = 0
-        for lead, name, village, _team_id, last_visit, fu_date, _fu_time, emp_name in rows:
+        for (
+            lead, name, village, _team_id, last_visit, fu_date, _fu_time,
+            emp_name, _customer_type, phone, address, district,
+        ) in rows:
             if lead.status == "HOT":
                 hot += 1
             elif lead.status == "WARM":
@@ -759,7 +762,10 @@ class ReportService:
                 cold += 1
             table_rows.append([
                 name or "Unknown",
+                phone or "—",
                 village or "—",
+                district or "—",
+                address or "—",
                 lead.status,
                 emp_name or "—",
                 last_visit.strftime("%d %b %Y") if last_visit else "—",

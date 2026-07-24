@@ -102,7 +102,8 @@ class LeadRepository:
         territory: str | None = None,
     ) -> list:
         """Rows of (Lead, farmer_name, village, team_id, last_visit, fu_date,
-        fu_time, employee_name) — one per farmer, current status, HOT→WARM→COLD."""
+        fu_time, employee_name, customer_type, phone, address, district) — one
+        per farmer, current status, HOT→WARM→COLD."""
         if team_ids is not None and not team_ids:
             return []
         latest = self._latest_ids()
@@ -117,6 +118,9 @@ class LeadRepository:
                 self._next_fu_time_sq().label("fu_time"),
                 User.name.label("employee_name"),
                 Farmer.customer_type.label("customer_type"),
+                Farmer.phone,
+                Farmer.address,
+                Farmer.district,
             )
             .join(latest, Lead.id == latest.c.mid)
             .join(Farmer, Farmer.id == Lead.farmer_id)

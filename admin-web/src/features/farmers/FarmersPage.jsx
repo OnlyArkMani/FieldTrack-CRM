@@ -126,7 +126,12 @@ export default function FarmersPage() {
       key: 'village',
       header: 'Village',
       render: (f) => (
-        <span className="text-text-secondary">{f.village || '—'}</span>
+        <div className="min-w-0">
+          <span className="text-text-secondary">{f.village || '—'}</span>
+          {f.address && (
+            <div className="truncate max-w-[200px] text-xs text-text-secondary/70">{f.address}</div>
+          )}
+        </div>
       ),
     },
     {

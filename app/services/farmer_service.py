@@ -114,6 +114,7 @@ class FarmerService:
                 phone=f.phone,
                 village=f.village,
                 district=f.district,
+                address=f.address,
                 total_cattle=f.total_cattle or 0,
                 is_active=f.is_active,
                 team_id=f.team_id,

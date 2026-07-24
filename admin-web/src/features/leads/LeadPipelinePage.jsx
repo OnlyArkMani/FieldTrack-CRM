@@ -223,6 +223,8 @@ export default function LeadPipelinePage() {
                 <tr>
                   <th className="px-4 py-3 font-semibold">Employee</th>
                   <th className="px-4 py-3 font-semibold">Customer</th>
+                  <th className="px-4 py-3 font-semibold">Phone</th>
+                  <th className="px-4 py-3 font-semibold">Location</th>
                   <th className="px-4 py-3 font-semibold">Customer Type</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold">Last Visit</th>
@@ -244,6 +246,16 @@ export default function LeadPipelinePage() {
                         {overdue && (
                           <div className="text-xs text-danger font-medium mt-0.5">Overdue follow-up</div>
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-text-secondary">
+                        {lead.phone
+                          ? <a href={`tel:${lead.phone}`} className="hover:text-accent hover:underline">{lead.phone}</a>
+                          : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-text-secondary">
+                        <div className="truncate max-w-[180px]">
+                          {lead.address || [lead.village, lead.district].filter(Boolean).join(', ') || '—'}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-text-secondary">{lead.customer_type ?? '—'}</td>
                       <td className="px-4 py-3">

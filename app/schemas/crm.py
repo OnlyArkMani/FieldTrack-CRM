@@ -371,6 +371,7 @@ class FarmerListItem(BaseModel):
     phone: str | None = None
     village: str | None = None
     district: str | None = None
+    address: str | None = None
     total_cattle: int = 0
     is_active: bool = True
     team_id: int | None = None
@@ -846,6 +847,9 @@ class LeadListItem(BaseModel):
     farmer_name: str
     customer_type: CustomerType = "FARMER_MEET"
     village: str | None = None
+    district: str | None = None
+    phone: str | None = None
+    address: str | None = None
     lead_status: str
     last_visit_at: datetime | None = None
     follow_up_date: date | None = None
