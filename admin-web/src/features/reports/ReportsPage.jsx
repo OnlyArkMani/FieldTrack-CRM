@@ -6,8 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import dayjs from 'dayjs';
-import clsx from 'clsx';
-import { Download, Eye, FileSpreadsheet, AlertCircle, Loader2, X } from 'lucide-react';
+import { Download, FileSpreadsheet, AlertCircle, Loader2, X } from 'lucide-react';
 
 import { api, apiErrorMessage } from '@/services/api/client';
 import { useTeams } from '@/hooks/useTeams';
@@ -15,7 +14,6 @@ import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/ui/PageHeader';
 import Card, { CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import Modal from '@/components/ui/Modal';
 import { Input, Select } from '@/components/ui/Input';
 
 const MAX_RANGE_DAYS = 31;
@@ -233,24 +231,6 @@ export default function ReportsPage() {
   const [reportId, setReportId] = useState(null);
   const [downloading, setDownloading] = useState(false);
 
-  // Preview: PDF renders in an iframe via a blob URL; Excel/CSV are parsed
-  // client-side (SheetJS) into plain rows and rendered as a React table —
-  // never via dangerouslySetInnerHTML, since report cells can carry
-  // user-entered text (names, work summaries) that must stay escaped.
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState(null);
-  const [previewPdfUrl, setPreviewPdfUrl] = useState(null);
-  const [previewSheets, setPreviewSheets] = useState([]); // [{ name, rows }]
-  const [activeSheet, setActiveSheet] = useState(0);
-  const previewPdfUrlRef = useRef(null);
-  const previewAbortRef = useRef(null);
-
-  useEffect(() => () => {
-    previewAbortRef.current?.abort();
-    if (previewPdfUrlRef.current) URL.revokeObjectURL(previewPdfUrlRef.current);
-  }, []);
-
   const pollRef = useRef(null);
   const clearPoll = () => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
@@ -296,7 +276,6 @@ export default function ReportsPage() {
     setPhase('idle');
     setError(null);
     setReportId(null);
-    closePreview();
   };
 
   const onTypeChange = (value) => {
@@ -388,65 +367,6 @@ export default function ReportsPage() {
       setError(apiErrorMessage(err));
     } finally {
       setDownloading(false);
-    }
-  };
-
-  const closePreview = () => {
-    previewAbortRef.current?.abort();
-    previewAbortRef.current = null;
-    setPreviewOpen(false);
-    setPreviewError(null);
-    setPreviewSheets([]);
-    setActiveSheet(0);
-    if (previewPdfUrlRef.current) {
-      URL.revokeObjectURL(previewPdfUrlRef.current);
-      previewPdfUrlRef.current = null;
-    }
-    setPreviewPdfUrl(null);
-  };
-
-  const openPreview = async () => {
-    if (!reportId) return;
-    previewAbortRef.current?.abort();
-    const controller = new AbortController();
-    previewAbortRef.current = controller;
-    setPreviewOpen(true);
-    setPreviewLoading(true);
-    setPreviewError(null);
-    try {
-      const resp = await api.get(`/reports/${reportId}/download`, {
-        responseType: 'blob',
-        signal: controller.signal,
-      });
-      // Closed/aborted while the request was in flight — drop the result
-      // instead of creating a blob URL nothing will ever revoke.
-      if (controller.signal.aborted) return;
-      if (format === 'PDF') {
-        const url = URL.createObjectURL(resp.data);
-        previewPdfUrlRef.current = url;
-        setPreviewPdfUrl(url);
-      } else {
-        const XLSX = await import('xlsx');
-        const workbook =
-          format === 'CSV'
-            ? XLSX.read(await resp.data.text(), { type: 'string' })
-            : XLSX.read(await resp.data.arrayBuffer(), { type: 'array' });
-        setPreviewSheets(
-          workbook.SheetNames.map((name) => ({
-            name,
-            rows: XLSX.utils.sheet_to_json(workbook.Sheets[name], {
-              header: 1,
-              raw: false,
-              defval: '',
-            }),
-          })),
-        );
-      }
-    } catch (err) {
-      if (controller.signal.aborted) return;
-      setPreviewError(apiErrorMessage(err));
-    } finally {
-      if (!controller.signal.aborted) setPreviewLoading(false);
     }
   };
 
@@ -625,9 +545,6 @@ export default function ReportsPage() {
               <span className="font-medium text-text-primary">Report ready to download.</span>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" icon={Eye} onClick={openPreview}>
-                Preview
-              </Button>
               <Button icon={Download} onClick={downloadFile} loading={downloading}>
                 Download
               </Button>
@@ -650,71 +567,6 @@ export default function ReportsPage() {
         </Card>
       )}
 
-      <Modal open={previewOpen} onClose={closePreview} title="Report preview" size="xl">
-        {previewLoading && (
-          <div className="flex items-center justify-center gap-2 py-10 text-text-secondary">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span>Loading preview…</span>
-          </div>
-        )}
-
-        {!previewLoading && previewError && (
-          <div className="flex items-start gap-2 py-4 text-danger">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
-            <span>{previewError}</span>
-          </div>
-        )}
-
-        {!previewLoading && !previewError && previewPdfUrl && (
-          <iframe
-            src={previewPdfUrl}
-            title="Report PDF preview"
-            className="h-[75vh] w-full rounded-btn border border-border"
-          />
-        )}
-
-        {!previewLoading && !previewError && previewSheets.length > 0 && (
-          <div>
-            {previewSheets.length > 1 && (
-              <div className="mb-3 flex flex-wrap gap-2 border-b border-border/60 pb-2">
-                {previewSheets.map((s, i) => (
-                  <button
-                    key={s.name}
-                    type="button"
-                    onClick={() => setActiveSheet(i)}
-                    className={clsx(
-                      'rounded-btn px-3 py-1 text-sm',
-                      i === activeSheet
-                        ? 'bg-primary font-medium text-primary-fg'
-                        : 'text-text-secondary hover:bg-surface',
-                    )}
-                  >
-                    {s.name}
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="max-h-[70vh] overflow-auto rounded-btn border border-border">
-              <table className="w-full text-sm">
-                <tbody>
-                  {(previewSheets[activeSheet]?.rows || []).map((row, ri) => (
-                    <tr
-                      key={ri}
-                      className={ri === 0 ? 'bg-surface font-medium' : 'border-t border-border/60'}
-                    >
-                      {row.map((cell, ci) => (
-                        <td key={ci} className="whitespace-nowrap px-3 py-1.5 text-text-primary">
-                          {cell === null || cell === undefined ? '' : String(cell)}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </Modal>
     </div>
   );
 }
