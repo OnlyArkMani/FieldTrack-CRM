@@ -388,6 +388,7 @@ class VisitSummary(BaseModel):
 
     id: int
     employee_id: int | None
+    employee_name: str | None = None
     check_in_at: datetime | None
     check_out_at: datetime | None
     purpose: str | None
@@ -426,6 +427,7 @@ class LeadHistoryItem(BaseModel):
     status: str
     reason_note: str | None
     employee_id: int | None
+    employee_name: str | None = None
     visit_id: int | None
     created_at: datetime
 

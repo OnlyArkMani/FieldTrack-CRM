@@ -1,10 +1,12 @@
+import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import dayjs from 'dayjs';
 import { X, Phone, MapPin, Users, FileBarChart } from 'lucide-react';
 
 import {
   useFarmer,
-  useFarmerVisits,
+  useFarmerVisitsInfinite,
   useFarmerLivestock,
   useFarmerLeadHistory,
   useFarmerOrders,
@@ -54,14 +56,46 @@ function fmtDate(d) {
   return d ? dayjs(d).format('MMM D, YYYY') : '—';
 }
 
+function fmtDateTime(d) {
+  return d ? dayjs(d).format('MMM D, YYYY · h:mm A') : '—';
+}
+
 /** Right-side slide-in farmer detail panel (400px). */
 export default function FarmerDetailPanel({ farmerId, open, onClose }) {
   const navigate = useNavigate();
   const { data: farmer, isLoading } = useFarmer(open ? farmerId : null);
-  const { data: visits } = useFarmerVisits(open ? farmerId : null);
+  const {
+    data: visitPages,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: visitsLoading,
+  } = useFarmerVisitsInfinite(open ? farmerId : null);
   const { data: livestock } = useFarmerLivestock(open ? farmerId : null);
   const { data: leads } = useFarmerLeadHistory(open ? farmerId : null);
   const { data: orders } = useFarmerOrders(open ? farmerId : null);
+
+  // Visit history can run into the hundreds/thousands per farmer — fetch it a
+  // page at a time (useFarmerVisitsInfinite) and only mount the rows actually
+  // scrolled into view (useVirtualizer), instead of paying for a huge fetch
+  // and a huge DOM up front.
+  const visitRows = visitPages?.pages.flatMap((p) => p.items) ?? [];
+  const visitTotal = visitPages?.pages[0]?.total ?? 0;
+  const visitScrollRef = useRef(null);
+  const rowVirtualizer = useVirtualizer({
+    count: hasNextPage ? visitRows.length + 1 : visitRows.length,
+    getScrollElement: () => visitScrollRef.current,
+    estimateSize: () => 52,
+    overscan: 6,
+  });
+  const virtualItems = rowVirtualizer.getVirtualItems();
+  const lastVirtualIndex = virtualItems.length ? virtualItems[virtualItems.length - 1].index : -1;
+
+  useEffect(() => {
+    if (lastVirtualIndex >= visitRows.length - 1 && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [lastVirtualIndex, visitRows.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
     <>
@@ -141,17 +175,61 @@ export default function FarmerDetailPanel({ farmerId, open, onClose }) {
                 )}
               </Section>
 
-              {/* Visit history */}
-              <Section title={`Visit history (${visits?.total ?? 0})`}>
-                {visits?.items?.length ? (
-                  <MiniTable
-                    head={['Date', 'Purpose', 'Status']}
-                    rows={visits.items.map((v) => [
-                      fmtDate(v.check_in_at || v.created_at),
-                      pretty(v.purpose) || 'Visit',
-                      pretty(v.status),
-                    ])}
-                  />
+              {/* Visit history — virtualized + infinite-scrolled since a
+                  farmer's visit count can grow into the hundreds. */}
+              <Section title={`Visit history (${visitTotal})`}>
+                {visitRows.length ? (
+                  <div
+                    ref={visitScrollRef}
+                    className="max-h-72 overflow-y-auto rounded-btn border border-border"
+                  >
+                    <div
+                      style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}
+                    >
+                      {virtualItems.map((vRow) => {
+                        const v = visitRows[vRow.index];
+                        return (
+                          <div
+                            key={vRow.key}
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              width: '100%',
+                              height: vRow.size,
+                              transform: `translateY(${vRow.start}px)`,
+                            }}
+                            className="flex items-center justify-between gap-3 border-b border-border/60 px-3 text-sm"
+                          >
+                            {v ? (
+                              <>
+                                <div className="min-w-0">
+                                  <div className="truncate font-medium text-text-primary">
+                                    {v.employee_name || 'Unassigned'}
+                                  </div>
+                                  <div className="truncate text-xs text-text-secondary">
+                                    {pretty(v.purpose) || 'Visit'}
+                                  </div>
+                                </div>
+                                <div className="shrink-0 text-right">
+                                  <div className="text-xs text-text-secondary">
+                                    {fmtDateTime(v.check_in_at || v.created_at)}
+                                  </div>
+                                  <div className="text-xs text-text-secondary">{pretty(v.status)}</div>
+                                </div>
+                              </>
+                            ) : (
+                              <span className="w-full text-center text-xs text-text-secondary">
+                                Loading more…
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : visitsLoading ? (
+                  <Spinner className="py-6" />
                 ) : (
                   <Empty>No visits yet.</Empty>
                 )}
@@ -210,6 +288,9 @@ export default function FarmerDetailPanel({ farmerId, open, onClose }) {
                           </div>
                           {l.reason_note && (
                             <p className="mt-1 text-sm text-text-primary">{l.reason_note}</p>
+                          )}
+                          {l.employee_name && (
+                            <p className="mt-0.5 text-xs text-text-secondary">by {l.employee_name}</p>
                           )}
                         </div>
                       </li>

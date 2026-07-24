@@ -10,6 +10,7 @@ import Card, { CardHeader } from '@/components/ui/Card';
 import PageHeader from '@/components/ui/PageHeader';
 import Spinner from '@/components/ui/Spinner';
 import { Input, Select } from '@/components/ui/Input';
+import FarmerDetailPanel from '@/features/farmers/FarmerDetailPanel';
 
 const STATUS_COLORS = {
   HOT: { bg: 'bg-danger/15', text: 'text-danger', label: 'Hot' },
@@ -42,6 +43,7 @@ export default function LeadPipelinePage() {
   const [territory, setTerritory] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [selectedFarmerId, setSelectedFarmerId] = useState(null);
 
   const { data: leads, isLoading } = useTeamLeads({
     status: statusFilter || undefined,
@@ -70,10 +72,14 @@ export default function LeadPipelinePage() {
   const conversionRate = totalLeads > 0 ? Math.round((hotCount / totalLeads) * 100) : 0;
 
   const today = dayjs().format('YYYY-MM-DD');
+  // Keyed by farmer_id — LeadListItem has no `id` field (one row per farmer),
+  // so keying this off `l.id` (undefined for every row) made the whole Set
+  // collapse to a single `undefined` entry once any lead matched, which
+  // flagged EVERY row as overdue as soon as one actually was.
   const overdueIds = new Set(
     leadList
       .filter((l) => l.follow_up_date && l.follow_up_date < today && l.follow_up_status !== 'DONE')
-      .map((l) => l.id),
+      .map((l) => l.farmer_id),
   );
 
   async function handleExport() {
@@ -234,11 +240,12 @@ export default function LeadPipelinePage() {
               </thead>
               <tbody>
                 {leadList.map((lead) => {
-                  const overdue = overdueIds.has(lead.id);
+                  const overdue = overdueIds.has(lead.farmer_id);
                   return (
                     <tr
-                      key={lead.id}
-                      className={`border-t border-border/60 ${overdue ? 'bg-danger/5' : 'hover:bg-surface/40'}`}
+                      key={lead.farmer_id}
+                      onClick={() => setSelectedFarmerId(lead.farmer_id)}
+                      className={`cursor-pointer border-t border-border/60 ${overdue ? 'bg-danger/5' : 'hover:bg-surface/40'}`}
                     >
                       <td className="px-4 py-3 text-text-secondary">{lead.employee_name ?? '—'}</td>
                       <td className="px-4 py-3 font-medium text-text-primary">
@@ -249,7 +256,15 @@ export default function LeadPipelinePage() {
                       </td>
                       <td className="px-4 py-3 text-text-secondary">
                         {lead.phone
-                          ? <a href={`tel:${lead.phone}`} className="hover:text-accent hover:underline">{lead.phone}</a>
+                          ? (
+                            <a
+                              href={`tel:${lead.phone}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="hover:text-accent hover:underline"
+                            >
+                              {lead.phone}
+                            </a>
+                          )
                           : '—'}
                       </td>
                       <td className="px-4 py-3 text-text-secondary">
@@ -280,6 +295,12 @@ export default function LeadPipelinePage() {
           </div>
         )}
       </Card>
+
+      <FarmerDetailPanel
+        farmerId={selectedFarmerId}
+        open={selectedFarmerId != null}
+        onClose={() => setSelectedFarmerId(null)}
+      />
     </div>
   );
 }

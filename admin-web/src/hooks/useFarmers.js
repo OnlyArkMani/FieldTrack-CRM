@@ -1,6 +1,7 @@
 import {
   useMutation,
   useQuery,
+  useInfiniteQuery,
   useQueryClient,
   keepPreviousData,
 } from '@tanstack/react-query';
@@ -78,11 +79,21 @@ export function useFarmer(id) {
   });
 }
 
-export function useFarmerVisits(id) {
-  return useQuery({
-    queryKey: [KEY, 'visits', id],
-    queryFn: async () =>
-      (await api.get(`/farmers/${id}/visits`, { params: { limit: 100 } })).data,
+/** Cursor-paginated visit history — fetches one page (default 30) at a time
+ *  via `fetchNextPage`, for farmers whose visit count can run into the
+ *  hundreds/thousands. Pair with a virtualized list on the render side so the
+ *  DOM only ever holds the visible rows. */
+export function useFarmerVisitsInfinite(id, pageSize = 30) {
+  return useInfiniteQuery({
+    queryKey: [KEY, 'visits-infinite', id],
+    queryFn: async ({ pageParam }) =>
+      (
+        await api.get(`/farmers/${id}/visits`, {
+          params: { limit: pageSize, cursor: pageParam ?? undefined },
+        })
+      ).data,
+    initialPageParam: null,
+    getNextPageParam: (lastPage) => (lastPage.has_more ? lastPage.next_cursor : undefined),
     enabled: !!id,
   });
 }

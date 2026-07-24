@@ -127,7 +127,7 @@ export default function FarmersPage() {
       header: 'Village',
       render: (f) => (
         <div className="min-w-0">
-          <span className="text-text-secondary">{f.village || '—'}</span>
+          <span className="text-text-secondary">{f.village}</span>
           {f.address && (
             <div className="truncate max-w-[200px] text-xs text-text-secondary/70">{f.address}</div>
           )}
@@ -139,7 +139,7 @@ export default function FarmersPage() {
       header: 'Team',
       render: (f) => (
         <span className="text-text-secondary">
-          {f.team_name || teams.find((t) => t.id === f.team_id)?.name || '—'}
+          {f.team_name || teams.find((t) => t.id === f.team_id)?.name}
         </span>
       ),
     },

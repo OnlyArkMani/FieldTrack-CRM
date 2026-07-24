@@ -19,7 +19,7 @@ from app.models.crm import (
     Visit,
     VisitOrder,
 )
-from app.models.user import Team
+from app.models.user import Team, User
 
 
 class FarmerRepository:
@@ -198,13 +198,15 @@ class FarmerRepository:
         )
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
-    async def lead_history(self, farmer_id: int) -> list[Lead]:
+    async def lead_history(self, farmer_id: int) -> list:
+        """Rows of (Lead, employee_name), newest first."""
         stmt = (
-            select(Lead)
+            select(Lead, User.name.label("employee_name"))
+            .outerjoin(User, User.id == Lead.employee_id)
             .where(Lead.farmer_id == farmer_id)
             .order_by(Lead.created_at.desc(), Lead.id.desc())
         )
-        return list((await self.db.execute(stmt)).scalars().all())
+        return list((await self.db.execute(stmt)).all())
 
     async def recent_visits(self, farmer_id: int, *, limit: int) -> list[Visit]:
         stmt = (
@@ -217,15 +219,19 @@ class FarmerRepository:
 
     async def list_visits(
         self, farmer_id: int, *, cursor_id: int | None, limit: int
-    ) -> tuple[list[Visit], int]:
-        """Full visit history, newest first. Keyset by id DESC (visits are
-        append-only; id order matches chronological order closely enough and is
-        a stable unique total order)."""
-        stmt = select(Visit).where(Visit.farmer_id == farmer_id)
+    ) -> tuple[list, int]:
+        """Full visit history, newest first, as (Visit, employee_name) rows.
+        Keyset by id DESC (visits are append-only; id order matches
+        chronological order closely enough and is a stable unique total order)."""
+        stmt = (
+            select(Visit, User.name.label("employee_name"))
+            .outerjoin(User, User.id == Visit.employee_id)
+            .where(Visit.farmer_id == farmer_id)
+        )
         if cursor_id is not None:
             stmt = stmt.where(Visit.id < cursor_id)
         stmt = stmt.order_by(Visit.id.desc()).limit(limit + 1)
-        rows = list((await self.db.execute(stmt)).scalars().all())
+        rows = list((await self.db.execute(stmt)).all())
 
         total = int(
             (

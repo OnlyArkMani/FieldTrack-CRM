@@ -460,9 +460,21 @@ class FarmerService:
         )
         has_more = len(rows) > limit
         page = rows[:limit]
-        next_cursor = encode_cursor(page[-1].id) if has_more and page else None
+        next_cursor = encode_cursor(page[-1][0].id) if has_more and page else None
         return CursorPage[VisitSummary](
-            items=[VisitSummary.model_validate(v) for v in page],
+            items=[
+                VisitSummary(
+                    id=v.id,
+                    employee_id=v.employee_id,
+                    employee_name=emp_name,
+                    check_in_at=v.check_in_at,
+                    check_out_at=v.check_out_at,
+                    purpose=v.purpose,
+                    status=v.status,
+                    created_at=v.created_at,
+                )
+                for v, emp_name in page
+            ],
             next_cursor=next_cursor,
             total=total,
             has_more=has_more,
@@ -488,7 +500,18 @@ class FarmerService:
             raise not_found("Farmer not found")
         await self._assert_can_view(farmer, user)
         rows = await self.repo.lead_history(farmer_id)
-        return [LeadHistoryItem.model_validate(r) for r in rows]
+        return [
+            LeadHistoryItem(
+                id=lead.id,
+                status=lead.status,
+                reason_note=lead.reason_note,
+                employee_id=lead.employee_id,
+                employee_name=emp_name,
+                visit_id=lead.visit_id,
+                created_at=lead.created_at,
+            )
+            for lead, emp_name in rows
+        ]
 
     # ── lead status change (powers the mobile 'Update Status' sheet) ─────
     async def update_lead_status(
