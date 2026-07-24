@@ -38,6 +38,7 @@ from app.schemas.location import (
     RoutePointOut,
     RouteReplayOut,
     RouteSessionOut,
+    RouteVisitOut,
     TeamLivePoint,
     TrailSummaryOut,
 )
@@ -346,6 +347,9 @@ class LocationService:
         sessions = list(attendance.sessions) if attendance else []
         total_duration = attendance.total_duration_minutes if attendance else 0
 
+        # Farmer visit check-ins for the day (visit markers).
+        visits = await self._visits_for_day(user_id, day)
+
         # Total distance: haversine across the RAW track (before simplification).
         total_distance = _haversine_total([(p.lat, p.lng) for p in raw])
 
@@ -387,6 +391,21 @@ class LocationService:
             for s in sorted(sessions, key=lambda s: s.timestamp)
         ]
 
+        visit_out = [
+            RouteVisitOut(
+                visit_id=v.id,
+                farmer_id=v.farmer_id,
+                farmer_name=v.farmer.name if v.farmer else None,
+                lat=v.check_in_lat,
+                lng=v.check_in_lng,
+                timestamp=v.check_in_at,
+                status=v.status,
+                location_warning=v.location_warning,
+            )
+            for v in visits
+            if v.check_in_lat is not None and v.check_in_lng is not None
+        ]
+
         return RouteReplayOut(
             user_id=user_id,
             date=day.isoformat(),
@@ -395,6 +414,7 @@ class LocationService:
             simplified=simplified,
             points=points,
             sessions=session_out,
+            visits=visit_out,
         )
 
     async def _attendance_for_day(self, user_id: int, day: date_type):
@@ -409,6 +429,26 @@ class LocationService:
             .options(selectinload(Attendance.sessions))
         )
         return (await self.db.execute(stmt)).scalar_one_or_none()
+
+    async def _visits_for_day(self, user_id: int, day: date_type):
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+
+        from app.models.crm import Visit
+
+        day_start = datetime.combine(day, time.min, tzinfo=timezone.utc)
+        day_end = datetime.combine(day, time.max, tzinfo=timezone.utc)
+        stmt = (
+            select(Visit)
+            .where(
+                Visit.employee_id == user_id,
+                Visit.check_in_at >= day_start,
+                Visit.check_in_at <= day_end,
+            )
+            .options(selectinload(Visit.farmer))
+            .order_by(Visit.check_in_at.asc())
+        )
+        return (await self.db.execute(stmt)).scalars().all()
 
     # ── Trail summary (30-day distance report) ──────────────────────────────
     async def trail_summary(

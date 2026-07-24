@@ -5,7 +5,8 @@ import { api } from '@/services/api/client';
  * Trail-replay route for an employee on a given day. Returns the enriched
  * payload: { points:[{lat,lng,timestamp,speed,accuracy,is_mock_gps,
  * attendance_state}], sessions:[{type,lat,lng,timestamp}],
- * total_distance_meters, total_duration_minutes }.
+ * visits:[{visit_id,farmer_id,farmer_name,lat,lng,timestamp,status,
+ * location_warning}], total_distance_meters, total_duration_minutes }.
  */
 export function useEmployeeRoute(userId, date, enabled = true) {
   return useQuery({

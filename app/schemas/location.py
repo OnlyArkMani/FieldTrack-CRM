@@ -105,11 +105,25 @@ class RouteSessionOut(BaseModel):
     timestamp: datetime
 
 
+class RouteVisitOut(BaseModel):
+    """One farmer visit check-in marker for trail replay."""
+
+    visit_id: int
+    farmer_id: int | None = None
+    farmer_name: str | None = None
+    lat: float
+    lng: float
+    timestamp: datetime  # check_in_at
+    status: str  # CHECKED_IN | COMPLETED | ABANDONED
+    location_warning: bool = False
+
+
 class RouteReplayOut(BaseModel):
     """Full trail-replay payload for a user's day: enriched points + session
-    markers + aggregate stats. Points are ordered by timestamp ASC. When the
-    raw track exceeds 500 points it's simplified (Douglas–Peucker), but every
-    mock-GPS-flagged point is preserved regardless."""
+    markers + visit markers + aggregate stats. Points are ordered by
+    timestamp ASC. When the raw track exceeds 500 points it's simplified
+    (Douglas–Peucker), but every mock-GPS-flagged point is preserved
+    regardless."""
 
     user_id: int
     date: str
@@ -118,6 +132,7 @@ class RouteReplayOut(BaseModel):
     simplified: bool = False
     points: list[RoutePointOut]
     sessions: list[RouteSessionOut]
+    visits: list[RouteVisitOut] = []
 
 
 class DailyDistanceOut(BaseModel):
