@@ -327,7 +327,7 @@ class _Working extends ConsumerWidget {
     final colors = context.appColors;
     final scheme = Theme.of(context).colorScheme;
     final notifier = ref.read(attendanceProvider.notifier);
-    final startedAt = state.attendance?.startedAt ?? DateTime.now();
+    final startedAt = state.attendance?.activeSessionStart ?? DateTime.now();
     final breaking =
         state.isSubmitting && state.pendingAction == SessionType.breakk;
     final ending =

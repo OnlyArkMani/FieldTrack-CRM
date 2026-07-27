@@ -155,8 +155,7 @@ class AttendanceStatusTile extends ConsumerWidget {
                         ),
                         const SizedBox(height: 4),
                         AttendanceTimer(
-                          start: ui.attendance?.sessions.last.timestamp ??
-                              ui.attendance?.startedAt ??
+                          start: ui.attendance?.activeSessionStart ??
                               DateTime.now(),
                           fontSize: 26,
                         ),

@@ -149,12 +149,24 @@ class Attendance {
   final String? workSummary;
   final AttendanceEmployeeRef? employee;
 
-  /// Timestamp of the first START today — the timer's origin.
+  /// Timestamp of the first START today — the day's first check-in origin.
   DateTime? get startedAt {
     for (final s in sessions) {
       if (s.type == SessionType.start) return s.timestamp;
     }
     return null;
+  }
+
+  /// Timestamp of the current active working session start (START, RESUME, or RE_CHECKIN).
+  DateTime? get activeSessionStart {
+    for (final s in sessions.reversed) {
+      if (s.type == SessionType.start ||
+          s.type == SessionType.resume ||
+          s.type == SessionType.reCheckIn) {
+        return s.timestamp;
+      }
+    }
+    return startedAt;
   }
 
   /// Timestamp the current break began (for the on-break duration display).
