@@ -950,6 +950,7 @@ class ReportService:
         present_days = half_days = absent_days = 0
         for att, _user in att_rows:
             start_t, end_t = self._session_bounds(att.sessions)
+            sess_history = self._session_history_text(att.sessions)
             total_minutes += att.total_duration_minutes
             total_distance_m += att.total_distance_meters
             if att.status == AttendanceStatus.PRESENT:
@@ -960,6 +961,7 @@ class ReportService:
                 absent_days += 1
             att_table_rows.append([
                 att.date.isoformat(), start_t, end_t,
+                sess_history,
                 self._fmt_duration(att.total_duration_minutes),
                 round(att.total_distance_meters / 1000, 2),
                 att.status.value,
@@ -1127,10 +1129,10 @@ class ReportService:
             tables=[
                 ReportTable(
                     name="Attendance",
-                    columns=["Date", "Start", "End", "Duration",
+                    columns=["Date", "Start", "End", "Session History", "Duration",
                              "Distance (km)", "Status", "Work Summary"],
                     rows=att_table_rows,
-                    numeric_cols={4},
+                    numeric_cols={5},
                 ),
                 ReportTable(
                     name="Distance & Zones",
