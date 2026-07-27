@@ -163,6 +163,24 @@ function DailyView({ isAdmin, teams }) {
         {r.is_late && <LateBadge />}
       </span>
     )},
+    {
+      key: 'actions',
+      header: 'Action',
+      align: 'right',
+      render: (r) =>
+        r.status !== 'MISSING' ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={Download}
+            onClick={(ev) => {
+              ev.stopPropagation();
+              downloadTeamDsr(r.employee_id, date, r.employee_name);
+            }}
+            title="Download DSR (CSV)"
+          />
+        ) : null,
+    },
   ];
 
   return (
@@ -265,6 +283,24 @@ function RangeView({ isAdmin, teams }) {
     { key: 'leads', header: 'Leads (H/W/C)', render: (r) => (
       <LeadPills h={r.hot_leads} w={r.warm_leads} c={r.cold_leads} />
     )},
+    {
+      key: 'actions',
+      header: 'Action',
+      align: 'right',
+      render: (r) =>
+        r.status !== 'MISSING' ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={Download}
+            onClick={(ev) => {
+              ev.stopPropagation();
+              downloadTeamDsr(r.employee_id, r.report_date, r.employee_name);
+            }}
+            title="Download DSR (CSV)"
+          />
+        ) : null,
+    },
   ];
 
   return (

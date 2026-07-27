@@ -69,7 +69,7 @@ class EmployeeRepository:
         )
         if cursor_id is not None:
             stmt = stmt.where(User.id > cursor_id)
-        stmt = stmt.order_by(User.id.asc()).limit(limit + 1)
+        stmt = stmt.order_by(User.name.asc(), User.id.asc()).limit(limit + 1)
         rows = (await self.db.execute(stmt)).scalars().all()
 
         count_stmt = self._apply_list_filters(

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any
 
@@ -632,10 +632,31 @@ def _dsr_csv_response(
     buf = io.StringIO()
     w = csv.writer(buf)
 
+    def _fmt_dt(val: Any) -> str:
+        if not val:
+            return ""
+        if hasattr(val, "strftime"):
+            return val.strftime("%Y-%m-%d %H:%M:%S")
+        if isinstance(val, str):
+            try:
+                dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
+                return dt.strftime("%Y-%m-%d %H:%M:%S")
+            except Exception:
+                return val
+        return str(val)
+
+    checkpoints = detail.get("checkpoints") or {}
+    check_in = checkpoints.get("check_in_at") or getattr(report, "check_in_at", None)
+    check_out = checkpoints.get("check_out_at") or getattr(report, "check_out_at", None)
+
     w.writerow(["Daily Sales Report"])
     w.writerow(["Employee", employee_name])
     w.writerow(["Date", report_date.isoformat()])
     w.writerow(["Status", getattr(report, "status", "")])
+    if check_in:
+        w.writerow(["Check-in", _fmt_dt(check_in)])
+    if check_out:
+        w.writerow(["Check-out", _fmt_dt(check_out)])
     w.writerow(
         ["Visits planned", getattr(report, "visits_planned", 0)]
     )
@@ -660,8 +681,8 @@ def _dsr_csv_response(
                 v["farmer_name"],
                 v.get("customer_type", "FARMER_MEET"),
                 v.get("purpose") or "",
-                v.get("check_in_at") or "",
-                v.get("check_out_at") or "",
+                _fmt_dt(v.get("check_in_at")),
+                _fmt_dt(v.get("check_out_at")),
                 v.get("lead_status") or "",
             ]
         )

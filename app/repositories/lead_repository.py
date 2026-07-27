@@ -134,7 +134,7 @@ class LeadRepository:
             status=status,
             territory=territory,
         )
-        stmt = stmt.order_by(_STATUS_ORDER.asc(), Lead.created_at.desc())
+        stmt = stmt.order_by(Lead.created_at.desc(), Lead.id.desc())
         return list((await self.db.execute(stmt)).all())
 
     async def pipeline_rows(self) -> list[tuple[str, str | None, str | None]]:
