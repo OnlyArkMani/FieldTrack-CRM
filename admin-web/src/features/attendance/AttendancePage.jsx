@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import dayjs from 'dayjs';
 import { AlertTriangle } from 'lucide-react';
+import clsx from 'clsx';
 
 import { useAttendanceForDate } from '@/hooks/useAttendance';
 import PageHeader from '@/components/ui/PageHeader';
@@ -29,8 +30,14 @@ export default function AttendancePage() {
   const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
   const { data, isLoading } = useAttendanceForDate(date);
   const [override, setOverride] = useState(null);
+  const [tab, setTab] = useState('ALL');
 
-  const rows = data?.items || [];
+  const allRows = data?.items || [];
+  const rows = allRows.filter((r) => {
+    if (tab === 'PRESENT') return r.status === 'PRESENT' || r.status === 'HALF_DAY';
+    if (tab === 'ABSENT') return r.status === 'ABSENT';
+    return true;
+  });
 
   const columns = [
     {
@@ -39,12 +46,17 @@ export default function AttendancePage() {
       render: (r) => (
         <div className="flex items-center gap-2">
           <Avatar name={r.employee?.name} src={r.employee?.profile_photo_url} size={30} />
-          <div className="flex items-center gap-1.5">
-            <span className="font-medium text-text-primary">
-              {r.employee?.name || `#${r.user_id}`}
-            </span>
-            {r.has_mock_gps && (
-              <AlertTriangle className="h-4 w-4 text-danger" title="Mock GPS detected" />
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium text-text-primary">
+                {r.employee?.name || `#${r.user_id}`}
+              </span>
+              {r.has_mock_gps && (
+                <AlertTriangle className="h-4 w-4 text-danger shrink-0" title="Mock GPS detected" />
+              )}
+            </div>
+            {r.employee?.role && (
+              <div className="truncate text-xs text-text-secondary">{r.employee.role}</div>
             )}
           </div>
         </div>
@@ -69,13 +81,52 @@ export default function AttendancePage() {
     <div className="space-y-6">
       <PageHeader
         title="Attendance"
-        subtitle="Click any row to override status or add a manual session"
+        subtitle="Live roster overview & daily attendance logs"
         actions={
           <div className="w-44">
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
         }
       />
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setTab('ALL')}
+          className={clsx(
+            'px-3 py-1.5 text-xs font-medium rounded-lg transition-colors',
+            tab === 'ALL'
+              ? 'bg-primary text-white font-semibold'
+              : 'bg-surface/60 text-text-secondary hover:text-text-primary',
+          )}
+        >
+          All ({data?.total ?? 0})
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('PRESENT')}
+          className={clsx(
+            'px-3 py-1.5 text-xs font-medium rounded-lg transition-colors',
+            tab === 'PRESENT'
+              ? 'bg-status-active text-white font-semibold'
+              : 'bg-surface/60 text-text-secondary hover:text-text-primary',
+          )}
+        >
+          Present ({data?.presentCount ?? 0})
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('ABSENT')}
+          className={clsx(
+            'px-3 py-1.5 text-xs font-medium rounded-lg transition-colors',
+            tab === 'ABSENT'
+              ? 'bg-danger text-white font-semibold'
+              : 'bg-surface/60 text-text-secondary hover:text-text-primary',
+          )}
+        >
+          Absent ({data?.absentCount ?? 0})
+        </button>
+      </div>
 
       <Card padded={false}>
         <Table

@@ -12,17 +12,23 @@ export default function Table({
   onRowClick,
   loading = false,
   empty = 'Nothing to show',
+  containerClassName,
 }) {
   return (
-    <div className="overflow-x-auto rounded-card border border-border/60">
+    <div
+      className={clsx(
+        'overflow-x-auto rounded-card border border-border/60',
+        containerClassName,
+      )}
+    >
       <table className="w-full border-collapse text-sm">
         <thead>
-          <tr className="bg-surface/60">
+          <tr>
             {columns.map((col) => (
               <th
                 key={col.key}
                 className={clsx(
-                  'whitespace-nowrap px-4 py-3 text-left font-semibold text-text-secondary',
+                  'sticky top-0 z-10 bg-card border-b border-border/60 whitespace-nowrap px-4 py-3 text-left font-semibold text-text-secondary',
                   col.align === 'right' && 'text-right',
                   col.align === 'center' && 'text-center',
                   col.className,

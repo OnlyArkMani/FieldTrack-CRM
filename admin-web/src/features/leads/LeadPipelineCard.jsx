@@ -7,6 +7,8 @@ import {
   Legend,
   Tooltip,
 } from 'recharts';
+import { useNavigate } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 
 import { usePipeline } from '@/hooks/useLeads';
 import Card, { CardHeader } from '@/components/ui/Card';
@@ -25,6 +27,7 @@ export default function LeadPipelineCard() {
   const { data, isLoading } = usePipeline();
   const [team, setTeam] = useState('');
   const [active, setActive] = useState(null); // 'Hot' | 'Warm' | 'Cold' | null
+  const navigate = useNavigate();
 
   if (isLoading || !data) {
     return (
@@ -61,28 +64,37 @@ export default function LeadPipelineCard() {
         title="Lead pipeline"
         subtitle={
           active
-            ? `Employees with ${active} leads — click the centre to clear`
+            ? `Employees with ${active} leads — click centre to clear`
             : 'Click a slice to drill into employees'
         }
         action={
-          <div className="w-44">
-            <Select
-              value={team}
-              onChange={(e) => setTeam(e.target.value)}
-              aria-label="Team filter"
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate('/leads')}
+              className="inline-flex items-center gap-0.5 text-xs font-medium text-primary hover:underline whitespace-nowrap"
             >
-              <option value="">All teams</option>
-              {byTeam.map((t) => (
-                <option key={t.team_name} value={t.team_name}>
-                  {t.team_name}
-                </option>
-              ))}
-            </Select>
+              View Pipeline <ChevronRight className="h-3 w-3" />
+            </button>
+            <div className="w-40">
+              <Select
+                value={team}
+                onChange={(e) => setTeam(e.target.value)}
+                aria-label="Team filter"
+              >
+                <option value="">All teams</option>
+                {byTeam.map((t) => (
+                  <option key={t.team_name} value={t.team_name}>
+                    {t.team_name}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
         }
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 items-start">
         <div className="h-60">
           {empty ? (
             <div className="grid h-full place-items-center text-sm text-text-secondary">
@@ -125,9 +137,9 @@ export default function LeadPipelineCard() {
           )}
         </div>
 
-        <div className="overflow-hidden rounded-card border border-border/60">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-surface/60 text-text-secondary">
+        <div className="overflow-x-auto overflow-y-auto max-h-[300px] rounded-card border border-border/60">
+          <table className="w-full text-left text-sm border-collapse">
+            <thead className="bg-surface/90 backdrop-blur sticky top-0 z-10 text-text-secondary border-b border-border/60">
               <tr>
                 <th className="px-3 py-2 font-semibold">Employee</th>
                 <th className="px-3 py-2 text-center font-semibold">Hot</th>
@@ -144,8 +156,20 @@ export default function LeadPipelineCard() {
                 </tr>
               ) : (
                 employees.map((e) => (
-                  <tr key={e.name} className="border-t border-border/60">
-                    <td className="px-3 py-2 font-medium text-text-primary">{e.name}</td>
+                  <tr
+                    key={e.name}
+                    onClick={() =>
+                      navigate(
+                        e.employee_id || e.id
+                          ? `/employees/${e.employee_id || e.id}`
+                          : '/leads',
+                      )
+                    }
+                    className="border-t border-border/60 cursor-pointer hover:bg-surface/60 transition-colors"
+                  >
+                    <td className="px-3 py-2 font-medium text-text-primary">
+                      {e.name}
+                    </td>
                     <Num v={e.hot} color={COLORS.Hot} on={active === 'Hot'} />
                     <Num v={e.warm} color={COLORS.Warm} on={active === 'Warm'} />
                     <Num v={e.cold} color={COLORS.Cold} on={active === 'Cold'} />
@@ -165,7 +189,10 @@ function Num({ v, color, on }) {
     <td className="px-3 py-2 text-center">
       <span
         className="font-semibold"
-        style={{ color: v > 0 ? color : 'var(--ft-text-secondary)', opacity: on || v === 0 ? 1 : 0.85 }}
+        style={{
+          color: v > 0 ? color : 'var(--ft-text-secondary)',
+          opacity: on || v === 0 ? 1 : 0.85,
+        }}
       >
         {v}
       </span>
