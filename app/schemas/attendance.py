@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enums import AttendanceStatus, SessionType
 
-CurrentState = Literal["STARTED", "ON_BREAK", "RESUMED", "ENDED", "ON_LEAVE", "NULL"]
+CurrentState = Literal["STARTED", "ON_BREAK", "RESUMED", "ENDED", "RE_CHECKED_IN", "ON_LEAVE", "NULL"]
 
 
 # ── Requests ─────────────────────────────────────────────────────────────
