@@ -5,6 +5,7 @@ import {
   Polyline,
   CircleMarker,
   Popup,
+  Tooltip,
   useMap,
 } from "react-leaflet";
 import dayjs from "dayjs";
@@ -17,6 +18,7 @@ import { Input } from "@/components/ui/Input";
 
 const AMBER = "#F5A623";
 const GREY = "#9E9EAE";
+const ROUTE_BLUE = "#2563EB";
 const VISIT_COLOR = "#8B5CF6";
 const SESSION_STYLE = {
   START: { color: "#4CAF7D", label: "Start" },
@@ -25,6 +27,28 @@ const SESSION_STYLE = {
   END: { color: "#E8645A", label: "End" },
 };
 const TICK_MS = { 1: 100, 2: 50, 5: 20 };
+
+async function fetchRoadRoute(coords) {
+  if (!coords || coords.length < 2) return coords;
+  let sampled = coords;
+  if (coords.length > 60) {
+    const step = Math.ceil(coords.length / 60);
+    sampled = coords.filter((_, i) => i === 0 || i === coords.length - 1 || i % step === 0);
+  }
+  const waypointsStr = sampled.map(([lat, lng]) => `${lng},${lat}`).join(';');
+  const url = `https://router.project-osrm.org/route/v1/driving/${waypointsStr}?overview=full&geometries=geojson`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return coords;
+    const json = await res.json();
+    if (json.routes && json.routes[0] && json.routes[0].geometry?.coordinates) {
+      return json.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+    }
+  } catch {
+    // Fallback to direct coords if OSRM is unreachable
+  }
+  return coords;
+}
 
 const fmtDuration = (min) => {
   if (!min) return "0m";
@@ -82,10 +106,49 @@ export default function TrailReplayModal({ open, onClose, employee }) {
   }, [playing, speed, points.length]);
 
   const latlngs = useMemo(() => points.map((p) => [p.lat, p.lng]), [points]);
-  const playedLatLngs = useMemo(
-    () => latlngs.slice(0, idx + 1),
-    [latlngs, idx],
-  );
+  const [roadPath, setRoadPath] = useState([]);
+
+  useEffect(() => {
+    let canceled = false;
+    if (latlngs.length >= 2) {
+      fetchRoadRoute(latlngs).then((res) => {
+        if (!canceled) setRoadPath(res);
+      });
+    } else {
+      setRoadPath(latlngs);
+    }
+    return () => {
+      canceled = true;
+    };
+  }, [latlngs]);
+
+  const displayPath = roadPath.length > 0 ? roadPath : latlngs;
+
+  const playedLatLngs = useMemo(() => {
+    if (!displayPath || displayPath.length === 0) return [];
+    if (points.length <= 1) return displayPath;
+    const progress = idx / Math.max(1, points.length - 1);
+    const roadIdx = Math.min(
+      displayPath.length - 1,
+      Math.floor(progress * (displayPath.length - 1))
+    );
+    return displayPath.slice(0, roadIdx + 1);
+  }, [displayPath, points.length, idx]);
+
+  const currentPos = useMemo(() => {
+    if (!displayPath || displayPath.length === 0) {
+      const p = points[idx];
+      return p ? [p.lat, p.lng] : null;
+    }
+    if (points.length <= 1) return displayPath[0];
+    const progress = idx / Math.max(1, points.length - 1);
+    const roadIdx = Math.min(
+      displayPath.length - 1,
+      Math.floor(progress * (displayPath.length - 1))
+    );
+    return displayPath[roadIdx];
+  }, [displayPath, points, idx]);
+
   const current = points[idx];
   const mapCenter = latlngs[0] || [20.5937, 78.9629];
 
@@ -195,10 +258,10 @@ export default function TrailReplayModal({ open, onClose, employee }) {
                 url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
                 attribution="&copy; OpenStreetMap contributors"
               />
-              {/* full route (grey) */}
+              {/* full route (blue, road-following via OSRM) */}
               <Polyline
-                positions={latlngs}
-                pathOptions={{ color: GREY, weight: 2, opacity: 0.7 }}
+                positions={displayPath}
+                pathOptions={{ color: ROUTE_BLUE, weight: 4, opacity: 0.95 }}
               />
               {/* played portion (amber, thicker) */}
               <Polyline
@@ -236,7 +299,21 @@ export default function TrailReplayModal({ open, onClose, employee }) {
                         fillOpacity: 1,
                         weight: 2,
                       }}
-                    />
+                    >
+                      <Tooltip permanent direction="top" offset={[0, -8]} opacity={0.75} interactive>
+                        <div className="text-xs p-0.5 text-center min-w-[90px]">
+                          <div className="font-bold text-gray-900 text-sm">
+                            {st.label === "Start" ? "Check-in" : st.label === "End" ? "Check-out" : `${st.label} Session`}
+                          </div>
+                          <div className="text-gray-600 font-medium my-0.5">
+                            {dayjs(s.timestamp).format("HH:mm")}
+                          </div>
+                          <div className="text-[10px] text-gray-500 font-mono">
+                            {s.lat.toFixed(4)}, {s.lng.toFixed(4)}
+                          </div>
+                        </div>
+                      </Tooltip>
+                    </CircleMarker>
                   );
                 })}
               {/* completed farmer visits */}
@@ -244,7 +321,7 @@ export default function TrailReplayModal({ open, onClose, employee }) {
                 <CircleMarker
                   key={`visit-${v.visit_id}`}
                   center={[v.lat, v.lng]}
-                  radius={7}
+                  radius={8}
                   pathOptions={{
                     color: "#fff",
                     fillColor: VISIT_COLOR,
@@ -252,27 +329,36 @@ export default function TrailReplayModal({ open, onClose, employee }) {
                     weight: 2,
                   }}
                 >
-                  <Popup>
-                    <div className="text-xs">
-                      <div className="font-semibold">
+                  <Tooltip
+                    permanent
+                    direction="top"
+                    offset={[0, -8]}
+                    opacity={0.75}
+                    interactive
+                  >
+                    <div className="text-xs p-0.5 text-center min-w-[100px]">
+                      <div className="font-bold text-gray-900 text-sm">
                         {v.farmer_name || "Farmer visit"}
                       </div>
-                      <div>
+                      <div className="text-gray-600 font-medium my-0.5">
                         {dayjs(v.timestamp).format("HH:mm")} · {v.status}
                       </div>
+                      <div className="text-[10px] text-gray-500 font-mono">
+                        {v.lat != null ? v.lat.toFixed(4) : "—"}, {v.lng != null ? v.lng.toFixed(4) : "—"}
+                      </div>
                       {v.location_warning && (
-                        <div className="text-red-600">
-                          Check-in far from farmer location
+                        <div className="text-red-600 font-semibold text-[10px] mt-0.5">
+                          ⚠️ Check-in far from location
                         </div>
                       )}
                     </div>
-                  </Popup>
+                  </Tooltip>
                 </CircleMarker>
               ))}
               {/* current position */}
-              {current && (
+              {currentPos && (
                 <CircleMarker
-                  center={[current.lat, current.lng]}
+                  center={currentPos}
                   radius={8}
                   pathOptions={{
                     color: "#fff",
@@ -282,7 +368,7 @@ export default function TrailReplayModal({ open, onClose, employee }) {
                   }}
                 />
               )}
-              <Follow target={current ? [current.lat, current.lng] : null} />
+              <Follow target={currentPos} />
             </MapContainer>
           )}
         </div>
