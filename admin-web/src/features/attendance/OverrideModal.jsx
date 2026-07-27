@@ -1,34 +1,35 @@
-import { useEffect, useState } from 'react';
-import dayjs from 'dayjs';
-import Modal from '@/components/ui/Modal';
-import Button from '@/components/ui/Button';
-import { Input, Select, Textarea } from '@/components/ui/Input';
-import { apiErrorMessage } from '@/services/api/client';
-import { useOverrideStatus, useAddManualSession } from '@/hooks/useAttendance';
+import { useEffect, useState } from "react";
+import dayjs from "dayjs";
+import Modal from "@/components/ui/Modal";
+import Button from "@/components/ui/Button";
+import { Input, Select, Textarea } from "@/components/ui/Input";
+import { apiErrorMessage } from "@/services/api/client";
+import { useOverrideStatus, useAddManualSession } from "@/hooks/useAttendance";
+import clsx from "clsx";
 
 /** Adjust a day's classification, and/or insert a manual session. */
 export default function OverrideModal({ open, onClose, row }) {
   const override = useOverrideStatus();
   const addSession = useAddManualSession();
-  const [status, setStatus] = useState('PRESENT');
-  const [reason, setReason] = useState('');
+  const [status, setStatus] = useState("PRESENT");
+  const [reason, setReason] = useState("");
   const [error, setError] = useState(null);
 
   // Manual session sub-form
   const [showManual, setShowManual] = useState(false);
-  const [sType, setSType] = useState('END');
-  const [sTime, setSTime] = useState('');
-  const [sReason, setSReason] = useState('');
+  const [sType, setSType] = useState("END");
+  const [sTime, setSTime] = useState("");
+  const [sReason, setSReason] = useState("");
 
   useEffect(() => {
     if (open && row) {
-      setStatus(row.status || 'PRESENT');
-      setReason('');
+      setStatus(row.status || "PRESENT");
+      setReason("");
       setError(null);
       setShowManual(false);
-      setSType('END');
-      setSTime(dayjs().format('YYYY-MM-DDTHH:mm'));
-      setSReason('');
+      setSType("END");
+      setSTime(dayjs().format("YYYY-MM-DDTHH:mm"));
+      setSReason("");
     }
   }, [open, row]);
 
@@ -37,7 +38,11 @@ export default function OverrideModal({ open, onClose, row }) {
   const saveStatus = async () => {
     setError(null);
     try {
-      await override.mutateAsync({ attendanceId: row.id, status, reason: reason || null });
+      await override.mutateAsync({
+        attendanceId: row.id,
+        status,
+        reason: reason || null,
+      });
       onClose();
     } catch (err) {
       setError(apiErrorMessage(err));
@@ -63,12 +68,18 @@ export default function OverrideModal({ open, onClose, row }) {
     <Modal
       open={open}
       onClose={onClose}
-      title={`Adjust — ${row.employee?.name || 'Employee'}`}
+      title={`Adjust — ${row.employee?.name || "Employee"}`}
       footer={
         <>
-          <Button variant="outline" onClick={onClose}>Close</Button>
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
           {showManual ? (
-            <Button onClick={saveSession} loading={addSession.isPending} disabled={sReason.trim().length < 3}>
+            <Button
+              onClick={saveSession}
+              loading={addSession.isPending}
+              disabled={sReason.trim().length < 3}
+            >
               Add session
             </Button>
           ) : (
@@ -87,13 +98,36 @@ export default function OverrideModal({ open, onClose, row }) {
             </div>
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
               {row.sessions.map((s, idx) => {
-                const isCheckIn = s.type === 'START' || s.type === 'RESUME' || s.type === 'RE_CHECKIN';
-                const label = s.type === 'START' ? 'Check-In' : s.type === 'END' ? 'Check-Out' : s.type === 'RE_CHECKIN' ? 'Re-Check In' : s.type;
-                const badgeColor = s.type === 'START' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : s.type === 'END' ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-purple-500/20 text-purple-400 border-purple-500/30';
+                const isCheckIn =
+                  s.type === "START" ||
+                  s.type === "RESUME" ||
+                  s.type === "RE_CHECKIN";
+                const label =
+                  s.type === "START"
+                    ? "Check-In"
+                    : s.type === "END"
+                      ? "Check-Out"
+                      : s.type === "RE_CHECKIN"
+                        ? "Re-Check In"
+                        : s.type;
+                const badgeColor =
+                  s.type === "START"
+                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                    : s.type === "END"
+                      ? "bg-red-500/20 text-red-400 border-red-500/30"
+                      : "bg-purple-500/20 text-purple-400 border-purple-500/30";
                 return (
-                  <div key={idx} className="flex items-start justify-between text-xs py-1 border-b border-white/5 last:border-0 gap-2">
+                  <div
+                    key={idx}
+                    className="flex items-start justify-between text-xs py-1 border-b border-white/5 last:border-0 gap-2"
+                  >
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className={clsx("px-2 py-0.5 rounded text-[11px] font-medium border shrink-0", badgeColor)}>
+                      <span
+                        className={clsx(
+                          "px-2 py-0.5 rounded text-[11px] font-medium border shrink-0",
+                          badgeColor,
+                        )}
+                      >
                         {label}
                       </span>
                       {s.notes && (
@@ -103,7 +137,7 @@ export default function OverrideModal({ open, onClose, row }) {
                       )}
                     </div>
                     <span className="font-mono text-text-primary shrink-0">
-                      {dayjs(s.timestamp).format('HH:mm')}
+                      {dayjs(s.timestamp).format("HH:mm")}
                     </span>
                   </div>
                 );
@@ -114,7 +148,11 @@ export default function OverrideModal({ open, onClose, row }) {
 
         {!showManual ? (
           <>
-            <Select label="Day status" value={status} onChange={(e) => setStatus(e.target.value)}>
+            <Select
+              label="Day status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
               <option value="PRESENT">Present</option>
               <option value="HALF_DAY">Half day</option>
               <option value="ABSENT">Absent</option>
@@ -135,7 +173,11 @@ export default function OverrideModal({ open, onClose, row }) {
         ) : (
           <>
             <div className="grid grid-cols-2 gap-4">
-              <Select label="Session type" value={sType} onChange={(e) => setSType(e.target.value)}>
+              <Select
+                label="Session type"
+                value={sType}
+                onChange={(e) => setSType(e.target.value)}
+              >
                 <option value="START">Start</option>
                 <option value="BREAK">Break</option>
                 <option value="RESUME">Resume</option>
