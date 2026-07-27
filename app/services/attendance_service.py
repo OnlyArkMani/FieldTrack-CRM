@@ -54,21 +54,24 @@ _STATE_FOR_TYPE: dict[SessionType, str] = {
     SessionType.RESUME: "RESUMED",
     SessionType.BREAK: "ON_BREAK",
     SessionType.END: "ENDED",
+    SessionType.RE_CHECKIN: "RE_CHECKED_IN",
 }
 
 # Which prior states each action is allowed from.
 _ALLOWED_FROM: dict[SessionType, set[str]] = {
     SessionType.START: {"NULL"},
-    SessionType.BREAK: {"STARTED", "RESUMED"},
+    SessionType.BREAK: {"STARTED", "RESUMED", "RE_CHECKED_IN"},
     SessionType.RESUME: {"ON_BREAK"},
-    SessionType.END: {"STARTED", "RESUMED"},
+    SessionType.END: {"STARTED", "RESUMED", "RE_CHECKED_IN"},
+    SessionType.RE_CHECKIN: {"ENDED"},
 }
 
 _INVALID_MESSAGE: dict[SessionType, str] = {
     SessionType.START: "Attendance already started today",
     SessionType.BREAK: "Can only take a break while working",
     SessionType.RESUME: "Can only resume from a break",
-    SessionType.END: "Can only end while working",
+    SessionType.END: "Can only end while working or re-checked in",
+    SessionType.RE_CHECKIN: "Can only re-check in after ending attendance",
 }
 
 
@@ -80,13 +83,13 @@ def _seconds_to_midnight(now: datetime) -> int:
 
 
 def calculate_duration(sessions: list[AttendanceSession]) -> int:
-    """Worked minutes across a day: sum each START/RESUME → next BREAK/END
+    """Worked minutes across a day: sum each START/RESUME/RE_CHECKIN → next BREAK/END
     interval. Order-independent input is sorted defensively."""
     ordered = sorted(sessions, key=lambda s: s.timestamp)
     total = timedelta()
     open_start: datetime | None = None
     for s in ordered:
-        if s.type in (SessionType.START, SessionType.RESUME):
+        if s.type in (SessionType.START, SessionType.RESUME, SessionType.RE_CHECKIN):
             open_start = s.timestamp
         elif s.type in (SessionType.BREAK, SessionType.END):
             if open_start is not None:
@@ -182,6 +185,10 @@ class AttendanceService:
             raise conflict("Marked as on leave today — cannot check in")
         if state not in _ALLOWED_FROM[action]:
             raise conflict(_INVALID_MESSAGE[action])
+
+        if action == SessionType.RE_CHECKIN:
+            if not notes or len(notes.strip()) < 5:
+                raise bad_request("Re-checkin requires a remark (at least 5 characters)")
 
         # END requires a work summary. When called by the auto-logout path
         # work_summary arrives as None — fill in a default rather

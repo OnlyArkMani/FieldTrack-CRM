@@ -7,6 +7,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_bottom_sheet.dart';
 import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/app_time_picker.dart';
 import '../../leads/data/lead_repository.dart';
 import '../models/farmer.dart';
 import '../providers/farmer_provider.dart';
@@ -173,9 +174,11 @@ class _UpdateLeadFormState extends ConsumerState<_UpdateLeadForm> {
                       ? 'Time'
                       : _followUpTime!.format(context),
                   onTap: () async {
-                    final picked = await showTimePicker(
-                        context: context,
-                        initialTime: const TimeOfDay(hour: 10, minute: 0));
+                    final picked = await showScrollTimePicker(
+                      context,
+                      initialTime: _followUpTime ??
+                          const TimeOfDay(hour: 10, minute: 0),
+                    );
                     if (picked != null) setState(() => _followUpTime = picked);
                   },
                 ),

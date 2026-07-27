@@ -13,11 +13,12 @@ import '../widgets/attendance_timer.dart';
 import '../widgets/leave_action.dart';
 import '../widgets/work_summary_sheet.dart';
 
+import '../widgets/re_checkin_remark_sheet.dart';
+import '../widgets/re_checkout_summary_modal.dart';
+
 /// Dashboard attendance control. Not checked in => Check In / On Leave
-/// buttons; checked in (incl. on break) => a running timer + Checkout;
-/// checked out => a total-hours badge that opens the full Attendance tab.
-/// The Attendance tab still owns the full START/BREAK/RESUME/END flow and
-/// history — this drives the same day's state machine from the home screen.
+/// buttons; checked in (incl. on break/re-checked in) => a running timer + Checkout;
+/// checked out => a total-hours badge + Re-Check In button.
 class AttendanceStatusTile extends ConsumerWidget {
   const AttendanceStatusTile({super.key});
 
@@ -31,8 +32,21 @@ class AttendanceStatusTile extends ConsumerWidget {
     await ref.read(attendanceProvider.notifier).start();
   }
 
+  Future<void> _reCheckIn(BuildContext context, WidgetRef ref) async {
+    final remark = await showReCheckInRemarkSheet(context);
+    if (remark == null || !context.mounted) return;
+    await ref.read(attendanceProvider.notifier).reCheckIn(remark);
+  }
+
   Future<void> _checkOut(BuildContext context, WidgetRef ref) async {
-    final summary = await showWorkSummarySheet(context);
+    final uiState = ref.read(attendanceProvider);
+    final attendance = uiState.attendance;
+    final String? summary;
+    if (uiState.state == MachineState.reCheckedIn && attendance != null) {
+      summary = await showReCheckOutSummaryModal(context, attendance: attendance);
+    } else {
+      summary = await showWorkSummarySheet(context);
+    }
     if (summary == null || !context.mounted) return;
     await ref.read(attendanceProvider.notifier).end(summary);
     if (!context.mounted) return;
@@ -41,7 +55,6 @@ class AttendanceStatusTile extends ConsumerWidget {
     if (attendanceId != null && state.state == MachineState.ended) {
       final today = DateTime.now();
       final reportDate = DateTime(today.year, today.month, today.day);
-      // Give the background DSR generation a moment to complete before loading.
       await Future<void>.delayed(const Duration(seconds: 2));
       if (!context.mounted) return;
       context.push('/dsr/review', extra: {'report_date': reportDate});
@@ -96,7 +109,10 @@ class AttendanceStatusTile extends ConsumerWidget {
             ],
           ),
         ),
-      MachineState.started || MachineState.resumed || MachineState.onBreak =>
+      MachineState.started ||
+      MachineState.resumed ||
+      MachineState.onBreak ||
+      MachineState.reCheckedIn =>
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -122,7 +138,11 @@ class AttendanceStatusTile extends ConsumerWidget {
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              ui.state == MachineState.onBreak ? 'On break' : 'Checked in',
+                              ui.state == MachineState.onBreak
+                                  ? 'On break'
+                                  : ui.state == MachineState.reCheckedIn
+                                      ? 'Re-checked in'
+                                      : 'Checked in',
                               style: AppTextStyles.caption.copyWith(
                                 color: ui.state == MachineState.onBreak
                                     ? colors.statusIdle
@@ -135,7 +155,9 @@ class AttendanceStatusTile extends ConsumerWidget {
                         ),
                         const SizedBox(height: 4),
                         AttendanceTimer(
-                          start: ui.attendance?.startedAt ?? DateTime.now(),
+                          start: ui.attendance?.sessions.last.timestamp ??
+                              ui.attendance?.startedAt ??
+                              DateTime.now(),
                           fontSize: 26,
                         ),
                       ],
@@ -176,6 +198,16 @@ class AttendanceStatusTile extends ConsumerWidget {
               label: 'Checked out',
               subtitle:
                   'Total today: ${_fmtMinutes(ui.attendance?.totalDurationMinutes ?? 0)}',
+            ),
+            const SizedBox(height: AppDimens.grid),
+            AppButton(
+              label: 'Re-Check In',
+              icon: Icons.replay_rounded,
+              variant: AppButtonVariant.secondary,
+              isLoading: ui.isSubmitting,
+              onPressed: ui.isSubmitting || ui.isMarkingLeave
+                  ? null
+                  : () => _reCheckIn(context, ref),
             ),
             const SizedBox(height: AppDimens.grid),
             Align(

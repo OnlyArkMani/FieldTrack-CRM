@@ -6,6 +6,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_bottom_sheet.dart';
 import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/app_time_picker.dart';
 import '../models/visit_plan.dart';
 import '../providers/visit_plan_provider.dart';
 import 'add_visit_sheet.dart'
@@ -171,8 +172,8 @@ class _EditVisitFlowState extends ConsumerState<_EditVisitFlow> {
         InkWell(
           borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
           onTap: () async {
-            final picked = await showTimePicker(
-              context: context,
+            final picked = await showScrollTimePicker(
+              context,
               initialTime: _time ?? const TimeOfDay(hour: 9, minute: 0),
             );
             if (picked == null) return;

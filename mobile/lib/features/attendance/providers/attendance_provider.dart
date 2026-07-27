@@ -151,6 +151,13 @@ class AttendanceNotifier extends Notifier<AttendanceUiState> {
         call: (lat, lng) => _repo.resume(lat, lng),
       );
 
+  Future<void> reCheckIn(String remark) => _run(
+        SessionType.reCheckIn,
+        optimistic: () =>
+            _optimisticAppend(SessionType.reCheckIn, MachineState.reCheckedIn),
+        call: (lat, lng) => _repo.reCheckIn(lat, lng, remark: remark),
+      );
+
   Future<void> end(String workSummary) => _run(
         SessionType.end,
         optimistic: () => _optimisticAppend(SessionType.end, MachineState.ended),

@@ -6,7 +6,8 @@ enum SessionType {
   start('START'),
   breakk('BREAK'), // 'break' is a Dart keyword
   resume('RESUME'),
-  end('END');
+  end('END'),
+  reCheckIn('RE_CHECKIN');
 
   const SessionType(this.wire);
   final String wire;
@@ -20,6 +21,7 @@ enum SessionType {
         SessionType.breakk => Icons.pause_circle_filled_rounded,
         SessionType.resume => Icons.refresh_rounded,
         SessionType.end => Icons.stop_circle_rounded,
+        SessionType.reCheckIn => Icons.replay_rounded,
       };
 
   String get label => switch (this) {
@@ -27,6 +29,7 @@ enum SessionType {
         SessionType.breakk => 'Break',
         SessionType.resume => 'Resumed',
         SessionType.end => 'Ended',
+        SessionType.reCheckIn => 'Re-Checked In',
       };
 }
 
@@ -37,6 +40,7 @@ enum MachineState {
   onBreak('ON_BREAK'),
   resumed('RESUMED'),
   ended('ENDED'),
+  reCheckedIn('RE_CHECKED_IN'),
   onLeave('ON_LEAVE');
 
   const MachineState(this.wire);
@@ -47,9 +51,13 @@ enum MachineState {
         orElse: () => MachineState.none,
       );
 
-  bool get isWorking => this == MachineState.started || this == MachineState.resumed;
+  bool get isWorking =>
+      this == MachineState.started ||
+      this == MachineState.resumed ||
+      this == MachineState.reCheckedIn;
   bool get isOnBreak => this == MachineState.onBreak;
   bool get isEnded => this == MachineState.ended;
+  bool get isReCheckedIn => this == MachineState.reCheckedIn;
   bool get isOnLeave => this == MachineState.onLeave;
   bool get notStarted => this == MachineState.none;
 }

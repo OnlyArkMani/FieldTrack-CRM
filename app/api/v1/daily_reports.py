@@ -613,7 +613,7 @@ async def _attendance_times(
     for att in rows:
         check_in = check_out = None
         for s in sorted(att.sessions, key=lambda x: x.timestamp):
-            if s.type == SessionType.START and check_in is None:
+            if s.type in (SessionType.START, SessionType.RE_CHECKIN) and check_in is None:
                 check_in = s.timestamp
             if s.type == SessionType.END:
                 check_out = s.timestamp

@@ -85,6 +85,19 @@ async def resume(
     )
 
 
+@router.post("/re-checkin", response_model=AttendanceOut)
+async def re_checkin(
+    body: AttendanceActionRequest,
+    request: Request,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AttendanceOut:
+    return await AttendanceService(db).transition_state(
+        user=user, action=SessionType.RE_CHECKIN, lat=body.lat, lng=body.lng,
+        notes=body.notes, ip=_client_ip(request),
+    )
+
+
 @router.post("/end", response_model=AttendanceOut)
 async def end(
     body: AttendanceEndRequest,

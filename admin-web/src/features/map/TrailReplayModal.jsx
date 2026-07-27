@@ -25,6 +25,7 @@ const SESSION_STYLE = {
   BREAK: { color: "#F5A623", label: "Break" },
   RESUME: { color: "#3B82F6", label: "Resume" },
   END: { color: "#E8645A", label: "End" },
+  RE_CHECKIN: { color: "#8B5CF6", label: "Re-Check In" },
 };
 const TICK_MS = { 1: 100, 2: 50, 5: 20 };
 

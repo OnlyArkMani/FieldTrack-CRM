@@ -128,6 +128,19 @@ class AttendanceRepository {
   Future<Attendance> resume(double lat, double lng) =>
       _transition('resume', lat, lng);
 
+  Future<Attendance> reCheckIn(
+    double lat,
+    double lng, {
+    required String remark,
+  }) async {
+    final data = await _api.post('/attendance/re-checkin', body: {
+      'lat': lat,
+      'lng': lng,
+      'notes': remark,
+    });
+    return Attendance.fromJson(data);
+  }
+
   Future<Attendance> end(
     double lat,
     double lng, {

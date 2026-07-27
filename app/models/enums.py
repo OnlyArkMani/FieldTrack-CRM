@@ -38,6 +38,7 @@ class SessionType(str, enum.Enum):
     BREAK = "BREAK"
     RESUME = "RESUME"
     END = "END"
+    RE_CHECKIN = "RE_CHECKIN"
 
 
 class SyncStatus(str, enum.Enum):

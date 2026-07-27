@@ -14,6 +14,7 @@ import '../../../attendance/providers/upcoming_leaves_provider.dart'
 import '../../../../core/widgets/app_bottom_sheet.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_time_picker.dart';
 import '../../farmers/data/farmer_repository.dart';
 import '../../farmers/models/farmer.dart';
 import '../../farmers/utils.dart';
@@ -369,8 +370,8 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
         InkWell(
           borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
           onTap: () async {
-            final picked = await showTimePicker(
-              context: context,
+            final picked = await showScrollTimePicker(
+              context,
               initialTime: _time ?? const TimeOfDay(hour: 9, minute: 0),
             );
             if (picked == null) return;

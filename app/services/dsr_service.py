@@ -149,7 +149,7 @@ def _checkpoints_from_sessions(sessions) -> dict:
     check_out_lat: float | None = None
     check_out_lng: float | None = None
     for s in sessions:
-        if s.type == SessionType.START and check_in_time is None:
+        if s.type in (SessionType.START, SessionType.RE_CHECKIN) and check_in_time is None:
             check_in_time = s.timestamp
             check_in_lat = s.lat
             check_in_lng = s.lng

@@ -11,6 +11,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_time_picker.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../farmers/models/farmer.dart'
     show CustomerType, LeadStatus, LivestockProfile;
@@ -1377,9 +1378,11 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
                       ? 'Time'
                       : _followUpTime!.format(context),
                   onTap: () async {
-                    final picked = await showTimePicker(
-                        context: context,
-                        initialTime: const TimeOfDay(hour: 10, minute: 0));
+                    final picked = await showScrollTimePicker(
+                      context,
+                      initialTime: _followUpTime ??
+                          const TimeOfDay(hour: 10, minute: 0),
+                    );
                     if (picked != null) setState(() => _followUpTime = picked);
                   },
                 ),

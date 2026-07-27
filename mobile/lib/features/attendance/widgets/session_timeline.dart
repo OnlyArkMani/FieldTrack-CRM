@@ -65,6 +65,7 @@ class _TimelineItem extends StatelessWidget {
       SessionType.resume => scheme.primary,
       SessionType.breakk => c.statusIdle,
       SessionType.end => scheme.error,
+      SessionType.reCheckIn => scheme.primary,
     };
   }
 

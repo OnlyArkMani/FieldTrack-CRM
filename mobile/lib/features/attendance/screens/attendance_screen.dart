@@ -22,6 +22,7 @@ import '../widgets/attendance_timer.dart';
 import '../widgets/leave_action.dart';
 import '../widgets/session_timeline.dart';
 import '../widgets/work_summary_sheet.dart';
+import '../widgets/re_checkin_remark_sheet.dart';
 
 /// The employee's daily home: the attendance state machine. One prominent
 /// status card drives START → BREAK ⇄ RESUME → END, with a live timer, a
@@ -638,6 +639,24 @@ class _Ended extends ConsumerWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ],
+        const SizedBox(height: AppDimens.grid * 2.5),
+        AppButton(
+          label: 'Re-Check In',
+          icon: Icons.replay_rounded,
+          variant: AppButtonVariant.secondary,
+          isLoading:
+              state.isSubmitting && state.pendingAction == SessionType.reCheckIn,
+          onPressed: state.isSubmitting
+              ? null
+              : () async {
+                  final remark = await showReCheckInRemarkSheet(context);
+                  if (remark != null && context.mounted) {
+                    await ref
+                        .read(attendanceProvider.notifier)
+                        .reCheckIn(remark);
+                  }
+                },
+        ),
       ],
     );
   }
