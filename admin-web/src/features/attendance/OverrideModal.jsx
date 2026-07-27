@@ -108,6 +108,7 @@ export default function OverrideModal({ open, onClose, row }) {
                 <option value="BREAK">Break</option>
                 <option value="RESUME">Resume</option>
                 <option value="END">End</option>
+                <option value="RE_CHECKIN">Re-Check In</option>
               </Select>
               <Input
                 label="Timestamp"

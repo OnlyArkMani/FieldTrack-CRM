@@ -1266,7 +1266,7 @@ class ReportService:
         """First START time and last END time, in business tz (HH:MM)."""
         start_t = end_t = ""
         for s in sessions:
-            if s.type == SessionType.START and not start_t:
+            if s.type in (SessionType.START, SessionType.RE_CHECKIN) and not start_t:
                 start_t = self._fmt_time(s.timestamp)
             if s.type == SessionType.END:
                 end_t = self._fmt_time(s.timestamp)
