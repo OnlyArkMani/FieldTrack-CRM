@@ -411,14 +411,15 @@ class ReportService:
         user_ids = list({u.id for _, u in rows})
 
         columns = [
-            "Employee", "Date", "Start", "End", "Duration",
-            "Distance (km)", "Status", "Work Summary",
+            "Employee", "Date", "Start", "End", "Session History",
+            "Duration", "Distance (km)", "Status", "Work Summary",
         ]
         table_rows: list[list[Any]] = []
         total_minutes = 0
         total_distance = 0.0
         for att, user in rows:
             start_t, end_t = self._session_bounds(att.sessions)
+            sess_history = self._session_history_text(att.sessions)
             total_minutes += att.total_duration_minutes
             total_distance += att.total_distance_meters
             table_rows.append([
@@ -426,6 +427,7 @@ class ReportService:
                 att.date.isoformat(),
                 start_t,
                 end_t,
+                sess_history,
                 self._fmt_duration(att.total_duration_minutes),
                 round(att.total_distance_meters / 1000, 2),
                 att.status.value,
@@ -448,7 +450,7 @@ class ReportService:
                 name="Attendance",
                 columns=columns,
                 rows=table_rows,
-                numeric_cols={5},
+                numeric_cols={6},
             )],
             filename_stem=f"attendance_{n.start}_{n.end}",
         )
@@ -1271,6 +1273,27 @@ class ReportService:
             if s.type == SessionType.END:
                 end_t = self._fmt_time(s.timestamp)
         return start_t, end_t
+
+    def _session_history_text(self, sessions: list[AttendanceSession]) -> str:
+        """Format all sessions into a compact human-readable timeline string for reports.
+        E.g. Check-In 09:00 | Check-Out 13:00 | Re-Check In 17:00 (Note: Evening visit) | Check-Out 19:30
+        """
+        if not sessions:
+            return "—"
+        parts = []
+        labels = {
+            SessionType.START: "Check-In",
+            SessionType.BREAK: "Break",
+            SessionType.RESUME: "Resume",
+            SessionType.END: "Check-Out",
+            SessionType.RE_CHECKIN: "Re-Check In",
+        }
+        for s in sorted(sessions, key=lambda x: x.timestamp):
+            lbl = labels.get(s.type, s.type.value if hasattr(s.type, "value") else str(s.type))
+            t_str = self._fmt_time(s.timestamp)
+            note_str = f" ({s.notes.strip()})" if s.notes and s.notes.strip() else ""
+            parts.append(f"{lbl} {t_str}{note_str}")
+        return " | ".join(parts)
 
     def _fmt_time(self, dt: datetime) -> str:
         if dt.tzinfo is None:

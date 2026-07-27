@@ -80,6 +80,38 @@ export default function OverrideModal({ open, onClose, row }) {
       }
     >
       <div className="space-y-4">
+        {row.sessions && row.sessions.length > 0 && (
+          <div className="bg-surface/50 border border-white/10 rounded-xl p-3.5 space-y-2.5">
+            <div className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
+              Daily Session Timeline ({row.sessions.length} checkpoints)
+            </div>
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+              {row.sessions.map((s, idx) => {
+                const isCheckIn = s.type === 'START' || s.type === 'RESUME' || s.type === 'RE_CHECKIN';
+                const label = s.type === 'START' ? 'Check-In' : s.type === 'END' ? 'Check-Out' : s.type === 'RE_CHECKIN' ? 'Re-Check In' : s.type;
+                const badgeColor = s.type === 'START' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : s.type === 'END' ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-purple-500/20 text-purple-400 border-purple-500/30';
+                return (
+                  <div key={idx} className="flex items-start justify-between text-xs py-1 border-b border-white/5 last:border-0 gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={clsx("px-2 py-0.5 rounded text-[11px] font-medium border shrink-0", badgeColor)}>
+                        {label}
+                      </span>
+                      {s.notes && (
+                        <span className="text-text-secondary italic truncate">
+                          "{s.notes}"
+                        </span>
+                      )}
+                    </div>
+                    <span className="font-mono text-text-primary shrink-0">
+                      {dayjs(s.timestamp).format('HH:mm')}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {!showManual ? (
           <>
             <Select label="Day status" value={status} onChange={(e) => setStatus(e.target.value)}>
