@@ -72,6 +72,7 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
   List<FarmerListItem> _results = const [];
 
   FarmerListItem? _selected;
+  DateTime? _visitDate;
   TimeOfDay? _time;
   String _purpose = 'FIRST_VISIT';
   final _targetBagsController = TextEditingController();
@@ -80,7 +81,30 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
   @override
   void initState() {
     super.initState();
+    final planDate = ref.read(visitPlanProvider).date;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    _visitDate = planDate.isBefore(today) ? today : planDate;
     _search(''); // initial page
+  }
+
+  String _formatDate(DateTime d) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final diff = d.difference(today).inDays;
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    const weekdays = [
+      'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
+    ];
+    final prefix = switch (diff) {
+      0 => 'Today',
+      1 => 'Tomorrow',
+      _ => weekdays[d.weekday - 1],
+    };
+    return '$prefix, ${d.day} ${months[d.month - 1]} ${d.year}';
   }
 
   @override
@@ -130,11 +154,11 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
       return;
     }
 
+    final targetDate = _visitDate ?? ref.read(visitPlanProvider).date;
     final offline = !ref.read(connectivityServiceProvider).current;
     if (offline) {
-      final planDate = ref.read(visitPlanProvider).date;
       final prefs = ref.read(sharedPreferencesProvider);
-      if (isLeaveDateCached(prefs, planDate)) {
+      if (isLeaveDateCached(prefs, targetDate)) {
         setState(() => _error = "You're on leave on that day — pick a different date.");
         return;
       }
@@ -150,6 +174,13 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
       _saving = true;
       _error = null;
     });
+
+    final currentPlanDate = ref.read(visitPlanProvider).date;
+    if (targetDate.year != currentPlanDate.year ||
+        targetDate.month != currentPlanDate.month ||
+        targetDate.day != currentPlanDate.day) {
+      await ref.read(visitPlanProvider.notifier).setDate(targetDate);
+    }
     final ok = await ref.read(visitPlanProvider.notifier).addItem(
           PlanItem(
             id: id,
@@ -275,6 +306,62 @@ class _AddVisitFlowState extends ConsumerState<_AddVisitFlow> {
           ],
         ),
         const SizedBox(height: AppDimens.grid),
+        Text('Visit date *',
+            style:
+                AppTextStyles.bodyMedium.copyWith(color: scheme.onSurface)),
+        const SizedBox(height: AppDimens.grid),
+        InkWell(
+          borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+          onTap: () async {
+            final now = DateTime.now();
+            final today = DateTime(now.year, now.month, now.day);
+            final initial = _visitDate == null || _visitDate!.isBefore(today)
+                ? today
+                : _visitDate!;
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: initial,
+              firstDate: today,
+              lastDate: today.add(const Duration(days: 365)),
+            );
+            if (picked == null) return;
+            setState(() {
+              _visitDate = picked;
+              _error = null;
+            });
+          },
+          child: Container(
+            padding: const EdgeInsets.all(AppDimens.grid * 1.5),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: _visitDate == null
+                    ? scheme.error.withValues(alpha: 0.5)
+                    : colors.textSecondary.withValues(alpha: 0.25),
+              ),
+              borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.calendar_month_rounded,
+                    size: 18, color: scheme.primary),
+                const SizedBox(width: AppDimens.grid),
+                Text(
+                  _visitDate == null
+                      ? 'Select a date'
+                      : _formatDate(_visitDate!),
+                  style: AppTextStyles.body.copyWith(
+                    color: scheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                Icon(Icons.arrow_drop_down_rounded,
+                    color: colors.textSecondary),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: AppDimens.grid * 1.5),
         Text('Time slot *',
             style:
                 AppTextStyles.bodyMedium.copyWith(color: scheme.onSurface)),

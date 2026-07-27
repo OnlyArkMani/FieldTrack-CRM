@@ -47,6 +47,44 @@ class FollowUpRepository:
         )
         return list((await self.db.execute(stmt)).all())
 
+    async def list_plan_item_follow_ups(
+        self,
+        employee_id: int,
+        *,
+        date_from: date_type | None,
+        date_to: date_type | None,
+        status: str | None,
+    ) -> list:
+        """Rows of (VisitPlanItem, farmer_name, plan_date) for planned stops with purpose == 'FOLLOW_UP'."""
+        from app.models.crm import VisitPlan, VisitPlanItem
+        stmt = (
+            select(VisitPlanItem, Farmer.name, VisitPlan.plan_date)
+            .join(VisitPlan, VisitPlan.id == VisitPlanItem.plan_id)
+            .outerjoin(Farmer, Farmer.id == VisitPlanItem.farmer_id)
+            .where(
+                VisitPlan.employee_id == employee_id,
+                VisitPlanItem.purpose == "FOLLOW_UP",
+            )
+        )
+        if date_from is not None:
+            stmt = stmt.where(VisitPlan.plan_date >= date_from)
+        if date_to is not None:
+            stmt = stmt.where(VisitPlan.plan_date <= date_to)
+        if status is not None:
+            if status in ("PENDING", "PLANNED"):
+                stmt = stmt.where(VisitPlanItem.status == "PLANNED")
+            elif status == "COMPLETED":
+                stmt = stmt.where(VisitPlanItem.status == "COMPLETED")
+            elif status == "SKIPPED":
+                stmt = stmt.where(VisitPlanItem.status == "SKIPPED")
+
+        stmt = stmt.order_by(
+            VisitPlan.plan_date.asc(),
+            VisitPlanItem.time_slot.asc().nullsfirst(),
+            VisitPlanItem.id.asc(),
+        )
+        return list((await self.db.execute(stmt)).all())
+
     async def list_for_team(
         self,
         team_ids: list[int] | None,

@@ -45,10 +45,54 @@ class FollowUpService:
         date_to: date_type | None,
         status: str | None,
     ) -> list[FollowUpListItem]:
+        from datetime import time as time_type
+
         rows = await self.repo.list_for_employee(
             user.id, date_from=date_from, date_to=date_to, status=status
         )
-        return [self._item(fu, name) for (fu, name) in rows]
+        items = [self._item(fu, name) for (fu, name) in rows]
+
+        plan_rows = await self.repo.list_plan_item_follow_ups(
+            user.id, date_from=date_from, date_to=date_to, status=status
+        )
+        existing = {
+            (f.farmer_id, f.scheduled_date)
+            for f in items
+            if f.farmer_id and f.scheduled_date
+        }
+
+        for item, farmer_name, plan_date in plan_rows:
+            if item.farmer_id and (item.farmer_id, plan_date) in existing:
+                continue
+
+            item_status = "COMPLETED" if item.status == "COMPLETED" else "PENDING"
+            if status and status != item_status and not (status == "PENDING" and item.status == "PLANNED"):
+                continue
+
+            items.append(
+                FollowUpListItem(
+                    id=-item.id,
+                    farmer_id=item.farmer_id,
+                    farmer_name=farmer_name,
+                    employee_id=user.id,
+                    employee_name=user.name,
+                    scheduled_date=plan_date,
+                    scheduled_time=item.time_slot,
+                    purpose=item.purpose or "FOLLOW_UP",
+                    status=item_status,
+                    reminder_sent_24h=item.reminder_sent,
+                    reminder_sent_1h=item.reminder_sent,
+                )
+            )
+
+        items.sort(
+            key=lambda x: (
+                x.scheduled_date,
+                x.scheduled_time or time_type.min,
+                x.id,
+            )
+        )
+        return items
 
     async def get_team(
         self,

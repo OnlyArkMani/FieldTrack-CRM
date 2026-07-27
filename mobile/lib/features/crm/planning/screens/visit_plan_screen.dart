@@ -20,6 +20,19 @@ import '../widgets/plan_item_card.dart';
 class VisitPlanScreen extends ConsumerWidget {
   const VisitPlanScreen({super.key});
 
+  Future<void> _pickDate(
+      BuildContext context, WidgetRef ref, DateTime currentDate) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: currentDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) {
+      ref.read(visitPlanProvider.notifier).setDate(picked);
+    }
+  }
+
   String _dateLabel(DateTime d) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -35,6 +48,7 @@ class VisitPlanScreen extends ConsumerWidget {
     final prefix = switch (diff) {
       0 => 'Today',
       1 => 'Tomorrow',
+      -1 => 'Yesterday',
       _ => weekdays[d.weekday - 1],
     };
     return '$prefix, ${d.day} ${months[d.month - 1]}';
@@ -112,6 +126,7 @@ class VisitPlanScreen extends ConsumerWidget {
                 canGoPrev: notifier.canGoPrev,
                 onPrev: notifier.prevDay,
                 onNext: notifier.nextDay,
+                onSelectDate: () => _pickDate(context, ref, state.date),
               ),
               if (onLeaveThisDay)
                 const _LeaveBanner()
@@ -554,12 +569,14 @@ class _DateSelector extends StatelessWidget {
     required this.canGoPrev,
     required this.onPrev,
     required this.onNext,
+    required this.onSelectDate,
   });
 
   final String label;
   final bool canGoPrev;
   final VoidCallback onPrev;
   final VoidCallback onNext;
+  final VoidCallback onSelectDate;
 
   @override
   Widget build(BuildContext context) {
@@ -581,19 +598,47 @@ class _DateSelector extends StatelessWidget {
             disabledColor: colors.textSecondary.withValues(alpha: 0.4),
           ),
           Expanded(
-            child: Column(
-              children: [
-                Text('Planning for',
-                    style: AppTextStyles.caption
-                        .copyWith(color: colors.textSecondary)),
-                Text(
-                  label,
-                  style: AppTextStyles.bodyMedium
-                      .copyWith(color: scheme.onSurface),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+            child: InkWell(
+              onTap: onSelectDate,
+              borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: AppDimens.grid * 0.5,
+                  horizontal: AppDimens.grid,
                 ),
-              ],
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Planning for',
+                        style: AppTextStyles.caption
+                            .copyWith(color: colors.textSecondary)),
+                    const SizedBox(height: 2),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            label,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: scheme.onSurface,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.calendar_month_rounded,
+                          size: 16,
+                          color: scheme.primary,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
           IconButton(

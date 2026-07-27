@@ -8,6 +8,7 @@ import '../../../../services/sync/connectivity_service.dart';
 import '../../../attendance/providers/upcoming_leaves_provider.dart'
     show isLeaveDateCached;
 import '../../../auth/providers/auth_provider.dart';
+import '../../followups/data/follow_up_repository.dart' show myFollowUpsProvider;
 import '../data/visit_plan_repository.dart';
 import '../models/visit_plan.dart';
 
@@ -41,10 +42,10 @@ class VisitPlanState {
   /// server-side guard that blocks planning visits for a leave day.
   bool get isOnLeave => plan?.isOnLeave ?? false;
 
-  /// Visits can only be started for today's plan — not a future day being
-  /// previewed/edited ahead of time (past days are already unreachable via
-  /// canGoPrev, so this is really just the future-day guard).
+  /// Visits can only be started for today's plan.
   bool get isToday => _dateOnly(date) == _dateOnly(DateTime.now());
+  bool get isPast => _dateOnly(date).isBefore(_dateOnly(DateTime.now()));
+  bool get isFuture => _dateOnly(date).isAfter(_dateOnly(DateTime.now()));
 
   VisitPlanState copyWith({
     DateTime? date,
@@ -152,8 +153,8 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
     return now.hour >= 16 ? base.add(const Duration(days: 1)) : base;
   }
 
-  /// Earliest plannable day is today — you can't plan the past.
-  bool get canGoPrev => state.date.isAfter(_dateOnly(DateTime.now()));
+  /// Allows navigating back into previous days to view past visit plans.
+  bool get canGoPrev => true;
 
   Future<void> load() async {
     // Bug this fixes: previously plan/items were left untouched on a failed
@@ -195,10 +196,7 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
 
   void nextDay() => setDate(state.date.add(const Duration(days: 1)));
 
-  void prevDay() {
-    if (!canGoPrev) return;
-    setDate(state.date.subtract(const Duration(days: 1)));
-  }
+  void prevDay() => setDate(state.date.subtract(const Duration(days: 1)));
 
   /// Adds a stop and immediately persists the day's plan (there's no
   /// per-item create endpoint, so this reuses the same bulk `save()`/
@@ -326,6 +324,7 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
         sourceItem: item,
       );
       await load();
+      ref.invalidate(myFollowUpsProvider);
       return true;
     } on ApiException catch (e) {
       state = state.copyWith(error: e.message);
@@ -357,6 +356,7 @@ class VisitPlanNotifier extends Notifier<VisitPlanState> {
         isSaving: false,
         dirty: false,
       );
+      ref.invalidate(myFollowUpsProvider);
       return true;
     } on ApiException catch (e) {
       state = state.copyWith(isSaving: false, error: e.message);

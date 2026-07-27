@@ -5,10 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../services/location/location_service.dart';
-import '../../../core/config/env.dart';
 import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_theme.dart';
@@ -238,15 +236,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       style: Theme.of(context).textTheme.bodySmall,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const Divider(),
-                  _SettingsTile(
-                    icon: Icons.description_outlined,
-                    title: 'Terms & Conditions',
-                    onTap: () => launchUrl(
-                      Uri.parse(Env.termsUrl),
-                      mode: LaunchMode.externalApplication,
                     ),
                   ),
                 ],
