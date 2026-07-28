@@ -3,7 +3,7 @@ rules, no commits (services own transactions), no HTTP exceptions, no Redis.
 """
 from datetime import date, datetime
 
-from sqlalchemy import Select, and_, func, or_, select
+from sqlalchemy import Select, and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -226,22 +226,44 @@ class EmployeeRepository:
     ) -> dict[int, dict[str, int]]:
         if not user_ids:
             return {}
-        from app.models.crm import VisitOrder
-        stmt = (
+        from app.models.crm import VisitOrder, VisitPlan, VisitPlanItem
+
+        out = {uid: {"target": 0, "captured": 0, "approved": 0} for uid in user_ids}
+
+        # 1. Target bags from planned visits
+        target_stmt = (
+            select(
+                VisitPlan.employee_id,
+                func.coalesce(func.sum(VisitPlanItem.target_order_bags), 0).label("target_bags"),
+            )
+            .join(VisitPlanItem, VisitPlanItem.plan_id == VisitPlan.id)
+            .where(VisitPlan.employee_id.in_(user_ids))
+            .group_by(VisitPlan.employee_id)
+        )
+        target_res = await self.db.execute(target_stmt)
+        for uid, target_bags in target_res.all():
+            if uid in out:
+                out[uid]["target"] = int(target_bags or 0)
+
+        # 2. Captured and Approved bags from visit orders
+        orders_stmt = (
             select(
                 VisitOrder.employee_id,
-                func.count(VisitOrder.id).label("captured"),
-                func.count(
-                    func.nullif(VisitOrder.status != "APPROVED", True)
-                ).label("approved"),
+                func.coalesce(func.sum(VisitOrder.bags_count), 0).label("captured_bags"),
+                func.coalesce(
+                    func.sum(
+                        case((VisitOrder.status == "APPROVED", VisitOrder.bags_count), else_=0)
+                    ),
+                    0,
+                ).label("approved_bags"),
             )
             .where(VisitOrder.employee_id.in_(user_ids))
             .group_by(VisitOrder.employee_id)
         )
-        res = await self.db.execute(stmt)
-        out = {uid: {"target": 50, "captured": 0, "approved": 0} for uid in user_ids}
-        for uid, captured, approved in res.all():
+        orders_res = await self.db.execute(orders_stmt)
+        for uid, captured_bags, approved_bags in orders_res.all():
             if uid in out:
-                out[uid]["captured"] = int(captured or 0)
-                out[uid]["approved"] = int(approved or 0)
+                out[uid]["captured"] = int(captured_bags or 0)
+                out[uid]["approved"] = int(approved_bags or 0)
+
         return out
