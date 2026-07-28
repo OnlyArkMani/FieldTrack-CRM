@@ -109,13 +109,13 @@ class AttendanceNotifier extends Notifier<AttendanceUiState> {
   }
 
   Future<void> load({bool silent = false}) async {
-    if (!silent) state = state.copyWith(isLoading: true, clearError: true);
+    if (!silent) state = state.copyWith(isLoading: true, clearError: true, isNavigatingToDsr: false);
     try {
       final today = await _repo.today();
-      state = state.copyWith(today: today, isLoading: false, clearError: true);
+      state = state.copyWith(today: today, isLoading: false, clearError: true, isNavigatingToDsr: false);
       await _syncTracking(today);
     } on ApiException catch (e) {
-      state = state.copyWith(isLoading: false, error: e.message);
+      state = state.copyWith(isLoading: false, error: e.message, isNavigatingToDsr: false);
     }
   }
 

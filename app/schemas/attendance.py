@@ -38,7 +38,7 @@ class AttendanceEndRequest(GpsPoint):
     # work_summary is optional so the auto-logout path can omit it;
     # the service auto-fills "Auto clock-out on logout." in that case.
     # When a value IS supplied (manual End tap), min_length=10 still applies.
-    work_summary: str | None = Field(default=None, min_length=10, max_length=500)
+    work_summary: str | None = Field(default=None, max_length=500)
 
 
 class LeaveRequest(BaseModel):

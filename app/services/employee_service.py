@@ -93,7 +93,9 @@ class EmployeeService:
         page = rows[:limit]
         next_cursor = encode_cursor(page[-1].id) if has_more and page else None
 
-        live_map = await self._live_status_batch([u.id for u in page])
+        user_ids = [u.id for u in page]
+        live_map = await self._live_status_batch(user_ids)
+        order_stats = await self.repo.order_counts_by_user_ids(user_ids)
         # One query flags everyone on the page who spoofed GPS since midnight
         # UTC (warning dot on the admin list).
         midnight = datetime.now(timezone.utc).replace(
@@ -105,6 +107,10 @@ class EmployeeService:
             row = EmployeeOut.model_validate(u)
             row.live = live_map.get(u.id)
             row.mock_gps_today = u.id in flagged_today
+            ostats = order_stats.get(u.id, {"target": 50, "captured": 0, "approved": 0})
+            row.target_orders = ostats.get("target", 50)
+            row.orders_captured = ostats.get("captured", 0)
+            row.orders_approved = ostats.get("approved", 0)
             items.append(row)
         return CursorPage[EmployeeOut](
             items=items,

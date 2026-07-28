@@ -220,3 +220,28 @@ class EmployeeRepository:
             .limit(limit + 1)
         )
         return list((await self.db.execute(stmt)).scalars().all())
+
+    async def order_counts_by_user_ids(
+        self, user_ids: list[int]
+    ) -> dict[int, dict[str, int]]:
+        if not user_ids:
+            return {}
+        from app.models.crm import VisitOrder
+        stmt = (
+            select(
+                VisitOrder.employee_id,
+                func.count(VisitOrder.id).label("captured"),
+                func.count(
+                    func.nullif(VisitOrder.status != "APPROVED", True)
+                ).label("approved"),
+            )
+            .where(VisitOrder.employee_id.in_(user_ids))
+            .group_by(VisitOrder.employee_id)
+        )
+        res = await self.db.execute(stmt)
+        out = {uid: {"target": 50, "captured": 0, "approved": 0} for uid in user_ids}
+        for uid, captured, approved in res.all():
+            if uid in out:
+                out[uid]["captured"] = int(captured or 0)
+                out[uid]["approved"] = int(approved or 0)
+        return out

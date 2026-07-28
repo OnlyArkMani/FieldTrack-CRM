@@ -114,6 +114,9 @@ class EmployeeOut(BaseModel):
     # warning dot on the admin list (anti-gaming). Filled by a single bulk
     # query in the list service; stays False if enrichment is skipped.
     mock_gps_today: bool = False
+    target_orders: int = 0
+    orders_captured: int = 0
+    orders_approved: int = 0
 
     @model_validator(mode="after")
     def format_profile_photo(self) -> "EmployeeOut":

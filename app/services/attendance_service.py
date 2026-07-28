@@ -187,18 +187,12 @@ class AttendanceService:
             raise conflict(_INVALID_MESSAGE[action])
 
         if action == SessionType.RE_CHECKIN:
-            if not notes or len(notes.strip()) < 5:
-                raise bad_request("Re-checkin requires a remark (at least 5 characters)")
+            if not notes or not notes.strip():
+                notes = "Re-checked in"
 
-        # END requires a work summary. When called by the auto-logout path
-        # work_summary arrives as None — fill in a default rather
-        # than rejecting it. Manual End from the UI always sends a value and
-        # the length check still applies.
         if action == SessionType.END:
-            if work_summary is None:
-                work_summary = "Auto clock-out on logout."
-            elif not (10 <= len(work_summary) <= 500):
-                raise bad_request("Work summary must be 10–500 characters")
+            if not work_summary or not work_summary.strip():
+                work_summary = "Day completed."
 
         now = datetime.now(timezone.utc)
 

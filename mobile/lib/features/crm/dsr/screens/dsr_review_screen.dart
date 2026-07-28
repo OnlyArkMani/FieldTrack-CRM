@@ -10,6 +10,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../attendance/providers/attendance_provider.dart';
 import '../data/dsr_repository.dart';
 import '../models/dsr.dart';
 
@@ -120,6 +121,7 @@ class _DsrReviewScreenState extends ConsumerState<DsrReviewScreen>
   }
 
   void _onBackPressed() {
+    ref.read(attendanceProvider.notifier).setNavigatingToDsr(false);
     if (_submitted) {
       if (context.canPop()) {
         context.pop();
