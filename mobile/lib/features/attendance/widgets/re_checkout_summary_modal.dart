@@ -46,9 +46,9 @@ class _ReCheckOutSummaryModalState extends State<_ReCheckOutSummaryModal> {
 
   void _confirm() {
     final text = _workSummaryController.text.trim();
-    if (text.length < 10 || text.length > 500) {
+    if (text.length > 500) {
       setState(() =>
-          _error = 'Work summary must be between 10 and 500 characters.');
+          _error = 'Work summary must be 500 characters or less.');
       return;
     }
     Navigator.of(context).pop(text);
@@ -173,7 +173,7 @@ class _ReCheckOutSummaryModalState extends State<_ReCheckOutSummaryModal> {
               },
               decoration: InputDecoration(
                 hintText:
-                    'Work Summary (Required, 10-500 chars summarizing your evening session)...',
+                    'Work Summary (Optional, summarizing your evening session)...',
                 errorText: _error,
               ),
             ),
