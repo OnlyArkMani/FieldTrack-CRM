@@ -55,9 +55,12 @@ class AttendanceStatusTile extends ConsumerWidget {
     if (attendanceId != null && state.state == MachineState.ended) {
       final today = DateTime.now();
       final reportDate = DateTime(today.year, today.month, today.day);
-      await Future<void>.delayed(const Duration(seconds: 2));
+      ref.read(attendanceProvider.notifier).setNavigatingToDsr(true);
       if (!context.mounted) return;
-      context.push('/dsr/review', extra: {'report_date': reportDate});
+      await context.push('/dsr/review', extra: {'report_date': reportDate});
+      if (context.mounted) {
+        ref.read(attendanceProvider.notifier).setNavigatingToDsr(false);
+      }
     }
   }
 
@@ -204,7 +207,7 @@ class AttendanceStatusTile extends ConsumerWidget {
               icon: Icons.replay_rounded,
               variant: AppButtonVariant.secondary,
               isLoading: ui.isSubmitting,
-              onPressed: ui.isSubmitting || ui.isMarkingLeave
+              onPressed: ui.isSubmitting || ui.isMarkingLeave || ui.isNavigatingToDsr
                   ? null
                   : () => _reCheckIn(context, ref),
             ),

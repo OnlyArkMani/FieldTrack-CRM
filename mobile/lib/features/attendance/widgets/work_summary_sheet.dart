@@ -4,7 +4,6 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_button.dart';
 
-const _kMinChars = 10;
 const _kMaxChars = 500;
 
 /// Work-summary capture on END. Non-dismissible by barrier tap or drag — the
@@ -48,9 +47,6 @@ class _WorkSummarySheetState extends State<_WorkSummarySheet>
     _spring.dispose();
     super.dispose();
   }
-
-  int get _len => _controller.text.trim().length;
-  bool get _valid => _len >= _kMinChars;
 
   @override
   Widget build(BuildContext context) {
@@ -103,7 +99,7 @@ class _WorkSummarySheetState extends State<_WorkSummarySheet>
                   ),
                   const SizedBox(height: AppDimens.grid * 0.5),
                   Text(
-                    'What did you accomplish today?',
+                    'What did you accomplish today? (Optional)',
                     style: AppTextStyles.body.copyWith(color: colors.textSecondary),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -128,12 +124,9 @@ class _WorkSummarySheetState extends State<_WorkSummarySheet>
                     children: [
                       Expanded(
                         child: Text(
-                          _valid
-                              ? 'Looks good'
-                              : 'At least ${_kMinChars - _len} more character'
-                                  '${(_kMinChars - _len) == 1 ? '' : 's'}',
+                          'Work summary is optional',
                           style: AppTextStyles.caption.copyWith(
-                            color: _valid ? colors.statusActive : colors.textSecondary,
+                            color: colors.textSecondary,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -151,7 +144,7 @@ class _WorkSummarySheetState extends State<_WorkSummarySheet>
                   AppButton(
                     label: 'End day & submit',
                     icon: Icons.check_rounded,
-                    onPressed: (_valid && !overLimit)
+                    onPressed: !overLimit
                         ? () => Navigator.of(context).pop(_controller.text.trim())
                         : null,
                   ),

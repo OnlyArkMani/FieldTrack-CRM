@@ -1,11 +1,13 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/network/api_client.dart';
 import '../models/report_models.dart';
+import '../models/report_preview_models.dart';
 
 final reportRepositoryProvider = Provider<ReportRepository>((ref) {
   return ReportRepository(ref.watch(apiClientProvider));
@@ -14,6 +16,9 @@ final reportRepositoryProvider = Provider<ReportRepository>((ref) {
 class ReportRepository {
   ReportRepository(this._api);
   final ApiClient _api;
+
+  static String _ymd(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   /// Kick off generation. Returns the report_id to poll.
   Future<String> generate({
@@ -29,9 +34,7 @@ class ReportRepository {
     return data['report_id'] as String;
   }
 
-  /// Kick off a single-FPO/farmer Excel export (full history). Returns the
-  /// report_id to poll. FARMER_EXPORT is Excel-only + farmer-scoped, so it's a
-  /// dedicated helper rather than a selectable type in the reports screen.
+  /// Kick off a single-FPO/farmer Excel export (full history).
   Future<String> generateFarmerExport(int farmerId) async {
     final data = await _api.post('/reports/generate', body: {
       'type': 'FARMER_EXPORT',
@@ -46,9 +49,6 @@ class ReportRepository {
     return ReportStatusResult.fromJson(data);
   }
 
-  /// Raw bytes of the finished file. Platform-agnostic (just HTTP) — the caller
-  /// decides whether to write a File (mobile) or trigger a browser download
-  /// (web). The auth interceptor still attaches the bearer token.
   Future<List<int>> downloadBytes(String reportId) async {
     try {
       final resp = await _api.dio.get<List<int>>(
@@ -61,9 +61,6 @@ class ReportRepository {
     }
   }
 
-  /// Download the finished file to a temp path and return it (ready to share /
-  /// open). Goes through the raw Dio so we can pull bytes; the auth interceptor
-  /// still attaches the bearer token.
   Future<File> download(String reportId, {required String filename}) async {
     try {
       final resp = await _api.dio.get<List<int>>(
@@ -76,6 +73,81 @@ class ReportRepository {
       return file;
     } on DioException catch (e) {
       throw ApiClient.mapError(e);
+    }
+  }
+
+  /// Fetch dynamic preview data for tabular rendering on the mobile Reports screen,
+  /// calling backend calculation engine (POST /reports/preview).
+  Future<ReportTableData> fetchPreviewData({
+    required ReportType type,
+    DateTimeRange? range,
+    DateTime? month,
+    int? teamId,
+  }) async {
+    final Map<String, dynamic> filters = {};
+
+    if (range != null) {
+      filters['start_date'] = _ymd(range.start);
+      filters['end_date'] = _ymd(range.end);
+    }
+    if (month != null) {
+      filters['month'] = _ymd(month);
+    }
+    if (teamId != null) {
+      filters['team_id'] = teamId;
+    }
+
+    try {
+      final res = await _api.post('/reports/preview', body: {
+        'type': type.wire,
+        'filters': filters,
+      });
+
+      final tables = res['tables'] as List<dynamic>? ?? [];
+      if (tables.isEmpty) {
+        return const ReportTableData(columns: [], rows: []);
+      }
+
+      final firstTbl = tables[0] as Map<String, dynamic>;
+      final rawCols = (firstTbl['columns'] as List<dynamic>?)?.cast<String>() ?? [];
+      final rawRows = (firstTbl['rows'] as List<dynamic>?) ?? [];
+
+      final columns = rawCols.map((colName) {
+        final w = colName.contains('Employee') || colName.contains('History') || colName.contains('Summary')
+            ? 140.0
+            : 110.0;
+        return ReportTableColumn(label: colName, width: w);
+      }).toList();
+
+      final rows = <ReportTableRow>[];
+      for (var rIdx = 0; rIdx < rawRows.length; rIdx++) {
+        final rowList = (rawRows[rIdx] as List<dynamic>?) ?? [];
+        final cells = rowList.map((val) {
+          final str = val?.toString() ?? '—';
+          final isBadge = str == 'PRESENT' || str == 'COMPLIANT' || str == 'SUBMITTED' || str == 'YES' ||
+              str == 'ABSENT' || str == 'LEAVE' || str == 'PENDING' || str == 'NO';
+          
+          if (isBadge) {
+            Color bg = const Color(0xFF34C759);
+            if (str.contains('LEAVE') || str.contains('PENDING')) bg = const Color(0xFFF5A623);
+            if (str.contains('ABSENT') || str == 'NO') bg = const Color(0xFFE8645A);
+            return ReportTableCell(str, badgeColor: bg.withValues(alpha: 0.15), badgeTextColor: bg);
+          }
+
+          return ReportTableCell(str);
+        }).toList();
+
+        rows.add(ReportTableRow(id: '$rIdx', cells: cells));
+      }
+
+      return ReportTableData(
+        columns: columns,
+        rows: rows,
+        totalRecords: rows.length,
+        summarySubtitle: res['subtitle'] as String?,
+      );
+    } catch (_) {
+      return const ReportTableData(columns: [], rows: []);
     }
   }
 }

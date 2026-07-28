@@ -37,10 +37,6 @@ class _ReCheckInRemarkSheetState extends State<_ReCheckInRemarkSheet> {
 
   void _submit() {
     final text = _controller.text.trim();
-    if (text.length < 5) {
-      setState(() => _error = 'Remark must be at least 5 characters long');
-      return;
-    }
     Navigator.of(context).pop(text);
   }
 
@@ -83,7 +79,7 @@ class _ReCheckInRemarkSheetState extends State<_ReCheckInRemarkSheet> {
                           .copyWith(color: scheme.onSurface, fontSize: 18),
                     ),
                     Text(
-                      'Please provide a mandatory remark to re-check in.',
+                      'Provide an optional remark for re-checking in.',
                       style: AppTextStyles.caption
                           .copyWith(color: colors.textSecondary),
                     ),
@@ -103,7 +99,7 @@ class _ReCheckInRemarkSheetState extends State<_ReCheckInRemarkSheet> {
               if (_error != null) setState(() => _error = null);
             },
             decoration: InputDecoration(
-              hintText: 'Remark (Required, e.g. Returning for evening shift)',
+              hintText: 'Remark (Optional, e.g. Returning for evening shift)',
               errorText: _error,
             ),
           ),

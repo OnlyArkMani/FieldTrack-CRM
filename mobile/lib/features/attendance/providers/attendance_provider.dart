@@ -22,6 +22,7 @@ class AttendanceUiState {
     this.isSubmitting = false,
     this.pendingAction,
     this.isMarkingLeave = false,
+    this.isNavigatingToDsr = false,
     this.error,
     this.errorNonce = 0,
   });
@@ -36,6 +37,9 @@ class AttendanceUiState {
   /// True while the leave request is in flight (drives the On Leave button
   /// spinner — leave has no SessionType, so it isn't covered by pendingAction).
   final bool isMarkingLeave;
+
+  /// True after checkout while navigating to/showing the DSR screen.
+  final bool isNavigatingToDsr;
   final String? error;
   final int errorNonce;
 
@@ -49,6 +53,7 @@ class AttendanceUiState {
     SessionType? pendingAction,
     bool clearPending = false,
     bool? isMarkingLeave,
+    bool? isNavigatingToDsr,
     String? error,
     bool clearError = false,
     int? errorNonce,
@@ -59,6 +64,7 @@ class AttendanceUiState {
         isSubmitting: isSubmitting ?? this.isSubmitting,
         pendingAction: clearPending ? null : (pendingAction ?? this.pendingAction),
         isMarkingLeave: isMarkingLeave ?? this.isMarkingLeave,
+        isNavigatingToDsr: isNavigatingToDsr ?? this.isNavigatingToDsr,
         error: clearError ? null : (error ?? this.error),
         errorNonce: errorNonce ?? this.errorNonce,
       );
@@ -342,6 +348,9 @@ class AttendanceNotifier extends Notifier<AttendanceUiState> {
   }
 
   void clearError() => state = state.copyWith(clearError: true);
+
+  void setNavigatingToDsr(bool value) =>
+      state = state.copyWith(isNavigatingToDsr: value);
 
   // ── GPS acquisition (mandatory per transition) ───────────────────────
   Future<(double, double)> _currentPosition() async {

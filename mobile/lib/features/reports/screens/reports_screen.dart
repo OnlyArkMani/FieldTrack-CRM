@@ -12,6 +12,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../teams/providers/team_provider.dart';
 import '../models/report_models.dart';
 import '../providers/report_provider.dart';
+import '../widgets/report_preview_table.dart';
 
 class ReportsScreen extends ConsumerWidget {
   const ReportsScreen({super.key});
@@ -173,6 +174,11 @@ class ReportsScreen extends ConsumerWidget {
                 ReportPhase.configuring => const SizedBox.shrink(),
               },
             ),
+            const SizedBox(height: AppDimens.grid * 2),
+
+            // ── Tabular Report Data Preview ────────────────────────────
+            const ReportPreviewTable(),
+
             const SizedBox(height: AppDimens.grid * 4),
           ],
         ),

@@ -14,6 +14,7 @@ DESIGN:
 """
 from datetime import date, datetime
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -113,3 +114,21 @@ class ReportStatusOut(BaseModel):
     error: str | None = None  # set only when FAILED
     created_at: datetime | None = None
     expires_at: datetime | None = None
+
+
+class PreviewReportRequest(BaseModel):
+    type: ReportType
+    filters: ReportFilters = Field(default_factory=ReportFilters)
+
+
+class ReportTableOut(BaseModel):
+    name: str
+    columns: list[str]
+    rows: list[list[Any]]
+
+
+class PreviewReportResponse(BaseModel):
+    title: str
+    subtitle: str
+    summary: list[tuple[str, str]]
+    tables: list[ReportTableOut]

@@ -9,12 +9,14 @@ import dayjs from 'dayjs';
 import { Download, FileSpreadsheet, AlertCircle, Loader2, X } from 'lucide-react';
 
 import { api, apiErrorMessage } from '@/services/api/client';
+import { fetchReportPreviewData } from '@/services/api/reportsApi';
 import { useTeams } from '@/hooks/useTeams';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/ui/PageHeader';
 import Card, { CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
+import ReportPreviewTable from './components/ReportPreviewTable';
 
 const MAX_RANGE_DAYS = 31;
 const POLL_INTERVAL_MS = 3000;
@@ -231,6 +233,11 @@ export default function ReportsPage() {
   const [reportId, setReportId] = useState(null);
   const [downloading, setDownloading] = useState(false);
 
+  // Table preview state
+  const [previewData, setPreviewData] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState(null);
+
   const pollRef = useRef(null);
   const clearPoll = () => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
@@ -259,6 +266,29 @@ export default function ReportsPage() {
     if (isManager && scope === 'all') setScope('team');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isManager, myTeamId]);
+
+  const loadPreview = useCallback(async () => {
+    setPreviewLoading(true);
+    setPreviewError(null);
+    try {
+      const data = await fetchReportPreviewData({
+        type,
+        startDate,
+        endDate,
+        teamId: effectiveScope === 'team' ? teamId : null,
+        userId: effectiveScope === 'employee' ? employee?.id : null,
+      });
+      setPreviewData(data);
+    } catch (err) {
+      setPreviewError(apiErrorMessage(err));
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [type, startDate, endDate, effectiveScope, teamId, employee]);
+
+  useEffect(() => {
+    loadPreview();
+  }, [loadPreview]);
 
   const teamMissing = effectiveScope === 'team' && !teamId;
   const employeeMissing = effectiveScope === 'employee' && !employee;
@@ -567,6 +597,13 @@ export default function ReportsPage() {
         </Card>
       )}
 
+      {/* Always-visible Data Table Preview */}
+      <ReportPreviewTable
+        data={previewData}
+        loading={previewLoading}
+        error={previewError}
+        onRetry={loadPreview}
+      />
     </div>
   );
 }

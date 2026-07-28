@@ -29,9 +29,12 @@ from app.models.user import User
 from app.schemas.report import (
     GenerateReportRequest,
     GenerateReportResponse,
+    PreviewReportRequest,
+    PreviewReportResponse,
     ReportFormat,
     ReportStatus,
     ReportStatusOut,
+    ReportTableOut,
     ReportType,
 )
 from app.services.report_service import ReportService, ReportStore, run_report_job
@@ -86,6 +89,49 @@ async def generate_report(
     background.add_task(run_report_job, report_id, normalized, body.format)
     return GenerateReportResponse(
         report_id=report_id, status=ReportStatus.PROCESSING
+    )
+
+
+@router.post("/preview", response_model=PreviewReportResponse)
+async def preview_report(
+    body: PreviewReportRequest,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> PreviewReportResponse:
+    """Synchronously compute and return preview table data using ReportService engine."""
+    start_date = body.filters.start_date
+    end_date = body.filters.end_date
+    if start_date is not None and end_date is not None:
+        if (end_date - start_date).days > 31:
+            raise HTTPException(
+                status_code=400,
+                detail="Date range cannot exceed 31 days.",
+                headers={"X-Error-Code": "DATE_RANGE_TOO_LARGE"},
+            )
+    if end_date is not None and end_date > date.today():
+        raise HTTPException(
+            status_code=400,
+            detail="End date cannot be in the future.",
+        )
+
+    service = ReportService(db)
+    normalized = await service.authorize(user, body.type, body.filters)
+    report_data = await service.build_data(normalized)
+
+    tables_out = [
+        ReportTableOut(
+            name=tbl.name,
+            columns=tbl.columns,
+            rows=tbl.rows,
+        )
+        for tbl in report_data.tables
+    ]
+
+    return PreviewReportResponse(
+        title=report_data.title,
+        subtitle=report_data.subtitle,
+        summary=report_data.summary,
+        tables=tables_out,
     )
 
 

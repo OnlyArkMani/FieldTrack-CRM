@@ -70,16 +70,17 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
     if (summary == null || !mounted) return;
     await ref.read(attendanceProvider.notifier).end(summary);
     if (!mounted) return;
-    // After END, poll the state once to get the attendance id, then go to DSR.
     final attendanceState = ref.read(attendanceProvider);
     final attendanceId = attendanceState.attendance?.id;
     if (attendanceId != null && attendanceState.state.name == 'ended') {
       final today = DateTime.now();
       final reportDate = DateTime(today.year, today.month, today.day);
-      // Give the background DSR generation a moment to complete before loading.
-      await Future<void>.delayed(const Duration(seconds: 2));
+      ref.read(attendanceProvider.notifier).setNavigatingToDsr(true);
       if (!mounted) return;
-      context.push('/dsr/review', extra: {'report_date': reportDate});
+      await context.push('/dsr/review', extra: {'report_date': reportDate});
+      if (mounted) {
+        ref.read(attendanceProvider.notifier).setNavigatingToDsr(false);
+      }
     }
   }
 
@@ -646,7 +647,7 @@ class _Ended extends ConsumerWidget {
           variant: AppButtonVariant.secondary,
           isLoading:
               state.isSubmitting && state.pendingAction == SessionType.reCheckIn,
-          onPressed: state.isSubmitting
+          onPressed: (state.isSubmitting || state.isNavigatingToDsr)
               ? null
               : () async {
                   final remark = await showReCheckInRemarkSheet(context);

@@ -119,10 +119,31 @@ class _DsrReviewScreenState extends ConsumerState<DsrReviewScreen>
     }
   }
 
+  void _onBackPressed() {
+    if (_submitted) {
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/home/dashboard');
+      }
+      return;
+    }
+    if (_submitting) return;
+
+    if (_detail != null) {
+      _submit();
+    } else if (!_loading) {
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/home/dashboard');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = context.appColors;
     final dateLabel =
         DateFormat('d MMMM yyyy').format(widget.reportDate.toLocal());
 
@@ -130,24 +151,14 @@ class _DsrReviewScreenState extends ConsumerState<DsrReviewScreen>
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) {
-          if (context.canPop()) {
-            context.pop();
-          } else {
-            context.go('/home/dashboard');
-          }
+          _onBackPressed();
         }
       },
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_rounded),
-            onPressed: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go('/home/dashboard');
-              }
-            },
+            onPressed: _onBackPressed,
           ),
           title: Text(
             "Today's Summary",
@@ -262,7 +273,7 @@ class _DsrReviewScreenState extends ConsumerState<DsrReviewScreen>
 
         // ── End-of-day note ───────────────────────────────────────────
         const SizedBox(height: 4),
-        _SectionHeader(label: 'End-of-Day Note'),
+        _SectionHeader(label: 'End-of-Day Note (Optional)'),
         AppCard(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           child: Column(
@@ -275,7 +286,7 @@ class _DsrReviewScreenState extends ConsumerState<DsrReviewScreen>
                     maxLength: 300,
                     maxLines: 4,
                     decoration: const InputDecoration(
-                      hintText: 'Add your summary note...',
+                      hintText: 'Add your summary note (Optional)...',
                       border: InputBorder.none,
                       counterText: '',
                     ),
