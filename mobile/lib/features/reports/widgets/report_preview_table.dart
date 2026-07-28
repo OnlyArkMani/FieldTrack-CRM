@@ -138,7 +138,7 @@ class _TableView extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final colors = context.appColors;
 
-    const horizontalPadding = 16.0; // 8px left + 8px right
+    const horizontalPadding = 16.0;
     final columnsWidth = data.columns.fold<double>(
       0.0,
       (sum, col) => sum + col.width,
@@ -200,18 +200,21 @@ class _TableView extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                       child: Row(
                         mainAxisSize: MainAxisSize.max,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: List.generate(
                           row.cells.length,
                           (colIndex) {
-                            final width = colIndex < data.columns.length
-                                ? data.columns[colIndex].width
-                                : 100.0;
+                            final col = colIndex < data.columns.length
+                                ? data.columns[colIndex]
+                                : const ReportTableColumn(label: '');
                             final cell = row.cells[colIndex];
                             return SizedBox(
-                              width: width,
+                              width: col.width,
                               child: Padding(
                                 padding: const EdgeInsets.only(right: 8),
-                                child: _buildCellWidget(context, cell),
+                                child: col.isSessionHistory
+                                    ? _SessionHistoryCell(text: cell.text)
+                                    : _buildCellWidget(context, cell),
                               ),
                             );
                           },
@@ -259,6 +262,146 @@ class _TableView extends StatelessWidget {
       ),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
+    );
+  }
+}
+
+// ── Session History Cell ──────────────────────────────────────────────────────
+const _kVisibleLimit = 3;
+
+class _SessionItem {
+  const _SessionItem({required this.label, this.time, this.note});
+  final String label;
+  final String? time;
+  final String? note;
+}
+
+const _sessionStyles = <String, (Color bg, Color fg, Color dot)>{
+  'Check-In':    (Color(0xFFDCFCE7), Color(0xFF166534), Color(0xFF16A34A)),
+  'Check-Out':   (Color(0xFFFEE2E2), Color(0xFF991B1B), Color(0xFFDC2626)),
+  'Re-Check In': (Color(0xFFEDE9FE), Color(0xFF5B21B6), Color(0xFF7C3AED)),
+  'Break':       (Color(0xFFFEF9C3), Color(0xFF854D0E), Color(0xFFCA8A04)),
+  'Resume':      (Color(0xFFDBEAFE), Color(0xFF1E40AF), Color(0xFF2563EB)),
+};
+
+(Color bg, Color fg, Color dot) _getStyle(String label) {
+  for (final entry in _sessionStyles.entries) {
+    if (label.startsWith(entry.key)) return entry.value;
+  }
+  return (const Color(0xFFF1F5F9), const Color(0xFF475569), const Color(0xFF94A3B8));
+}
+
+List<_SessionItem> _parseSessionHistory(String text) {
+  if (text == '—' || text.isEmpty) return [];
+  return text.split('|').map((part) {
+    part = part.trim();
+    String? note;
+    final noteIdx = part.lastIndexOf('(');
+    if (noteIdx != -1 && part.endsWith(')')) {
+      note = part.substring(noteIdx + 1, part.length - 1).trim();
+      part = part.substring(0, noteIdx).trim();
+    }
+    final timeMatch = RegExp(r'(\d{1,2}:\d{2})$').firstMatch(part);
+    final time = timeMatch?.group(1);
+    final label = time != null
+        ? part.substring(0, part.lastIndexOf(time)).trim()
+        : part;
+    return _SessionItem(label: label, time: time, note: note);
+  }).toList();
+}
+
+class _SessionHistoryCell extends StatefulWidget {
+  const _SessionHistoryCell({required this.text});
+  final String text;
+
+  @override
+  State<_SessionHistoryCell> createState() => _SessionHistoryCellState();
+}
+
+class _SessionHistoryCellState extends State<_SessionHistoryCell> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _parseSessionHistory(widget.text);
+    if (items.isEmpty) {
+      return Text('—', style: AppTextStyles.caption.copyWith(color: context.appColors.textSecondary));
+    }
+
+    final hasMore = items.length > _kVisibleLimit;
+    final visible = _expanded ? items : items.take(_kVisibleLimit).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ...visible.map((item) {
+          final (bg, fg, dot) = _getStyle(item.label);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Dot
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 4),
+                  // Label
+                  Text(item.label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: fg)),
+                  if (item.time != null) ...[
+                    const SizedBox(width: 3),
+                    Text(item.time!, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: fg.withValues(alpha: 0.75))),
+                  ],
+                  if (item.note != null) ...[
+                    const SizedBox(width: 3),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 80),
+                      child: Text(
+                        item.note!,
+                        style: TextStyle(fontSize: 9, fontStyle: FontStyle.italic, color: fg.withValues(alpha: 0.65)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        }),
+        if (hasMore)
+          GestureDetector(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Container(
+              margin: const EdgeInsets.only(top: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFF94A3B8), width: 1),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                    size: 12,
+                    color: const Color(0xFF64748B),
+                  ),
+                  const SizedBox(width: 2),
+                  Text(
+                    _expanded ? 'Show less' : '+${items.length - _kVisibleLimit} more',
+                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

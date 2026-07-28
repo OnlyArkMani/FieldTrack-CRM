@@ -113,10 +113,13 @@ class ReportRepository {
       final rawRows = (firstTbl['rows'] as List<dynamic>?) ?? [];
 
       final columns = rawCols.map((colName) {
-        final w = colName.contains('Employee') || colName.contains('History') || colName.contains('Summary')
-            ? 140.0
-            : 110.0;
-        return ReportTableColumn(label: colName, width: w);
+        final isSessionHistory = colName.toLowerCase().contains('session history');
+        final w = isSessionHistory
+            ? 200.0
+            : (colName.contains('Employee') || colName.contains('Summary'))
+                ? 140.0
+                : 110.0;
+        return ReportTableColumn(label: colName, width: w, isSessionHistory: isSessionHistory);
       }).toList();
 
       final rows = <ReportTableRow>[];

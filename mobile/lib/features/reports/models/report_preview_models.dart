@@ -36,11 +36,13 @@ class ReportTableColumn {
     required this.label,
     this.width = 120.0,
     this.alignment = Alignment.centerLeft,
+    this.isSessionHistory = false,
   });
 
   final String label;
   final double width;
   final Alignment alignment;
+  final bool isSessionHistory;
 }
 
 /// Complete dataset returned for the tabular report preview.
