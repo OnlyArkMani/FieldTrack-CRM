@@ -29,6 +29,7 @@ from app.api.v1 import (
     sync,
     teams,
     vet,
+    villages,
     visit_plans,
     visits,
     ws,
@@ -186,5 +187,6 @@ app.include_router(follow_ups.router, prefix=settings.api_v1_prefix)
 app.include_router(daily_reports.router, prefix=settings.api_v1_prefix)
 app.include_router(gps_config.router, prefix=settings.api_v1_prefix)
 app.include_router(vet.router, prefix=settings.api_v1_prefix)
+app.include_router(villages.router, prefix=settings.api_v1_prefix)
 # WebSocket router (no response_model/prefix conventions — paths are absolute).
 app.include_router(ws.router, prefix=settings.api_v1_prefix)
