@@ -6,6 +6,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_bottom_sheet.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../services/village/widgets/village_search_field.dart';
 
 /// One Farmer Meet attendee collected by the sheet below.
 typedef AttendeeInput = ({String name, String phone, String village});
@@ -113,14 +114,16 @@ class _AddAttendeeFormState extends State<_AddAttendeeForm> {
           ],
         ),
         const SizedBox(height: AppDimens.grid * 2),
-        AppTextField(
+        VillageSearchField(
           label: 'Village *',
           controller: _village,
           hint: "Farmer's village/town/city",
           errorText: _villageError,
           textInputAction: TextInputAction.done,
-          prefixIcon: Icons.home_work_rounded,
-          onSubmitted: (_) => _confirm(),
+          onSelected: (v) => setState(() {
+            _village.text = v.formattedAddress;
+            _villageError = null;
+          }),
         ),
       ],
     );

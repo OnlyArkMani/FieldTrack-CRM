@@ -9,6 +9,8 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../services/village/models/village.dart';
+import '../../../../services/village/widgets/village_search_field.dart';
 import '../data/farmer_repository.dart';
 import '../models/farmer.dart';
 import '../providers/farmer_provider.dart';
@@ -75,6 +77,13 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
   }
 
   void _removeAttendee(int index) => setState(() => _attendees.removeAt(index));
+
+  void _onVillageSelected(Village v) => setState(() {
+        _village.text = v.villageName;
+        _district.text = v.districtName ?? '';
+        _address.text = v.formattedAddress;
+        _addressError = null;
+      });
 
   Future<void> _submit() async {
     final address = _address.text.trim();
@@ -389,13 +398,14 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
             ],
             if (!_isFarmerMeet) ...[
               const SizedBox(height: AppDimens.grid * 2),
-              AppTextField(
+              VillageSearchField(
                 label: 'Address *',
                 controller: _address,
                 hint: 'Address',
                 errorText: _addressError,
                 textInputAction: TextInputAction.next,
                 prefixIcon: Icons.location_on_rounded,
+                onSelected: _onVillageSelected,
               ),
               const SizedBox(height: AppDimens.grid * 2),
               AppTextField(

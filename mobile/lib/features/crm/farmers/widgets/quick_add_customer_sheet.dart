@@ -8,6 +8,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_bottom_sheet.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../services/village/widgets/village_search_field.dart';
 import '../data/farmer_repository.dart';
 import '../models/farmer.dart';
 import '../providers/farmer_provider.dart';
@@ -239,13 +240,17 @@ class _QuickAddCustomerFormState extends ConsumerState<_QuickAddCustomerForm> {
           ],
         ),
         const SizedBox(height: AppDimens.grid * 2),
-        AppTextField(
+        VillageSearchField(
           label: 'Address *',
           controller: _address,
           hint: 'Address',
           errorText: _addressError,
           textInputAction: TextInputAction.done,
           prefixIcon: Icons.location_on_rounded,
+          onSelected: (v) => setState(() {
+            _address.text = v.formattedAddress;
+            _addressError = null;
+          }),
         ),
       ],
     );

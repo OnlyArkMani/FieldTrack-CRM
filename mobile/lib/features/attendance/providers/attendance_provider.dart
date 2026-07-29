@@ -354,20 +354,25 @@ class AttendanceNotifier extends Notifier<AttendanceUiState> {
 
   // ── GPS acquisition (mandatory per transition) ───────────────────────
   Future<(double, double)> _currentPosition() async {
-    if (!await Geolocator.isLocationServiceEnabled()) {
-      throw const _LocationException(
-          'Location services are off. Enable GPS to mark attendance.');
-    }
-    var perm = await Geolocator.checkPermission();
-    if (perm == LocationPermission.denied) {
-      perm = await Geolocator.requestPermission();
-    }
-    if (perm == LocationPermission.denied ||
-        perm == LocationPermission.deniedForever) {
-      throw const _LocationException(
-          'Location permission is required to mark attendance.');
-    }
+    // Whole method wrapped (not just getCurrentPosition): checkPermission/
+    // requestPermission/isLocationServiceEnabled can also throw (e.g. a
+    // PermissionRequestInProgressException from an overlapping request), and
+    // _run() only catches _LocationException/ConflictException/ApiException —
+    // anything else would otherwise escape uncaught.
     try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw const _LocationException(
+            'Location services are off. Enable GPS to mark attendance.');
+      }
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
+        throw const _LocationException(
+            'Location permission is required to mark attendance.');
+      }
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
@@ -375,11 +380,14 @@ class AttendanceNotifier extends Notifier<AttendanceUiState> {
         ),
       );
       return (pos.latitude, pos.longitude);
+    } on _LocationException {
+      rethrow;
     } catch (e) {
-      // Was a bare `catch (_)` — swallowed the real cause (e.g. OEM battery/
-      // Doze throttling killing the fix a few seconds in) behind one generic
-      // message, making field reports impossible to root-cause. Logged, not
-      // surfaced to the user — the message below stays the same.
+      // Was a bare `catch (_)` around just getCurrentPosition — swallowed the
+      // real cause (e.g. OEM battery/Doze throttling killing the fix a few
+      // seconds in) behind one generic message, making field reports
+      // impossible to root-cause. Logged, not surfaced to the user — the
+      // message below stays the same.
       debugPrint('Attendance GPS fetch failed (${e.runtimeType}): $e');
       throw const _LocationException(
           'Could not get your location. Move to open sky and retry.');

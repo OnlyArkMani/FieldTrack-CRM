@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -15,7 +17,26 @@ import 'services/map/tile_cache_service.dart';
 import 'services/notification/fcm_service.dart';
 
 Future<void> main() async {
+  // No global handler previously existed: any exception that escaped a
+  // try/catch anywhere in the app (sync or async) was fatal to the isolate
+  // instead of being logged. This is a safety net, not a fix for any specific
+  // bug — it turns "app silently closes" into a logged, recoverable error.
+  runZonedGuarded(_bootstrap, (error, stack) {
+    debugPrint('Uncaught zone error: $error\n$stack');
+  });
+}
+
+Future<void> _bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('FlutterError: ${details.exceptionAsString()}\n${details.stack}');
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('PlatformDispatcher uncaught error: $error\n$stack');
+    return true;
+  };
 
   // Env + prefs BEFORE runApp: theme mode and API base URL must be ready on
   // first frame (no flash of wrong theme, no late env crashes).

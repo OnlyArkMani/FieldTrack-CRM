@@ -138,11 +138,14 @@ export default function FarmerDetailPanel({ farmerId, open, onClose }) {
                     <Badge color="var(--ft-status-offline)">Inactive</Badge>
                   )}
                 </div>
-                {farmer.village && (
-                  <Row icon={MapPin} text={[farmer.village, farmer.district].filter(Boolean).join(', ')} />
-                )}
-                {(farmer.address || farmer.landmark) && (
-                  <Row icon={MapPin} text={[farmer.address, farmer.landmark].filter(Boolean).join(', ')} />
+                {(farmer.village || farmer.district || farmer.address || farmer.landmark) && (
+                  <Row
+                    icon={MapPin}
+                    wrap
+                    text={[farmer.village, farmer.district, farmer.address, farmer.landmark]
+                      .filter(Boolean)
+                      .join(', ')}
+                  />
                 )}
                 {farmer.pincode && (
                   <Row icon={MapPin} text={`PIN ${farmer.pincode}`} />
@@ -320,11 +323,11 @@ export default function FarmerDetailPanel({ farmerId, open, onClose }) {
   );
 }
 
-function Row({ icon: Icon, text }) {
+function Row({ icon: Icon, text, wrap = false }) {
   return (
-    <div className="flex items-center gap-2 text-sm text-text-secondary">
-      <Icon className="h-4 w-4 shrink-0" />
-      <span className="truncate">{text}</span>
+    <div className={`flex gap-2 text-sm text-text-secondary ${wrap ? 'items-start' : 'items-center'}`}>
+      <Icon className={`h-4 w-4 shrink-0 ${wrap ? 'mt-0.5' : ''}`} />
+      <span className={wrap ? 'whitespace-normal break-words' : 'truncate'}>{text}</span>
     </div>
   );
 }
