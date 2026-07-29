@@ -29,10 +29,12 @@ REDIS state key: fieldtrack:attendance:state:{user_id}
 import logging
 from datetime import datetime, time, timedelta, timezone
 from datetime import date as date_type
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.exceptions import bad_request, conflict, forbidden, not_found
 from app.core.redis import Keys, get_redis
 from app.models.attendance import Attendance, AttendanceSession
@@ -80,6 +82,25 @@ def _seconds_to_midnight(now: datetime) -> int:
     tomorrow = (now + timedelta(days=1)).date()
     midnight = datetime.combine(tomorrow, time.min, tzinfo=timezone.utc)
     return max(1, int((midnight - now).total_seconds()))
+
+
+# START and RE_CHECKIN close at noon business-tz wall clock — BREAK/RESUME/END
+# are never gated by this. Missing the window leaves the day in NULL state;
+# the employee can still apply for leave (mark_leave has no time gate).
+_CHECKIN_CUTOFF_HOUR = 12
+
+
+def _checkin_cutoff_passed() -> bool:
+    """True once the business-timezone wall clock is at/past the noon
+    check-in/re-check-in cutoff. Business-tz (not UTC, not server-local),
+    matching how DSR "day" boundaries are defined — see dsr_service.business_today.
+    """
+    settings = get_settings()
+    try:
+        tz = ZoneInfo(settings.business_timezone)
+    except Exception:
+        tz = timezone.utc
+    return datetime.now(tz).hour >= _CHECKIN_CUTOFF_HOUR
 
 
 def calculate_duration(sessions: list[AttendanceSession]) -> int:
@@ -185,6 +206,10 @@ class AttendanceService:
             raise conflict("Marked as on leave today — cannot check in")
         if state not in _ALLOWED_FROM[action]:
             raise conflict(_INVALID_MESSAGE[action])
+        if action in (SessionType.START, SessionType.RE_CHECKIN) and _checkin_cutoff_passed():
+            raise conflict(
+                "Check-in closes at 12:00 PM. You can still apply for leave for today."
+            )
 
         if action == SessionType.RE_CHECKIN:
             if not notes or not notes.strip():
@@ -286,6 +311,66 @@ class AttendanceService:
         )
         await self.db.flush()
         await self.db.refresh(attendance, attribute_names=["sessions"])
+
+    # ── System-triggered auto-checkout (19:00 IST scheduler job) ──────────
+    async def auto_checkout(
+        self,
+        user_id: int,
+        day: date_type,
+        *,
+        lat: float | None,
+        lng: float | None,
+    ) -> Attendance | None:
+        """Force-close whoever's still open (STARTED/RESUMED/ON_BREAK/
+        RE_CHECKED_IN) at the 19:00 cutoff. Bypasses transition_state's
+        _ALLOWED_FROM gate on purpose: ON_BREAK can't reach END through the
+        normal self-service path (it must RESUME first), and there's no user
+        behind this call to do that — it mirrors add_manual_session's admin
+        override in that sense, just system-triggered instead of an admin
+        action. work_summary is set to a distinguishing marker (not "Day
+        completed.", the manual-End default) so the employee and any DSR
+        viewer can tell this wasn't a manual End. Returns None if the row is
+        no longer open by the time this runs (race with a manual End, or
+        already ON_LEAVE/NULL) — the caller should treat that as a no-op,
+        not an error.
+        """
+        attendance = await self.repo.get_for_user_date(user_id, day)
+        if attendance is None:
+            return None
+        if self._state_of(attendance) not in (
+            "STARTED",
+            "RESUMED",
+            "ON_BREAK",
+            "RE_CHECKED_IN",
+        ):
+            return None
+
+        now = datetime.now(timezone.utc)
+        self.repo.add_session(
+            AttendanceSession(
+                attendance_id=attendance.id,
+                type=SessionType.END,
+                timestamp=now,
+                lat=lat,
+                lng=lng,
+                notes="Auto-checkout: 7:00 PM cutoff",
+            )
+        )
+        await self.db.flush()
+        await self.db.refresh(attendance, attribute_names=["sessions"])
+        attendance.work_summary = "Auto-checked-out at 7:00 PM — no manual entry."
+        attendance.total_duration_minutes = calculate_duration(attendance.sessions)
+        attendance.total_distance_meters = await self._day_distance(user_id, day)
+
+        await self._write_redis_state(user_id, "ENDED", attendance.id, now)
+        self.repo.add_audit_log(
+            user_id=user_id,
+            action="ATTENDANCE_AUTO_CHECKOUT",
+            entity_id=attendance.id,
+            metadata={"lat": lat, "lng": lng},
+        )
+        await self.db.commit()
+        return await self.repo.get_for_user_date(user_id, day)
 
     # ── Reads ─────────────────────────────────────────────────────────────
     async def current_state_today(self, user_id: int) -> str:

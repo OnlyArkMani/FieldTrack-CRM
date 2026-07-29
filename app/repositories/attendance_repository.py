@@ -119,6 +119,19 @@ class AttendanceRepository:
         ).scalar_one()
         return rows, int(total)
 
+    async def all_for_date_with_sessions(self, day: date_type) -> list[Attendance]:
+        """Every attendance row for `day` (any status), sessions eager-loaded.
+        Used by the 19:00 auto-checkout job to compute each row's TRUE current
+        state (its last session by timestamp) — unlike
+        NotificationRepository.users_started_not_ended_today, this doesn't
+        mistake "has a START and an END somewhere in history" for closed: a
+        RE_CHECKIN after an earlier END would be wrongly skipped by that
+        heuristic, but must still be force-closed here if still open."""
+        stmt = select(Attendance).where(Attendance.date == day).options(
+            selectinload(Attendance.sessions)
+        )
+        return list((await self.db.execute(stmt)).scalars().all())
+
     async def last_session_type(self, attendance_id: int) -> SessionType | None:
         stmt = (
             select(AttendanceSession.type)

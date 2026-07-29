@@ -8,6 +8,7 @@ SCHEDULE (business-local wall clock — settings.business_timezone, default
 Asia/Kolkata):
   09:00  ATTENDANCE_REMINDER  -> active field users with no attendance today
   18:00  END_WORK_REMINDER    -> active field users started-but-not-ended today
+  19:00  AUTO_CHECKOUT        -> force-end anyone still on the clock + auto-submit DSR
   23:00  redis cleanup        -> defensive TTL sweep of live keys
   :00/:30 VISIT_REMINDER      -> employees with a planned visit ~1h away
 
@@ -35,13 +36,20 @@ from apscheduler.triggers.cron import CronTrigger
 from app.core.config import get_settings
 from app.core.database import async_session_factory
 from app.core.redis import Keys, get_redis
+from app.repositories.attendance_repository import AttendanceRepository
 from app.repositories.follow_up_repository import FollowUpRepository
 from app.repositories.location_repository import LocationRepository
 from app.repositories.notification_repository import NotificationRepository
 from app.repositories.report_repository import ReportRepository
 from app.repositories.visit_plan_repository import VisitPlanRepository
 from app.schemas.report import ReportFormat
-from app.services.dsr_service import _manager_ids_for_team, mark_late_reports
+from app.services.attendance_service import AttendanceService
+from app.services.dsr_service import (
+    _manager_ids_for_team,
+    business_today,
+    generate_and_submit_dsr,
+    mark_late_reports,
+)
 from app.services.notification_service import NotificationService
 from app.services.report_service import generate_team_report_file
 
@@ -431,6 +439,59 @@ async def escalate_unacknowledged_followups() -> None:
         logger.info("FOLLOW_UP escalations: %d", escalated)
 
 
+async def auto_checkout_job() -> None:
+    """19:00 — force-end anyone still on the clock (STARTED/RESUMED/ON_BREAK/
+    RE_CHECKED_IN) and auto-submit their DSR, exactly as if they'd tapped End
+    with no work summary (mobile's existing logout-triggered auto-checkout —
+    see AttendanceService.auto_checkout / generate_and_submit_dsr).
+
+    Population comes from AttendanceRepository.all_for_date_with_sessions +
+    a real current-state check per row, NOT
+    NotificationRepository.users_started_not_ended_today — that heuristic
+    (has a START, has no END anywhere in history) wrongly skips someone who
+    already ended once today and re-checked in, which is exactly the case
+    this job must still catch.
+
+    Each user is force-ended in their OWN db session/commit so one failure
+    (e.g. a bad row) never blocks the rest — this touches payroll-relevant
+    attendance data, so partial success beats an all-or-nothing transaction.
+    """
+    today = _today_utc()
+    if not await _claim(f"auto_checkout:{today}"):
+        return
+
+    async with async_session_factory() as db:
+        rows = await AttendanceRepository(db).all_for_date_with_sessions(today)
+        open_user_ids = [
+            row.user_id
+            for row in rows
+            if AttendanceService._state_of(row)
+            in ("STARTED", "RESUMED", "ON_BREAK", "RE_CHECKED_IN")
+        ]
+    if not open_user_ids:
+        return
+
+    report_date = business_today()
+    closed = 0
+    for user_id in open_user_ids:
+        try:
+            async with async_session_factory() as db:
+                latest = await LocationRepository(db).latest_for_user(user_id)
+                lat = latest.lat if latest else None
+                lng = latest.lng if latest else None
+                attendance = await AttendanceService(db).auto_checkout(
+                    user_id, today, lat=lat, lng=lng
+                )
+            if attendance is None:
+                continue  # already closed by the time we got here (manual End raced us)
+            await generate_and_submit_dsr(user_id, attendance.id, report_date)
+            closed += 1
+        except Exception:  # noqa: BLE001
+            logger.exception("auto_checkout failed for user %s", user_id)
+    if closed:
+        logger.info("AUTO_CHECKOUT: force-ended %d user(s) at the 19:00 cutoff", closed)
+
+
 async def late_dsr_check_job() -> None:
     """19:30 — mark DRAFT DSRs as is_late; notify each late employee's team
     manager(s) individually (checklist #53 — was previously one aggregate
@@ -757,6 +818,14 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
         max_instances=1,
         coalesce=True,
         misfire_grace_time=1800,
+    )
+    scheduler.add_job(
+        auto_checkout_job,
+        CronTrigger(hour=19, minute=0),
+        id="auto_checkout",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=3600,
     )
     scheduler.add_job(
         late_dsr_check_job,

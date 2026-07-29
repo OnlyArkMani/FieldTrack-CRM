@@ -61,17 +61,23 @@ class _ReCheckOutSummaryModalState extends State<_ReCheckOutSummaryModal> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final timeFmt = DateFormat('hh:mm a');
 
-    // Extract sessions
+    // Extract sessions. There's exactly one START per day, so "first" is
+    // correct for that — but END and RE_CHECKIN can each occur more than
+    // once on a multi-cycle day (check out, re-check in, check out again,
+    // re-check in again, ...). This modal summarizes the CURRENT cycle being
+    // closed, so it needs the LAST checkout and the LAST re-check-in, not
+    // the day's very first ones — firstWhere here would show a stale
+    // checkout time and the wrong remark on a 2nd+ re-check-in.
     final sessions = widget.attendance.sessions;
     final initialCheckIn = sessions.firstWhere(
       (s) => s.type == SessionType.start,
       orElse: () => sessions.first,
     );
-    final initialCheckOut = sessions.firstWhere(
+    final initialCheckOut = sessions.lastWhere(
       (s) => s.type == SessionType.end,
       orElse: () => sessions.last,
     );
-    final reCheckIn = sessions.firstWhere(
+    final reCheckIn = sessions.lastWhere(
       (s) => s.type == SessionType.reCheckIn,
       orElse: () => sessions.last,
     );

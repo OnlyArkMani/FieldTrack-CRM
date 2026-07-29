@@ -62,6 +62,16 @@ enum MachineState {
   bool get notStarted => this == MachineState.none;
 }
 
+/// True once it's noon or later in the business timezone (Asia/Kolkata,
+/// fixed UTC+5:30 — no DST) — the backend closes START/RE_CHECKIN at this
+/// same cutoff (see AttendanceService._checkin_cutoff_passed). This is a
+/// UX pre-check only; the backend is the real gate regardless of device
+/// clock/timezone.
+bool isPastNoonCutoffIst() {
+  final ist = DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30));
+  return ist.hour >= 12;
+}
+
 class AttendanceStatusValue {
   // Day classification (present/absent/half_day/on_leave).
   static const present = 'PRESENT';

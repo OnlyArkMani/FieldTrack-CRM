@@ -23,6 +23,7 @@ import '../widgets/leave_action.dart';
 import '../widgets/session_timeline.dart';
 import '../widgets/work_summary_sheet.dart';
 import '../widgets/re_checkin_remark_sheet.dart';
+import '../widgets/re_checkout_summary_modal.dart';
 
 /// The employee's daily home: the attendance state machine. One prominent
 /// status card drives START → BREAK ⇄ RESUME → END, with a live timer, a
@@ -66,7 +67,19 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
   }
 
   void _onEndTap() async {
-    final summary = await showWorkSummarySheet(context);
+    // Re-checked-in today => show the richer confirmation (initial check-in/
+    // out, re-check-in remark, final check-out) instead of the plain
+    // work-summary box, matching the dashboard tile's Checkout button
+    // (attendance_status_tile.dart._checkOut) — two different End/Checkout
+    // buttons shouldn't behave differently for the same underlying state.
+    final uiState = ref.read(attendanceProvider);
+    final attendance = uiState.attendance;
+    final String? summary;
+    if (uiState.state == MachineState.reCheckedIn && attendance != null) {
+      summary = await showReCheckOutSummaryModal(context, attendance: attendance);
+    } else {
+      summary = await showWorkSummarySheet(context);
+    }
     if (summary == null || !mounted) return;
     await ref.read(attendanceProvider.notifier).end(summary);
     if (!mounted) return;
@@ -285,13 +298,14 @@ class _NotStarted extends ConsumerWidget {
     final colors = context.appColors;
     final starting =
         state.isSubmitting && state.pendingAction == SessionType.start;
+    final cutoffPassed = isPastNoonCutoffIst();
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         const _PulseRing(),
         const SizedBox(height: AppDimens.grid * 2.5),
         Text(
-          'Ready to start your day?',
+          cutoffPassed ? 'Check-in closed for today' : 'Ready to start your day?',
           style: AppTextStyles.heading
               .copyWith(color: Theme.of(context).colorScheme.onSurface),
           textAlign: TextAlign.center,
@@ -300,7 +314,9 @@ class _NotStarted extends ConsumerWidget {
         ),
         const SizedBox(height: AppDimens.grid * 0.5),
         Text(
-          'Tap start to clock in. We’ll capture your location.',
+          cutoffPassed
+              ? 'Check-in closes at 12:00 PM. You can still apply for leave.'
+              : 'Tap start to clock in. We’ll capture your location.',
           style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
           textAlign: TextAlign.center,
           maxLines: 2,
@@ -311,7 +327,7 @@ class _NotStarted extends ConsumerWidget {
           label: 'Start',
           icon: Icons.play_arrow_rounded,
           isLoading: starting,
-          onPressed: starting ? null : onStart,
+          onPressed: (starting || cutoffPassed) ? null : onStart,
         ),
       ],
     );
@@ -578,6 +594,7 @@ class _Ended extends ConsumerWidget {
     final colors = context.appColors;
     final scheme = Theme.of(context).colorScheme;
     final a = state.attendance!;
+    final cutoffPassed = isPastNoonCutoffIst();
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -647,17 +664,27 @@ class _Ended extends ConsumerWidget {
           variant: AppButtonVariant.secondary,
           isLoading:
               state.isSubmitting && state.pendingAction == SessionType.reCheckIn,
-          onPressed: (state.isSubmitting || state.isNavigatingToDsr)
-              ? null
-              : () async {
-                  final remark = await showReCheckInRemarkSheet(context);
-                  if (remark != null && context.mounted) {
-                    await ref
-                        .read(attendanceProvider.notifier)
-                        .reCheckIn(remark);
-                  }
-                },
+          onPressed:
+              (state.isSubmitting || state.isNavigatingToDsr || cutoffPassed)
+                  ? null
+                  : () async {
+                      final remark = await showReCheckInRemarkSheet(context);
+                      if (remark != null && context.mounted) {
+                        await ref
+                            .read(attendanceProvider.notifier)
+                            .reCheckIn(remark);
+                      }
+                    },
         ),
+        if (cutoffPassed) ...[
+          const SizedBox(height: AppDimens.grid * 0.75),
+          Text(
+            'Re-check-in closes at 12:00 PM.',
+            style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ],
     );
   }

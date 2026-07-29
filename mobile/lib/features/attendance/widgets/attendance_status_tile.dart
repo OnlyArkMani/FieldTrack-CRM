@@ -83,32 +83,47 @@ class AttendanceStatusTile extends ConsumerWidget {
 
     final ui = ref.watch(attendanceProvider);
     final colors = context.appColors;
+    final cutoffPassed = isPastNoonCutoffIst();
 
     return switch (ui.state) {
       MachineState.none => AppCard(
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: AppButton(
-                  label: 'Check In',
-                  icon: Icons.login_rounded,
-                  isLoading: ui.isSubmitting,
-                  onPressed: ui.isSubmitting || ui.isMarkingLeave
-                      ? null
-                      : () => _checkIn(context, ref),
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: AppButton(
+                      label: 'Check In',
+                      icon: Icons.login_rounded,
+                      isLoading: ui.isSubmitting,
+                      onPressed: ui.isSubmitting || ui.isMarkingLeave || cutoffPassed
+                          ? null
+                          : () => _checkIn(context, ref),
+                    ),
+                  ),
+                  const SizedBox(width: AppDimens.grid * 1.5),
+                  Expanded(
+                    child: AppButton(
+                      label: 'On Leave',
+                      variant: AppButtonVariant.secondary,
+                      isLoading: ui.isMarkingLeave,
+                      onPressed: ui.isSubmitting || ui.isMarkingLeave
+                          ? null
+                          : () => _markLeave(context, ref),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: AppDimens.grid * 1.5),
-              Expanded(
-                child: AppButton(
-                  label: 'On Leave',
-                  variant: AppButtonVariant.secondary,
-                  isLoading: ui.isMarkingLeave,
-                  onPressed: ui.isSubmitting || ui.isMarkingLeave
-                      ? null
-                      : () => _markLeave(context, ref),
+              if (cutoffPassed) ...[
+                const SizedBox(height: AppDimens.grid * 0.75),
+                Text(
+                  'Check-in closes at 12:00 PM.',
+                  style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -207,10 +222,22 @@ class AttendanceStatusTile extends ConsumerWidget {
               icon: Icons.replay_rounded,
               variant: AppButtonVariant.secondary,
               isLoading: ui.isSubmitting,
-              onPressed: ui.isSubmitting || ui.isMarkingLeave || ui.isNavigatingToDsr
+              onPressed: ui.isSubmitting ||
+                      ui.isMarkingLeave ||
+                      ui.isNavigatingToDsr ||
+                      cutoffPassed
                   ? null
                   : () => _reCheckIn(context, ref),
             ),
+            if (cutoffPassed) ...[
+              const SizedBox(height: AppDimens.grid * 0.75),
+              Text(
+                'Re-check-in closes at 12:00 PM.',
+                style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
             const SizedBox(height: AppDimens.grid),
             Align(
               alignment: Alignment.centerLeft,
