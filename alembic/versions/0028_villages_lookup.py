@@ -7,16 +7,16 @@ WHAT CHANGES
 - B-tree index on ``district_name`` for district-filter queries.
 - UNIQUE on ``village_code`` (LGD code) so the seeder upserts safely.
 
-Revision: 0027
-Prev: 0026
+Revision: 0028
+Prev: 0027
 """
 from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0027"
-down_revision: Union[str, None] = "0026"
+revision: str = "0028"
+down_revision: Union[str, None] = "0027"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
