@@ -140,6 +140,26 @@ class AuditLog(Base):
     )
 
 
+class Village(Base):
+    """LGD village reference data — seeded from data.gov.in, read-only at runtime.
+
+    Searched via pg_trgm GIN index on village_name (see migration 0027).
+    village_code is the LGD unique key; the seeder upserts on it."""
+
+    __tablename__ = "villages"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    village_code: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    village_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    village_name_local: Mapped[str | None] = mapped_column(String(200))
+    subdistrict_code: Mapped[int | None] = mapped_column(BigInteger)
+    subdistrict_name: Mapped[str | None] = mapped_column(String(200))
+    district_code: Mapped[int | None] = mapped_column(BigInteger)
+    district_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    state_code: Mapped[int] = mapped_column(Integer, nullable=False)
+    state_name: Mapped[str] = mapped_column(String(100), nullable=False)
+
+
 class Setting(Base):
     __tablename__ = "settings"
 
