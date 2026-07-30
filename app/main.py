@@ -43,6 +43,15 @@ from app.core.storage import get_storage
 from app.workers.sync_cleanup import run_cleanup
 
 settings = get_settings()
+
+# Without this, the root logger stays at Python's default WARNING with no
+# handler, so every logger.info() in the app (including APScheduler's own
+# "Running job.../executed successfully" lines) is silently dropped —
+# scheduled jobs like auto_checkout would run with zero trace in the logs.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 logger = logging.getLogger("fieldtrack.main")
 
 

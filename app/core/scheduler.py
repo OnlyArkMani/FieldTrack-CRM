@@ -469,6 +469,7 @@ async def auto_checkout_job() -> None:
             in ("STARTED", "RESUMED", "ON_BREAK", "RE_CHECKED_IN")
         ]
     if not open_user_ids:
+        logger.info("AUTO_CHECKOUT: ran at the 19:00 cutoff, nobody was on the clock")
         return
 
     report_date = business_today()
@@ -739,9 +740,16 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     the lifespan and shuts it down on exit."""
     settings = get_settings()
     scheduler = AsyncIOScheduler(timezone=settings.business_timezone)
+    # CronTrigger defaults to the OS-local timezone (UTC in Docker) when no
+    # `timezone=` is given — the scheduler's own `timezone=` above only sets
+    # ITS default, it is NOT inherited by trigger objects constructed
+    # explicitly like `CronTrigger(hour=19, minute=0)`. Every trigger below
+    # must be passed `timezone=tz` explicitly, or these all silently run on
+    # the container's OS clock instead of business_timezone.
+    tz = scheduler.timezone
     scheduler.add_job(
         attendance_reminder_job,
-        CronTrigger(hour=9, minute=0),
+        CronTrigger(hour=9, minute=0, timezone=tz),
         id="attendance_reminder",
         max_instances=1,
         coalesce=True,
@@ -749,7 +757,7 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     )
     scheduler.add_job(
         end_work_reminder_job,
-        CronTrigger(hour=18, minute=0),
+        CronTrigger(hour=18, minute=0, timezone=tz),
         id="end_work_reminder",
         max_instances=1,
         coalesce=True,
@@ -757,7 +765,7 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     )
     scheduler.add_job(
         missed_visits_reminder_job,
-        CronTrigger(hour=18, minute=30),
+        CronTrigger(hour=18, minute=30, timezone=tz),
         id="missed_visits_reminder",
         max_instances=1,
         coalesce=True,
@@ -765,7 +773,7 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     )
     scheduler.add_job(
         redis_cleanup_job,
-        CronTrigger(hour=23, minute=0),
+        CronTrigger(hour=23, minute=0, timezone=tz),
         id="redis_cleanup",
         max_instances=1,
         coalesce=True,
@@ -773,7 +781,7 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     )
     scheduler.add_job(
         check_unsubmitted_plans,
-        CronTrigger(hour=20, minute=0),
+        CronTrigger(hour=20, minute=0, timezone=tz),
         id="check_unsubmitted_plans",
         max_instances=1,
         coalesce=True,
@@ -781,7 +789,7 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     )
     scheduler.add_job(
         send_24h_followup_reminders,
-        CronTrigger(hour=8, minute=0),
+        CronTrigger(hour=8, minute=0, timezone=tz),
         id="fu_24h_reminders",
         max_instances=1,
         coalesce=True,
@@ -789,7 +797,7 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     )
     scheduler.add_job(
         send_24h_followup_reminders_precise,
-        CronTrigger(minute="0,30"),
+        CronTrigger(minute="0,30", timezone=tz),
         id="fu_24h_reminders_precise",
         max_instances=1,
         coalesce=True,
@@ -797,7 +805,7 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     )
     scheduler.add_job(
         send_1h_followup_reminders,
-        CronTrigger(minute="0,30"),
+        CronTrigger(minute="0,30", timezone=tz),
         id="fu_1h_reminders",
         max_instances=1,
         coalesce=True,
@@ -805,7 +813,7 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     )
     scheduler.add_job(
         send_visit_reminders,
-        CronTrigger(minute="0,30"),
+        CronTrigger(minute="0,30", timezone=tz),
         id="visit_reminders",
         max_instances=1,
         coalesce=True,
@@ -813,7 +821,7 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     )
     scheduler.add_job(
         escalate_unacknowledged_followups,
-        CronTrigger(minute=15),
+        CronTrigger(minute=15, timezone=tz),
         id="fu_escalation",
         max_instances=1,
         coalesce=True,
@@ -821,7 +829,7 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     )
     scheduler.add_job(
         auto_checkout_job,
-        CronTrigger(hour=19, minute=0),
+        CronTrigger(hour=12, minute=15, timezone=tz),
         id="auto_checkout",
         max_instances=1,
         coalesce=True,
@@ -829,7 +837,7 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     )
     scheduler.add_job(
         late_dsr_check_job,
-        CronTrigger(hour=19, minute=30),
+        CronTrigger(hour=19, minute=30, timezone=tz),
         id="late_dsr_check",
         max_instances=1,
         coalesce=True,
@@ -837,7 +845,7 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     )
     scheduler.add_job(
         refresh_gps_config_cache,
-        CronTrigger(hour=0, minute=0),
+        CronTrigger(hour=0, minute=0, timezone=tz),
         id="refresh_gps_config_cache",
         max_instances=1,
         coalesce=True,
@@ -845,7 +853,7 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     )
     scheduler.add_job(
         absentee_alert_job,
-        CronTrigger(hour=9, minute=30),
+        CronTrigger(hour=9, minute=30, timezone=tz),
         id="absentee_alert",
         max_instances=1,
         coalesce=True,
@@ -854,7 +862,7 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     scheduler.add_job(
         stationary_alert_job,
         # Every 30 min across field hours (10:00–17:30 business tz).
-        CronTrigger(hour="10-17", minute="0,30"),
+        CronTrigger(hour="10-17", minute="0,30", timezone=tz),
         id="stationary_alert",
         max_instances=1,
         coalesce=True,
@@ -862,7 +870,7 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     )
     scheduler.add_job(
         weekly_report_job,
-        CronTrigger(day_of_week="mon", hour=7, minute=0),
+        CronTrigger(day_of_week="mon", hour=7, minute=0, timezone=tz),
         id="weekly_report",
         max_instances=1,
         coalesce=True,
@@ -870,7 +878,7 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     )
     scheduler.add_job(
         monthly_report_job,
-        CronTrigger(day=1, hour=6, minute=0),
+        CronTrigger(day=1, hour=6, minute=0, timezone=tz),
         id="monthly_report",
         max_instances=1,
         coalesce=True,
