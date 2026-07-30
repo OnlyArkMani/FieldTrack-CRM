@@ -37,6 +37,7 @@ from app.schemas.report import (
     ReportTableOut,
     ReportType,
 )
+from app.services.dsr_service import business_today
 from app.services.report_service import ReportService, ReportStore, run_report_job
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -56,6 +57,7 @@ async def generate_report(
     # explicit contract and additionally rejects future end dates.
     start_date = body.filters.start_date
     end_date = body.filters.end_date
+    today = business_today()
     if start_date is not None and end_date is not None:
         if (end_date - start_date).days > 31:
             raise HTTPException(
@@ -63,7 +65,7 @@ async def generate_report(
                 detail="Date range cannot exceed 31 days.",
                 headers={"X-Error-Code": "DATE_RANGE_TOO_LARGE"},
             )
-    if end_date is not None and end_date > date.today():
+    if end_date is not None and end_date > today:
         raise HTTPException(
             status_code=400,
             detail="End date cannot be in the future.",
@@ -101,6 +103,7 @@ async def preview_report(
     """Synchronously compute and return preview table data using ReportService engine."""
     start_date = body.filters.start_date
     end_date = body.filters.end_date
+    today = business_today()
     if start_date is not None and end_date is not None:
         if (end_date - start_date).days > 31:
             raise HTTPException(
@@ -108,7 +111,7 @@ async def preview_report(
                 detail="Date range cannot exceed 31 days.",
                 headers={"X-Error-Code": "DATE_RANGE_TOO_LARGE"},
             )
-    if end_date is not None and end_date > date.today():
+    if end_date is not None and end_date > today:
         raise HTTPException(
             status_code=400,
             detail="End date cannot be in the future.",

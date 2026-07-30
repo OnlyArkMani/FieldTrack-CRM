@@ -43,6 +43,7 @@ from app.schemas.report import (
     ReportStatus,
     ReportType,
 )
+from app.services.dsr_service import business_today
 
 logger = logging.getLogger("fieldtrack.reports")
 
@@ -167,7 +168,7 @@ class ReportService:
             if filters.team_id not in managed:
                 raise forbidden("You don't manage this team")
 
-        month = filters.month or date.today().replace(day=1)
+        month = filters.month or business_today().replace(day=1)
         start, end = self._month_bounds(month)
         return NormalizedReport(
             type=ReportType.TEAM, start=start, end=end, team_id=team.id,
@@ -262,7 +263,7 @@ class ReportService:
         return NormalizedReport(
             type=ReportType.FARMER_EXPORT,
             start=date(2000, 1, 1),
-            end=date.today(),
+            end=business_today(),
             team_id=None,
             user_id=None,
             status=None,
@@ -306,7 +307,7 @@ class ReportService:
             team = await self.repo.get_team(team_id)
             scope_label = f"Team: {team.name if team else team_id}"
 
-        today = date.today()
+        today = business_today()
         return NormalizedReport(
             type=ReportType.LEAD_PIPELINE, start=today, end=today,
             team_id=team_id, user_id=user_id, status=None,
@@ -788,7 +789,7 @@ class ReportService:
             generated_at=datetime.now(timezone.utc),
             summary=summary,
             tables=[ReportTable(name="Leads", columns=columns, rows=table_rows)],
-            filename_stem=f"lead_pipeline_{date.today().isoformat()}",
+            filename_stem=f"lead_pipeline_{business_today().isoformat()}",
         )
 
     @staticmethod
@@ -1406,7 +1407,7 @@ class ReportService:
     ) -> tuple[date, date]:
         if start and end:
             return start, end
-        today = date.today()
+        today = business_today()
         if end and not start:
             return end - timedelta(days=DEFAULT_RANGE_DAYS), end
         if start and not end:
@@ -1417,7 +1418,7 @@ class ReportService:
     def _month_bounds(month: date) -> tuple[date, date]:
         first = month.replace(day=1)
         last = date(month.year, month.month, monthrange(month.year, month.month)[1])
-        today = date.today()
+        today = business_today()
         if last > today and first <= today:
             last = today  # current month: stop at today
         return first, last

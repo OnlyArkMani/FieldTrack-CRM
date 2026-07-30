@@ -149,8 +149,10 @@ class ReportRepository {
         totalRecords: rows.length,
         summarySubtitle: res['subtitle'] as String?,
       );
-    } catch (_) {
-      return const ReportTableData(columns: [], rows: []);
+    } on DioException catch (e) {
+      throw ApiClient.mapError(e);
+    } catch (e) {
+      rethrow;
     }
   }
 }
