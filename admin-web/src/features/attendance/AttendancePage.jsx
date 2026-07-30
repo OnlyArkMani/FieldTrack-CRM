@@ -133,7 +133,7 @@ export default function AttendancePage() {
           columns={columns}
           rows={rows}
           loading={isLoading}
-          onRowClick={(r) => r.id && setOverride(r)}
+          onRowClick={(r) => r.id && !r.isAbsent && setOverride(r)}
           empty={`No attendance recorded for ${dayjs(date).format('MMM D, YYYY')}`}
         />
       </Card>

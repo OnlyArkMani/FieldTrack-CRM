@@ -21,26 +21,29 @@ export function useAttendanceForDate(date) {
       const attItems = attRes.data?.items || [];
       const employees = empsRes.data?.items || [];
 
-      // Map existing attendance items by employee/user ID
+      // Map existing attendance items by employee/user ID (coerce to String to avoid type mismatch)
       const attMap = new Map();
       for (const item of attItems) {
-        const empId = item.employee?.id || item.user_id;
-        if (empId) attMap.set(empId, item);
+        const empId = item.employee?.id ?? item.user_id;
+        if (empId !== undefined && empId !== null) {
+          attMap.set(String(empId), item);
+        }
       }
 
       const merged = [];
       for (const emp of employees) {
-        const record = attMap.get(emp.id);
+        const key = String(emp.id);
+        const record = attMap.get(key);
         if (record) {
           merged.push({
             ...record,
             employee: record.employee || emp,
           });
-          attMap.delete(emp.id);
+          attMap.delete(key);
         } else {
           // Employee has no attendance entry for this date -> ABSENT / Not started
           merged.push({
-            id: null,
+            id: `absent-${emp.id}`,
             user_id: emp.id,
             employee: emp,
             status: 'ABSENT',
