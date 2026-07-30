@@ -829,7 +829,7 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     )
     scheduler.add_job(
         auto_checkout_job,
-        CronTrigger(hour=12, minute=15, timezone=tz),
+        CronTrigger(hour=19, minute=0, timezone=tz),
         id="auto_checkout",
         max_instances=1,
         coalesce=True,
