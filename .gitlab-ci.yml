@@ -333,71 +333,31 @@ Build-&-Deployment-Dev:
     - echo "" > ~/.aws/credentials
     - echo "Docker compose up for dev complete."
 
-Build-&-Deployment-Stage:
+Build-&-Deployment-stage:
   stage: stage
   tags:
     - gcp
-  needs: 
-    - job: test:zap
-      optional: true
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main" && $DEPLOYMENT_ON_STAGING_CLIENT != "true" && $DEPLOYMENT_ON_STAGING_EXTERNAL != "true"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
       when: manual
     - when: never
   script:
-    - COMPOSE_STAGING=$(echo $COMPOSE_STAGING | tr '[A-Z]' '[a-z]')
-    - |
-      api=$(curl -X GET "https://gitlab.thewitslab.com/api/v4/projects/$CI_PROJECT_ID" -H "Private-Token: $GITLAB_ACCESS_TOKEN")
-      CLIENT_NAME=$(echo $api | jq '.namespace.name' | sed 's/"//g' | sed s/WIL-//g | sed s/WIL_//g | tr '[A-Z]' '[a-z]' | sed 's/_/-/g')
-      inputString=$(echo $CI_PROJECT_NAME | tr '[A-Z]' '[a-z]' | sed 's/_/-/g')
-      original_string=$inputString
-      original_string=$(echo $original_string | tr '[A-Z]' '[a-z]')
-      if [[ $original_string = wil* ]];then
-        inputString=$(echo $original_string | sed 's/wil//')
-      fi
-      NAME="${CLIENT_NAME%%-*}"
-      NEW_CLIENT_NAME=$(echo $CLIENT_NAME | sed 's/'$NAME-'//g')
-      NEW_NAME="${NEW_CLIENT_NAME%%-*}"
-      project_name=$(echo $inputString | cut -d'-' -f1-2)
-      if [[ $NEW_NAME == $project_name  ]];then
-        PROJECT_NAME=$project_name
-      else
-        validation=$(echo $NEW_NAME | cut -d'-' -f1)
-        validation_Repo=$(echo $project_name | cut -d'-' -f1)
-        if [[ $validation ==  $validation_Repo ]];then
-          project_name=$(echo $project_name | sed 's/'$validation-'//g')
-        fi
-        PROJECT_NAME=$NEW_NAME-$project_name
-      fi
-    - |
-      if [[ $PROJECT_NAME == *"--"* ]];then
-        PROJECT_NAME=$(echo $PROJECT_NAME | sed 's/-//')
-      fi
-      if [[ $PROJECT_NAME == "-"* ]];then
-        PROJECT_NAME=$(echo $PROJECT_NAME | sed 's/-//')
-      fi
-    - |
-      if [[ ! -z $DOMAIN ]];then
-        PROJECT_NAME=$DOMAIN
-        echo "Deployment is going through custom domain."
-      fi
+    - echo "Deploying cattle-feed-gatipay-backend-NestJs to STAGING"
     - Path=$(pwd)
-    - bash -c '(cd /home/$Default_Username/script && ./env_script.sh staging $CI_PROJECT_NAME"-staging" $VAULT_TOKEN > /dev/null)'
+    - bash -c '(cd /home/$Default_Username/script && ./env_script.sh staging "cattle-feed-gatipay-backend-NestJs-staging" $VAULT_TOKEN > /dev/null)'
     - mv /home/$Default_Username/script/.env $Path && cd $Path
     - |
-      ssh $Staging_User@$Staging_Server "
-        if [[ -d ./backend/"WIL-"$CI_PROJECT_NAME"-staging" ]]; then
-          cd /home/$Staging_User/backend/"WIL-"$CI_PROJECT_NAME"-staging"
-          docker compose -f $COMPOSE_STAGING down --remove-orphans
-          cd .. && rm -rf "WIL-"$CI_PROJECT_NAME"-staging"
+      ssh $Default_Username@$FARMER_STAGING_HOST "
+        if [[ -d /home/$Default_Username/backend/WIL-$CI_PROJECT_NAME-staging ]]; then
+          cd /home/$Default_Username/backend/WIL-$CI_PROJECT_NAME-staging
+          docker compose -f docker-compose-staging.yaml down
+          cd && rm -rf ./backend/WIL-$CI_PROJECT_NAME-staging
         fi "
-    - ssh $Staging_User@$Staging_Server "mkdir -p ./backend/"WIL-"$CI_PROJECT_NAME"-staging""
-    - scp -r * .env $Staging_User@$Staging_Server:/home/$Staging_User/backend/"WIL-"$CI_PROJECT_NAME"-staging"
-    - ssh $Staging_User@$Staging_Server "
-        cd /home/$Staging_User/backend/"WIL-"$CI_PROJECT_NAME"-staging" && docker compose -f $COMPOSE_STAGING up -d --build "
-    - ssh $Staging_User@$Staging_Server " ./scripts/nginx-backend.sh $PROJECT_NAME"-staging" $VAULT_TOKEN $PORT_STAGING "
-    - aws configure set aws_access_key_id $AWS_ACCESS_KEY; aws configure set aws_secret_access_key $AWS_SECRET_KEY; aws configure set default.region $AWS_ZONE
-    - cd /home/$Staging_User/script && ./dns-nginx-staging.sh $PROJECT_NAME"-staging" $VAULT_TOKEN
-    - echo "" > ~/.aws/config
-    - echo "" > ~/.aws/credentials
-    - echo "Docker compose up for staging complete."
+    - ssh $Default_Username@$FARMER_STAGING_HOST "cd ./backend && git clone -b main https://user:'$GITLAB_ACCESS_TOKEN'@gitlab.thewitslab.com/wil-workspace/wil-gatipay/cattle-feed-gatipay-backend-nestjs.git WIL-$CI_PROJECT_NAME-staging"
+
+    - scp .env $Default_Username@$FARMER_STAGING_HOST:/home/$Default_Username/backend/WIL-$CI_PROJECT_NAME-staging
+    - ssh -tt $Default_Username@$FARMER_STAGING_HOST "
+        cd /home/$Default_Username/backend/WIL-$CI_PROJECT_NAME-staging && docker compose -f docker-compose-staging.yaml up -d --build"
+
+    - echo "Docker compose up for staging environment complete."
+    - echo "HOSTED URL:- https://cattle-feed-gatipay-admin-staging.gatipay.in"
