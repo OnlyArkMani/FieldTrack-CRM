@@ -40,6 +40,7 @@ from app.core.exceptions import DEFAULT_ERROR_CODES, ApiError
 from app.core.redis import close_redis, get_redis
 from app.core.scheduler import build_reminder_scheduler
 from app.core.storage import get_storage
+from app.core.telemetry import setup_telemetry
 from app.workers.sync_cleanup import run_cleanup
 
 settings = get_settings()
@@ -127,6 +128,8 @@ app = FastAPI(
     else None,
     lifespan=lifespan,
 )
+
+setup_telemetry(app)
 
 app.add_middleware(
     CORSMiddleware,

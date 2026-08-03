@@ -19,7 +19,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -621,40 +621,3 @@ class EmployeeService:
         await self.db.refresh(user)
         return UserOut.model_validate(user)
 
-    # ── Database reset (dev/staging only) ───────────────────────────────
-    async def reset_database(self) -> dict[str, int]:
-        """Truncate all tables, then re-seed the default admin.
-        Order respects FK constraints (children before parents)."""
-        tables = [
-            "visit_org_answers", "follow_ups", "daily_reports", "leads",
-            "visit_orders", "visit_photos", "visit_notes", "visits",
-            "visit_plan_items", "visit_plans", "livestock_profiles",
-            "customers", "geofence_events", "geofences", "location_logs",
-            "attendance_sessions", "attendance", "gps_config",
-            "device_info", "notifications", "sync_queue", "audit_logs",
-            "settings",
-        ]
-        counts: dict[str, int] = {}
-        for table in tables:
-            result = await self.db.execute(text(f"DELETE FROM {table}"))
-            counts[table] = result.rowcount
-
-        counts["users"] = (await self.db.execute(delete(User))).rowcount
-        counts["teams"] = (await self.db.execute(delete(Team))).rowcount
-
-        # Re-seed the default admin
-        admin = User(
-            name="Admin User",
-            email="admin@fieldtrack.com",
-            phone="9000000001",
-            password_hash=hash_password("Admin@123"),
-            role=UserRole.ADMIN,
-            is_active=True,
-        )
-        self.db.add(admin)
-
-        # Clear all Redis keys
-        await self.redis.flushdb()
-
-        await self.db.commit()
-        return counts
