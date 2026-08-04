@@ -10,9 +10,8 @@ Call order in main.py:
   setup_telemetry(app)   ← after app creation so FastAPI instrumentation wraps it
 
 DECISIONS:
-- OTLP gRPC: lower overhead than HTTP/JSON; standard for all major collectors.
-- insecure derived from endpoint scheme: http:// → no TLS (internal collectors);
-  https:// → TLS (cloud providers like Honeycomb, Datadog).
+- OTLP HTTP/JSON: port 4318; simpler firewall/proxy rules than gRPC.
+- TLS inferred from endpoint scheme: http:// → plaintext, https:// → TLS.
 - SQLAlchemy: pass sync_engine explicitly — the auto-detect path is unreliable
   with SQLAlchemy 2.0 async (asyncpg).
 - Redis: global patch via RedisInstrumentor() — no engine ref needed.
@@ -34,7 +33,7 @@ def setup_telemetry(app) -> None:
 
     try:
         from opentelemetry import trace
-        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
         from opentelemetry.instrumentation.redis import RedisInstrumentor
         from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
@@ -47,8 +46,7 @@ def setup_telemetry(app) -> None:
         resource = Resource.create({SERVICE_NAME: settings.otel_service_name})
         provider = TracerProvider(resource=resource)
 
-        insecure = not settings.otel_endpoint.startswith("https://")
-        exporter = OTLPSpanExporter(endpoint=settings.otel_endpoint, insecure=insecure)
+        exporter = OTLPSpanExporter(endpoint=settings.otel_endpoint)
         provider.add_span_processor(BatchSpanProcessor(exporter))
         trace.set_tracer_provider(provider)
 
