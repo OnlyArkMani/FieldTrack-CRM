@@ -10,7 +10,7 @@ Call order in main.py:
   setup_telemetry(app)   ← after app creation so FastAPI instrumentation wraps it
 
 DECISIONS:
-- OTLP HTTP/JSON: port 4318; simpler firewall/proxy rules than gRPC.
+- OTLP gRPC: port 4317; lower overhead than HTTP, protobuf native.
 - TLS inferred from endpoint scheme: http:// → plaintext, https:// → TLS.
 - SQLAlchemy: pass sync_engine explicitly — the auto-detect path is unreliable
   with SQLAlchemy 2.0 async (asyncpg).
@@ -33,7 +33,7 @@ def setup_telemetry(app) -> None:
 
     try:
         from opentelemetry import trace
-        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
         from opentelemetry.instrumentation.redis import RedisInstrumentor
         from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
