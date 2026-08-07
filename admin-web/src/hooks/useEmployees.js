@@ -66,6 +66,16 @@ export function useSetEmployeeStatus() {
   });
 }
 
+export function useUpdateEmployeePassword(id) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (newPassword) =>
+      (await api.patch(`/employees/${id}/password`, { new_password: newPassword })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: [KEY] }),
+  });
+}
+
+
 /** Mock-GPS integrity for one employee (7-day window). Admin/manager only;
  *  this anti-gaming data is never shown to the employee. Refetched on an
  *  interval so the detail page stays current without a manual reload. */

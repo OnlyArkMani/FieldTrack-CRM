@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Power, Pencil, ShieldAlert } from "lucide-react";
+import { Plus, Power, Pencil, ShieldAlert, KeyRound } from "lucide-react";
 
 import { useEmployees, useSetEmployeeStatus } from "@/hooks/useEmployees";
 import { useTeams } from "@/hooks/useTeams";
@@ -15,6 +15,7 @@ import Button from "@/components/ui/Button";
 import Avatar from "@/components/ui/Avatar";
 import { Select } from "@/components/ui/Input";
 import EmployeeFormModal from "./EmployeeFormModal";
+import ChangePasswordModal from "./ChangePasswordModal";
 
 export default function EmployeesPage() {
   const navigate = useNavigate();
@@ -23,6 +24,7 @@ export default function EmployeesPage() {
   const [teamId, setTeamId] = useState("");
   const [status, setStatus] = useState("");
   const [modal, setModal] = useState({ open: false, employee: null });
+  const [passwordModal, setPasswordModal] = useState({ open: false, employee: null });
 
   const { data, isLoading } = useEmployees({
     teamId: teamId || undefined,
@@ -131,6 +133,16 @@ export default function EmployeesPage() {
           <Button
             size="sm"
             variant="ghost"
+            icon={KeyRound}
+            onClick={(ev) => {
+              ev.stopPropagation();
+              setPasswordModal({ open: true, employee: e });
+            }}
+            title="Change Password"
+          />
+          <Button
+            size="sm"
+            variant="ghost"
             icon={Power}
             onClick={(ev) => toggleActive(e, ev)}
             title={e.is_active ? "Deactivate" : "Activate"}
@@ -208,6 +220,12 @@ export default function EmployeesPage() {
         open={modal.open}
         employee={modal.employee}
         onClose={() => setModal({ open: false, employee: null })}
+      />
+
+      <ChangePasswordModal
+        open={passwordModal.open}
+        employee={passwordModal.employee}
+        onClose={() => setPasswordModal({ open: false, employee: null })}
       />
     </div>
   );
