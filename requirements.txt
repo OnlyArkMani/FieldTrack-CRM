@@ -38,6 +38,16 @@ reportlab==4.4.0              # PDF
 # MinIO, DigitalOcean Spaces, etc. via S3_ENDPOINT_URL.
 boto3==1.34.144
 
+# OpenTelemetry — distributed tracing via OTLP HTTP (Jaeger, Tempo, Honeycomb,
+# Datadog, etc.). No-op when OTEL_ENABLED=false or OTEL_ENDPOINT unset — dev
+# environments need zero extra setup.
+opentelemetry-sdk==1.27.0
+opentelemetry-api==1.27.0
+opentelemetry-instrumentation-fastapi==0.48b0
+opentelemetry-instrumentation-sqlalchemy==0.48b0
+opentelemetry-instrumentation-redis==0.48b0
+opentelemetry-exporter-otlp-proto-grpc==1.27.0
+
 # Testing
 pytest==8.3.5
 pytest-asyncio==0.26.0

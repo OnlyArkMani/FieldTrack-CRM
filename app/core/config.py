@@ -100,6 +100,12 @@ class Settings(BaseSettings):
     # "last month" of employee trails the dashboard needs. Tune via env.
     location_retention_days: int = 31
 
+    # OpenTelemetry — traces sent to OTLP gRPC collector (DevOps-supplied endpoint).
+    # No-op when disabled or endpoint is empty — dev environments skip this entirely.
+    otel_enabled: bool = False
+    otel_endpoint: str = ""          # e.g. http://otel-collector:4317
+    otel_service_name: str = "samarth-sathi-api"
+
     # Background jobs
     cleanup_enabled: bool = True  # daily housekeeping worker (APScheduler)
     reminders_enabled: bool = True  # daily attendance reminder jobs (APScheduler)

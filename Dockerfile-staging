@@ -1,0 +1,26 @@
+
+FROM python:3.11-slim AS builder
+
+ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+WORKDIR /build
+COPY requirements.txt .
+RUN pip install --prefix=/install -r requirements.txt
+
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Non-root user — UID/GID pinned to 1000 for reproducibility.
+RUN groupadd -r -g 1000 fieldtrack && useradd -r -u 1000 -g fieldtrack fieldtrack
+
+COPY --from=builder /install /usr/local
+WORKDIR /srv/fieldtrack
+COPY alembic.ini ./
+COPY alembic ./alembic
+COPY app ./app
+
+USER fieldtrack
+EXPOSE 8000
+
+CMD ["sh", "-c", "gunicorn app.main:app -k uvicorn.workers.UvicornWorker --workers ${GUNICORN_WORKERS:-2} --bind 0.0.0.0:8000 --access-logfile - --error-logfile - --timeout 60"]
