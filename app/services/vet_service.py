@@ -55,7 +55,8 @@ class VetService:
             if not user.team_id:
                 return []
             q = q.where(User.team_id == user.team_id)
-        elif user.role == UserRole.ADMIN:
+        elif user.role in (UserRole.ADMIN, UserRole.VET):
+            # VETs see every pending vet request, optionally filtered by team.
             if team_id is not None:
                 q = q.where(User.team_id == team_id)
         else:
@@ -100,7 +101,7 @@ class VetService:
         if not visit.vet_required:
             raise bad_request("This visit has no vet request")
 
-        # Scope: admin anywhere; manager within their team; employee only
+        # Scope: admin/vet anywhere; manager within their team; employee only
         # their own raised request.
         if user.role == UserRole.EMPLOYEE:
             if visit.employee_id != user.id:
@@ -109,6 +110,7 @@ class VetService:
             emp = await self.db.get(User, visit.employee_id) if visit.employee_id else None
             if emp is None or emp.team_id != user.team_id:
                 raise forbidden("This request isn't on your team")
+        # VET and ADMIN can advance any request's status — fall through.
 
         visit.vet_status = vet_status.upper()
         self.db.add(visit)

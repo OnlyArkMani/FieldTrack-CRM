@@ -41,6 +41,7 @@ __all__ = [
     "get_current_admin",
     "get_current_manager",
     "get_current_employee",
+    "get_current_vet",
     "login_rate_limit",
     "CurrentUser",
     "bearer_scheme",
@@ -101,6 +102,13 @@ async def get_current_manager(user: CurrentUser) -> User:
 
 async def get_current_employee(user: CurrentUser) -> User:
     """Any authenticated active user (employees, managers, admins)."""
+    return user
+
+
+async def get_current_vet(user: CurrentUser) -> User:
+    """VET or ADMIN — grants access to vet-request and farmer-profile endpoints."""
+    if user.role not in (UserRole.VET, UserRole.ADMIN):
+        raise forbidden("Vet access required")
     return user
 
 

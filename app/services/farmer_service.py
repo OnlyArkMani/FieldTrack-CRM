@@ -50,7 +50,8 @@ class FarmerService:
     # ── scope helpers ────────────────────────────────────────────────────
     @staticmethod
     def _is_admin(user: User) -> bool:
-        return user.role == UserRole.ADMIN
+        # VET gets the same read-scope as ADMIN: sees all farmers unscoped.
+        return user.role in (UserRole.ADMIN, UserRole.VET)
 
     async def _scope_for(self, user: User) -> dict:
         """List filter kwargs that enforce visibility for a non-admin user."""
@@ -195,6 +196,8 @@ class FarmerService:
     async def create_farmer(
         self, payload: FarmerCreate, *, user: User
     ) -> FarmerResponse:
+        if user.role == UserRole.VET:
+            raise forbidden("Vet users cannot create farmer records")
         if not payload.name.strip():
             raise bad_request("Name is required")
 
@@ -245,6 +248,8 @@ class FarmerService:
         it either fully landed last time or not at all — so if every
         attendee's client_id is already present, the batch already
         succeeded and we just hand back those rows instead of re-inserting."""
+        if user.role == UserRole.VET:
+            raise forbidden("Vet users cannot create farmer records")
         client_ids = [a.client_id for a in payload.attendees if a.client_id]
         if client_ids and len(client_ids) == len(payload.attendees):
             existing = await self.repo.get_by_client_ids(client_ids)
@@ -293,6 +298,8 @@ class FarmerService:
     async def update_farmer(
         self, farmer_id: int, payload: FarmerUpdate, *, user: User
     ) -> FarmerResponse:
+        if user.role == UserRole.VET:
+            raise forbidden("Vet users cannot modify farmer records")
         farmer = await self.repo.get_by_id(farmer_id)
         if farmer is None:
             raise not_found("Farmer not found")
@@ -517,6 +524,8 @@ class FarmerService:
     async def update_lead_status(
         self, farmer_id: int, payload: LeadStatusUpdate, *, user: User
     ) -> LeadResponse:
+        if user.role == UserRole.VET:
+            raise forbidden("Vet users cannot update lead status")
         farmer = await self.repo.get_by_id(farmer_id)
         if farmer is None:
             raise not_found("Farmer not found")

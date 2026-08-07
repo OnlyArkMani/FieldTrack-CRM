@@ -8,6 +8,7 @@ class UserRole(str, enum.Enum):
     ADMIN = "ADMIN"
     MANAGER = "MANAGER"
     EMPLOYEE = "EMPLOYEE"
+    VET = "VET"
 
 
 class CustomerType(str, enum.Enum):
