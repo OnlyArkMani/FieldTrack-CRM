@@ -53,16 +53,25 @@ export function useDsrArchive({ enabled = true, ...filters } = {}) {
   });
 }
 
-/** Download one employee's DSR for a date as CSV (the per-day download button). */
-export async function downloadTeamDsr(employeeId, date, employeeName = 'employee') {
+/** Download one employee's DSR for a date as PDF (default) or CSV. */
+export async function downloadTeamDsr(
+  employeeId,
+  date,
+  employeeName = 'employee',
+  format = 'pdf',
+) {
   const { data } = await api.get(
     `/daily-reports/team/${employeeId}/${date}/download`,
-    { responseType: 'blob' },
+    {
+      params: { format },
+      responseType: 'blob',
+    },
   );
+  const ext = format === 'csv' ? 'csv' : 'pdf';
   const url = window.URL.createObjectURL(data);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `DSR_${employeeName.replace(/\s+/g, '_')}_${date}.csv`;
+  a.download = `Daily_Status_Report_${employeeName.replace(/\s+/g, '_')}_${date}.${ext}`;
   document.body.appendChild(a);
   a.click();
   a.remove();

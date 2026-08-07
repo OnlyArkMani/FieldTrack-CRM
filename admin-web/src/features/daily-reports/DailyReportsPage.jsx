@@ -175,9 +175,9 @@ function DailyView({ isAdmin, teams }) {
             icon={Download}
             onClick={(ev) => {
               ev.stopPropagation();
-              downloadTeamDsr(r.employee_id, date, r.employee_name);
+              downloadTeamDsr(r.employee_id, date, r.employee_name, 'pdf');
             }}
-            title="Download DSR (CSV)"
+            title="Download Daily Status Report (PDF)"
           />
         ) : null,
     },
@@ -295,9 +295,9 @@ function RangeView({ isAdmin, teams }) {
             icon={Download}
             onClick={(ev) => {
               ev.stopPropagation();
-              downloadTeamDsr(r.employee_id, r.report_date, r.employee_name);
+              downloadTeamDsr(r.employee_id, r.report_date, r.employee_name, 'pdf');
             }}
-            title="Download DSR (CSV)"
+            title="Download Daily Status Report (PDF)"
           />
         ) : null,
     },
@@ -400,11 +400,18 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
         </div>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => downloadTeamDsr(employeeId, date, employeeName)}
-            title="Download this day's DSR (CSV)"
-            className="flex items-center gap-1 rounded-btn px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+            onClick={() => downloadTeamDsr(employeeId, date, employeeName, 'pdf')}
+            title="Download Daily Status Report (PDF)"
+            className="flex items-center gap-1 rounded-btn px-2.5 py-1 text-xs font-semibold bg-primary text-white hover:bg-primary-hover shadow-sm"
           >
-            <Download className="h-4 w-4" /> CSV
+            <Download className="h-3.5 w-3.5" /> PDF
+          </button>
+          <button
+            onClick={() => downloadTeamDsr(employeeId, date, employeeName, 'csv')}
+            title="Download CSV"
+            className="flex items-center gap-1 rounded-btn px-2 py-1 text-xs font-medium text-text-secondary hover:bg-surface/80"
+          >
+            CSV
           </button>
           <button onClick={onClose} className="rounded p-1 text-text-secondary hover:bg-border/40 hover:text-text-primary">
             <X className="h-4 w-4" />
