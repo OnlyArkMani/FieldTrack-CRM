@@ -8,7 +8,7 @@ SCHEDULE (business-local wall clock — settings.business_timezone, default
 Asia/Kolkata):
   09:00  ATTENDANCE_REMINDER  -> active field users with no attendance today
   18:00  END_WORK_REMINDER    -> active field users started-but-not-ended today
-  19:00  AUTO_CHECKOUT        -> force-end anyone still on the clock + auto-submit DSR
+  23:59:59 AUTO_CHECKOUT      -> force-end anyone still on the clock + auto-submit DSR
   23:00  redis cleanup        -> defensive TTL sweep of live keys
   :00/:30 VISIT_REMINDER      -> employees with a planned visit ~1h away
 
@@ -440,7 +440,7 @@ async def escalate_unacknowledged_followups() -> None:
 
 
 async def auto_checkout_job() -> None:
-    """19:00 — force-end anyone still on the clock (STARTED/RESUMED/ON_BREAK/
+    """23:59:59 — force-end anyone still on the clock (STARTED/RESUMED/ON_BREAK/
     RE_CHECKED_IN) and auto-submit their DSR, exactly as if they'd tapped End
     with no work summary (mobile's existing logout-triggered auto-checkout —
     see AttendanceService.auto_checkout / generate_and_submit_dsr).
@@ -469,7 +469,7 @@ async def auto_checkout_job() -> None:
             in ("STARTED", "RESUMED", "ON_BREAK", "RE_CHECKED_IN")
         ]
     if not open_user_ids:
-        logger.info("AUTO_CHECKOUT: ran at the 19:00 cutoff, nobody was on the clock")
+        logger.info("AUTO_CHECKOUT: ran at the 23:59:59 cutoff, nobody was on the clock")
         return
 
     report_date = business_today()
@@ -490,7 +490,7 @@ async def auto_checkout_job() -> None:
         except Exception:  # noqa: BLE001
             logger.exception("auto_checkout failed for user %s", user_id)
     if closed:
-        logger.info("AUTO_CHECKOUT: force-ended %d user(s) at the 19:00 cutoff", closed)
+        logger.info("AUTO_CHECKOUT: force-ended %d user(s) at the 23:59:59 cutoff", closed)
 
 
 async def late_dsr_check_job() -> None:
@@ -829,7 +829,7 @@ def build_reminder_scheduler() -> AsyncIOScheduler:
     )
     scheduler.add_job(
         auto_checkout_job,
-        CronTrigger(hour=19, minute=0, timezone=tz),
+        CronTrigger(hour=23, minute=59, second=59, timezone=tz),
         id="auto_checkout",
         max_instances=1,
         coalesce=True,

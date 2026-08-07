@@ -7,8 +7,8 @@ import '../../../core/widgets/app_button.dart';
 const _kMaxChars = 500;
 
 /// Work-summary capture on END. Non-dismissible by barrier tap or drag — the
-/// user must either submit (≥10 chars) or explicitly Cancel. Returns the
-/// summary string on submit, or null on cancel.
+/// user must submit or explicitly Cancel. Returns the summary string on submit,
+/// or null on cancel. If checking out post 7:00 PM (19:00), requires a reason.
 Future<String?> showWorkSummarySheet(BuildContext context) {
   return showModalBottomSheet<String>(
     context: context,
@@ -30,6 +30,8 @@ class _WorkSummarySheet extends StatefulWidget {
 class _WorkSummarySheetState extends State<_WorkSummarySheet>
     with SingleTickerProviderStateMixin {
   final _controller = TextEditingController();
+  final _lateReasonController = TextEditingController();
+
   late final AnimationController _spring = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 420),
@@ -39,11 +41,13 @@ class _WorkSummarySheetState extends State<_WorkSummarySheet>
   void initState() {
     super.initState();
     _controller.addListener(() => setState(() {}));
+    _lateReasonController.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _lateReasonController.dispose();
     _spring.dispose();
     super.dispose();
   }
@@ -52,7 +56,12 @@ class _WorkSummarySheetState extends State<_WorkSummarySheet>
   Widget build(BuildContext context) {
     final colors = context.appColors;
     final scheme = Theme.of(context).colorScheme;
+    final isLateCheckout = DateTime.now().hour >= 19;
+
     final overLimit = _controller.text.characters.length > _kMaxChars;
+    final lateReasonProvided =
+        !isLateCheckout || _lateReasonController.text.trim().isNotEmpty;
+    final canSubmit = !overLimit && lateReasonProvided;
 
     // Spring slide-up + slight overshoot on entrance.
     final curved = CurvedAnimation(parent: _spring, curve: Curves.easeOutBack);
@@ -74,7 +83,7 @@ class _WorkSummarySheetState extends State<_WorkSummarySheet>
           ),
           child: SafeArea(
             top: false,
-            child: Padding(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(AppDimens.grid * 3),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -107,16 +116,16 @@ class _WorkSummarySheetState extends State<_WorkSummarySheet>
                   const SizedBox(height: AppDimens.grid * 2),
                   TextField(
                     controller: _controller,
-                    autofocus: true,
+                    autofocus: !isLateCheckout,
                     maxLines: 5,
                     minLines: 3,
                     maxLength: _kMaxChars,
                     textCapitalization: TextCapitalization.sentences,
                     style: AppTextStyles.body.copyWith(color: scheme.onSurface),
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       hintText: 'e.g. Completed 12 site inspections in the north zone…',
                       alignLabelWithHint: true,
-                      counterText: '', // we render our own counter below
+                      counterText: '',
                     ),
                   ),
                   const SizedBox(height: AppDimens.grid),
@@ -140,12 +149,81 @@ class _WorkSummarySheetState extends State<_WorkSummarySheet>
                       ),
                     ],
                   ),
+
+                  // ── Mandatory Late Checkout Reason (Post 7:00 PM) ──────
+                  if (isLateCheckout) ...[
+                    const SizedBox(height: AppDimens.grid * 2.5),
+                    Container(
+                      padding: const EdgeInsets.all(AppDimens.grid * 1.5),
+                      decoration: BoxDecoration(
+                        color: scheme.error.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(AppDimens.cardRadius),
+                        border: Border.all(color: scheme.error.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.schedule_rounded, color: scheme.error, size: 20),
+                          const SizedBox(width: AppDimens.grid * 1.5),
+                          Expanded(
+                            child: Text(
+                              'Late Checkout Notice: Checking out post 7:00 PM requires a reason.',
+                              style: AppTextStyles.caption.copyWith(
+                                color: scheme.error,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppDimens.grid * 1.5),
+                    Text(
+                      'Reason for Late Checkout *',
+                      style: AppTextStyles.body.copyWith(
+                        color: scheme.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: AppDimens.grid * 0.5),
+                    TextField(
+                      controller: _lateReasonController,
+                      autofocus: isLateCheckout,
+                      maxLines: 2,
+                      minLines: 2,
+                      maxLength: 200,
+                      textCapitalization: TextCapitalization.sentences,
+                      style: AppTextStyles.body.copyWith(color: scheme.onSurface),
+                      decoration: InputDecoration(
+                        hintText: 'e.g. Overtime site visit, delayed customer meeting…',
+                        alignLabelWithHint: true,
+                        counterText: '',
+                        errorText: isLateCheckout &&
+                                _lateReasonController.text.isEmpty &&
+                                _controller.text.isNotEmpty
+                            ? 'Reason required for post 7:00 PM checkout'
+                            : null,
+                      ),
+                    ),
+                  ],
+
                   const SizedBox(height: AppDimens.grid * 2.5),
                   AppButton(
                     label: 'End day & submit',
                     icon: Icons.check_rounded,
-                    onPressed: !overLimit
-                        ? () => Navigator.of(context).pop(_controller.text.trim())
+                    onPressed: canSubmit
+                        ? () {
+                            final workSummary = _controller.text.trim();
+                            final lateReason = _lateReasonController.text.trim();
+                            final parts = <String>[];
+                            if (workSummary.isNotEmpty) {
+                              parts.add(workSummary);
+                            }
+                            if (isLateCheckout && lateReason.isNotEmpty) {
+                              parts.add('Reason for Late Checkout: $lateReason');
+                            }
+                            final result = parts.join('\n\n');
+                            Navigator.of(context).pop(result.isEmpty ? null : result);
+                          }
                         : null,
                   ),
                   const SizedBox(height: AppDimens.grid),

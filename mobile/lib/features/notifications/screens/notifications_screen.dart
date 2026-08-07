@@ -124,7 +124,13 @@ class NotificationsScreen extends ConsumerWidget {
   ) {
     notifier.markRead(item.id);
     final route = item.type.inAppRoute;
-    if (route != null) context.push(route);
+    if (route != null) {
+      if (route.startsWith('/home/')) {
+        context.go(route);
+      } else {
+        context.push(route);
+      }
+    }
   }
 }
 

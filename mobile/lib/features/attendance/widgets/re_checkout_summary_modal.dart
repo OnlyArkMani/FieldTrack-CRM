@@ -10,6 +10,7 @@ import '../models/attendance.dart';
 /// Shows a summary modal when checking out from a Re-Checked In session.
 /// Displays all existing check-in/out timestamps, re-checkin time & remark,
 /// and allows inputting the work summary before confirming final checkout.
+/// Requires a reason if checking out post 7:00 PM (19:00).
 Future<String?> showReCheckOutSummaryModal(
   BuildContext context, {
   required Attendance attendance,
@@ -36,22 +37,42 @@ class _ReCheckOutSummaryModal extends StatefulWidget {
 
 class _ReCheckOutSummaryModalState extends State<_ReCheckOutSummaryModal> {
   final _workSummaryController = TextEditingController();
+  final _lateReasonController = TextEditingController();
   String? _error;
 
   @override
   void dispose() {
     _workSummaryController.dispose();
+    _lateReasonController.dispose();
     super.dispose();
   }
 
   void _confirm() {
-    final text = _workSummaryController.text.trim();
-    if (text.length > 500) {
-      setState(() =>
-          _error = 'Work summary must be 500 characters or less.');
+    final isLateCheckout = DateTime.now().hour >= 19;
+    final workSummary = _workSummaryController.text.trim();
+    final lateReason = _lateReasonController.text.trim();
+
+    if (workSummary.length > 500) {
+      setState(() => _error = 'Work summary must be 500 characters or less.');
       return;
     }
-    Navigator.of(context).pop(text);
+
+    if (isLateCheckout && lateReason.isEmpty) {
+      setState(() => _error =
+          'Please provide a reason for late checkout (required after 7:00 PM).');
+      return;
+    }
+
+    final parts = <String>[];
+    if (workSummary.isNotEmpty) {
+      parts.add(workSummary);
+    }
+    if (isLateCheckout && lateReason.isNotEmpty) {
+      parts.add('Reason for Late Checkout: $lateReason');
+    }
+
+    final result = parts.join('\n\n');
+    Navigator.of(context).pop(result.isEmpty ? null : result);
   }
 
   @override
@@ -60,6 +81,7 @@ class _ReCheckOutSummaryModalState extends State<_ReCheckOutSummaryModal> {
     final scheme = Theme.of(context).colorScheme;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final timeFmt = DateFormat('hh:mm a');
+    final isLateCheckout = DateTime.now().hour >= 19;
 
     // Extract sessions. There's exactly one START per day, so "first" is
     // correct for that — but END and RE_CHECKIN can each occur more than
@@ -183,6 +205,49 @@ class _ReCheckOutSummaryModalState extends State<_ReCheckOutSummaryModal> {
                 errorText: _error,
               ),
             ),
+
+            // ── Mandatory Late Checkout Reason Field (Post 7:00 PM) ─────
+            if (isLateCheckout) ...[
+              const SizedBox(height: AppDimens.grid * 2),
+              Container(
+                padding: const EdgeInsets.all(AppDimens.grid * 1.5),
+                decoration: BoxDecoration(
+                  color: scheme.error.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(AppDimens.cardRadius),
+                  border:
+                      Border.all(color: scheme.error.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.schedule_rounded, color: scheme.error, size: 20),
+                    const SizedBox(width: AppDimens.grid * 1.5),
+                    Expanded(
+                      child: Text(
+                        'Late Checkout Notice: Checking out post 7:00 PM requires a reason.',
+                        style: AppTextStyles.caption.copyWith(
+                          color: scheme.error,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppDimens.grid * 1.5),
+              TextField(
+                controller: _lateReasonController,
+                minLines: 2,
+                maxLines: 3,
+                style: AppTextStyles.body.copyWith(color: scheme.onSurface),
+                onChanged: (_) {
+                  if (_error != null) setState(() => _error = null);
+                },
+                decoration: const InputDecoration(
+                  labelText: 'Reason for Late Checkout *',
+                  hintText: 'e.g. Extended client visit, site delay…',
+                ),
+              ),
+            ],
 
             const SizedBox(height: AppDimens.grid * 2),
 
