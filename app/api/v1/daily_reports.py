@@ -1,4 +1,4 @@
-"""Daily Sales Report (DSR) router -- Module 5.
+"""Daily Status Report (DSR) router -- Module 5.
 
 Route ordering: static paths (/my, /team, /archive) declared before
 parameterised paths (/{id}/...) to avoid conflicts.
@@ -210,12 +210,15 @@ async def download_my_dsr(
     report_date: date,
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
+    fmt: str = Query(default="pdf", pattern="^(pdf|csv)$", alias="format"),
 ) -> StreamingResponse:
-    """Download the caller's DSR for one day as CSV (the per-day download button)."""
+    """Download the caller's DSR for one day as PDF or CSV (?format=pdf|csv)."""
     detail = await get_dsr_with_details(db, employee_id=user.id, report_date=report_date)
     if detail is None:
         raise HTTPException(status_code=404, detail="No DSR for this date.")
-    return _dsr_csv_response(detail, user.name, report_date)
+    if fmt == "csv":
+        return _dsr_csv_response(detail, user.name, report_date)
+    return _dsr_pdf_response(detail, user.name, report_date)
 
 
 # -- Employee: submit DSR -----------------------------------------------------
@@ -334,8 +337,9 @@ async def download_team_dsr(
     report_date: date,
     manager: Annotated[User, Depends(get_current_manager)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    fmt: str = Query(default="pdf", pattern="^(pdf|csv)$", alias="format"),
 ) -> StreamingResponse:
-    """Download one team member's DSR for a day as CSV (manager/admin)."""
+    """Download one team member's DSR for a day as PDF or CSV (?format=pdf|csv)."""
     emp = await db.get(User, employee_id)
     if emp is None:
         raise not_found("Employee not found")
@@ -344,7 +348,9 @@ async def download_team_dsr(
     detail = await get_dsr_with_details(db, employee_id=employee_id, report_date=report_date)
     if detail is None:
         raise not_found("No DSR found for this employee on this date")
-    return _dsr_csv_response(detail, emp.name, report_date)
+    if fmt == "csv":
+        return _dsr_csv_response(detail, emp.name, report_date)
+    return _dsr_pdf_response(detail, emp.name, report_date)
 
 
 # -- Manager: add manager comment ------------------------------------------
@@ -621,98 +627,118 @@ async def _attendance_times(
     return out
 
 
-# -- Internal helper ----------------------------------------------------------
+# -- Internal helpers ---------------------------------------------------------
 
 def _dsr_csv_response(
     detail: dict, employee_name: str, report_date: date
 ) -> StreamingResponse:
-    """Render one employee-day DSR as a single CSV (summary + visits + orders +
-    follow-ups), each visited customer tagged with its type."""
-    report = detail["report"]
-    buf = io.StringIO()
-    w = csv.writer(buf)
+    """Render one employee-day DSR as CSV. Applies all the same presentation
+    rules as the PDF version: time-only for check-in/out, 'Expected Delivery
+    Date', NA row for empty follow-ups, Remarks column on visits."""
+    from zoneinfo import ZoneInfo
 
-    def _fmt_dt(val: Any) -> str:
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    try:
+        _tz = ZoneInfo(settings.business_timezone)
+    except Exception:  # noqa: BLE001
+        _tz = ZoneInfo("UTC")
+
+    def _fmt_time(val: Any) -> str:
+        """UTC datetime → local HH:MM string."""
         if not val:
             return ""
-        if hasattr(val, "strftime"):
-            return val.strftime("%Y-%m-%d %H:%M:%S")
+        if hasattr(val, "astimezone"):
+            return val.astimezone(_tz).strftime("%H:%M")
         if isinstance(val, str):
             try:
                 dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
-                return dt.strftime("%Y-%m-%d %H:%M:%S")
-            except Exception:
+                return dt.astimezone(_tz).strftime("%H:%M")
+            except Exception:  # noqa: BLE001
                 return val
         return str(val)
 
+    def _fmt_date(val: Any) -> str:
+        if not val:
+            return ""
+        if hasattr(val, "isoformat"):
+            return val.isoformat()
+        return str(val)
+
+    def _remarks(v: dict) -> str:
+        parts = [
+            (v.get("meeting_highlights") or "").strip(),
+            (v.get("farmer_concerns") or "").strip(),
+        ]
+        return " / ".join(p for p in parts if p)
+
+    report = detail["report"]
     checkpoints = detail.get("checkpoints") or {}
     check_in = checkpoints.get("check_in_at") or getattr(report, "check_in_at", None)
     check_out = checkpoints.get("check_out_at") or getattr(report, "check_out_at", None)
 
-    w.writerow(["Daily Sales Report"])
+    buf = io.StringIO()
+    w = csv.writer(buf)
+
+    w.writerow(["Daily Status Report"])
     w.writerow(["Employee", employee_name])
     w.writerow(["Date", report_date.isoformat()])
     w.writerow(["Status", getattr(report, "status", "")])
     if check_in:
-        w.writerow(["Check-in", _fmt_dt(check_in)])
+        w.writerow(["Check-in", _fmt_time(check_in)])
     if check_out:
-        w.writerow(["Check-out", _fmt_dt(check_out)])
-    w.writerow(
-        ["Visits planned", getattr(report, "visits_planned", 0)]
-    )
+        w.writerow(["Check-out", _fmt_time(check_out)])
+    w.writerow(["Visits planned", getattr(report, "visits_planned", 0)])
     w.writerow(["Visits completed", getattr(report, "visits_completed", 0)])
     w.writerow(["Orders captured", getattr(report, "orders_captured", 0)])
-    w.writerow(
-        [
-            "Leads (Hot/Warm/Cold)",
-            f"{getattr(report, 'hot_leads', 0)}/"
-            f"{getattr(report, 'warm_leads', 0)}/"
-            f"{getattr(report, 'cold_leads', 0)}",
-        ]
-    )
+    w.writerow([
+        "Leads (Hot/Warm/Cold)",
+        f"{getattr(report, 'hot_leads', 0)}/"
+        f"{getattr(report, 'warm_leads', 0)}/"
+        f"{getattr(report, 'cold_leads', 0)}",
+    ])
     w.writerow(["End-of-day note", getattr(report, "end_of_day_note", "") or ""])
     w.writerow([])
 
     w.writerow(["Visits"])
-    w.writerow(["Customer", "Type", "Purpose", "Check-in", "Check-out", "Lead"])
+    w.writerow(["Customer", "Type", "Purpose", "Check-in", "Check-out", "Lead", "Remarks"])
     for v in detail["visits"]:
-        w.writerow(
-            [
-                v["farmer_name"],
-                v.get("customer_type", "FARMER_MEET"),
-                v.get("purpose") or "",
-                _fmt_dt(v.get("check_in_at")),
-                _fmt_dt(v.get("check_out_at")),
-                v.get("lead_status") or "",
-            ]
-        )
+        w.writerow([
+            v["farmer_name"],
+            v.get("customer_type", ""),
+            v.get("purpose") or "",
+            _fmt_time(v.get("check_in_at")),
+            _fmt_time(v.get("check_out_at")),
+            v.get("lead_status") or "",
+            _remarks(v),
+        ])
     w.writerow([])
 
     w.writerow(["Orders"])
-    w.writerow(["Customer", "Type", "Bags", "Delivery date", "Payment"])
+    w.writerow(["Customer", "Type", "Bags", "Expected Delivery Date", "Payment"])
     for o in detail["orders"]:
-        w.writerow(
-            [
-                o["farmer_name"],
-                o.get("customer_type", "FARMER_MEET"),
-                o["bags_count"],
-                o["delivery_date"].isoformat() if o.get("delivery_date") else "",
-                o.get("payment_mode") or "",
-            ]
-        )
+        w.writerow([
+            o["farmer_name"],
+            o.get("customer_type", ""),
+            o.get("bags_count", ""),
+            _fmt_date(o.get("delivery_date")),
+            o.get("payment_mode") or "",
+        ])
     w.writerow([])
 
     w.writerow(["Follow-ups"])
-    w.writerow(["Customer", "Scheduled date", "Time", "Purpose"])
-    for f in detail["follow_ups"]:
-        w.writerow(
-            [
+    w.writerow(["Customer", "Scheduled Date", "Time", "Purpose"])
+    if detail["follow_ups"]:
+        for f in detail["follow_ups"]:
+            w.writerow([
                 f["farmer_name"],
-                f["scheduled_date"].isoformat() if f.get("scheduled_date") else "",
-                f.get("scheduled_time") or "",
+                _fmt_date(f.get("scheduled_date")),
+                str(f.get("scheduled_time") or ""),
                 f.get("purpose") or "",
-            ]
-        )
+            ])
+    else:
+        w.writerow(["NA", "NA", "NA", "NA"])
 
     buf.seek(0)
     safe_name = employee_name.replace(" ", "_")
@@ -720,6 +746,265 @@ def _dsr_csv_response(
     return StreamingResponse(
         iter([buf.getvalue()]),
         media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={fname}"},
+    )
+
+
+def _dsr_pdf_response(
+    detail: dict, employee_name: str, report_date: date
+) -> StreamingResponse:
+    """Render one employee-day DSR as a branded PDF (summary + visits + orders +
+    follow-ups). Times are shown in the business timezone (HH:MM only)."""
+    from zoneinfo import ZoneInfo
+
+    from reportlab.lib import colors as _c
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
+    )
+
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    try:
+        _tz = ZoneInfo(settings.business_timezone)
+    except Exception:  # noqa: BLE001
+        _tz = ZoneInfo("UTC")
+
+    # Brand palette
+    _AMBER = _c.HexColor("#F5A623")
+    _DARK = _c.HexColor("#1A1A2E")
+    _CREAM = _c.HexColor("#FFF8E7")
+    _PURPLE = _c.HexColor("#8B7FD4")
+    _GRAY = _c.HexColor("#6B6B80")
+
+    _base = getSampleStyleSheet()
+    _title_sty = ParagraphStyle(
+        "DSRTitle", parent=_base["Title"],
+        fontSize=18, textColor=_DARK, spaceAfter=3,
+    )
+    _meta_sty = ParagraphStyle(
+        "DSRMeta", parent=_base["Normal"],
+        fontSize=10, textColor=_GRAY, spaceAfter=2, leading=14,
+    )
+    _sec_sty = ParagraphStyle(
+        "DSRSec", parent=_base["Heading3"],
+        fontSize=11, textColor=_PURPLE, spaceBefore=8, spaceAfter=4,
+    )
+    _cell_sty = ParagraphStyle(
+        "DSRCell", parent=_base["Normal"], fontSize=8, leading=10,
+    )
+    _hdr_sty = ParagraphStyle(
+        "DSRHdr", parent=_base["Normal"],
+        fontSize=8, leading=10, textColor=_c.white,
+    )
+
+    def _esc(s: Any) -> str:
+        return str(s if s is not None else "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    def _cell(s: Any) -> Paragraph:
+        return Paragraph(_esc(s) if s not in (None, "", "—") else "—", _cell_sty)
+
+    def _hdr(s: str) -> Paragraph:
+        return Paragraph(f"<b>{_esc(s)}</b>", _hdr_sty)
+
+    def _fmt_time(val: Any) -> str:
+        """UTC datetime → local HH:MM (time only)."""
+        if not val:
+            return "—"
+        if hasattr(val, "astimezone"):
+            return val.astimezone(_tz).strftime("%H:%M")
+        if isinstance(val, str):
+            try:
+                dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
+                return dt.astimezone(_tz).strftime("%H:%M")
+            except Exception:  # noqa: BLE001
+                return val
+        return str(val)
+
+    def _fmt_date(val: Any) -> str:
+        if not val:
+            return "—"
+        if hasattr(val, "strftime"):
+            return val.strftime("%d %b %Y")
+        return str(val)
+
+    def _remarks(v: dict) -> str:
+        parts = [
+            (v.get("meeting_highlights") or "").strip(),
+            (v.get("farmer_concerns") or "").strip(),
+        ]
+        return " / ".join(p for p in parts if p) or "—"
+
+    def _make_table(
+        headers: list[str], rows: list[list], col_widths_mm: list[float]
+    ) -> Table:
+        body: list = [[_hdr(h) for h in headers]]
+        for r in rows:
+            body.append([_cell(c) for c in r])
+        tbl = Table(body, colWidths=[w * mm for w in col_widths_mm], repeatRows=1)
+        cmds = [
+            ("BACKGROUND", (0, 0), (-1, 0), _AMBER),
+            ("TEXTCOLOR", (0, 0), (-1, 0), _c.white),
+            ("GRID", (0, 0), (-1, -1), 0.4, _c.HexColor("#D8D4C4")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ]
+        for i in range(1, len(body)):
+            if i % 2 == 0:
+                cmds.append(("BACKGROUND", (0, i), (-1, i), _CREAM))
+        tbl.setStyle(TableStyle(cmds))
+        return tbl
+
+    report = detail["report"]
+    checkpoints = detail.get("checkpoints") or {}
+    check_in = checkpoints.get("check_in_at") or getattr(report, "check_in_at", None)
+    check_out = checkpoints.get("check_out_at") or getattr(report, "check_out_at", None)
+
+    bio = io.BytesIO()
+    doc = SimpleDocTemplate(
+        bio,
+        pagesize=A4,
+        topMargin=15 * mm, bottomMargin=18 * mm,
+        leftMargin=15 * mm, rightMargin=15 * mm,
+        title="Daily Status Report",
+        author="Samarth Sathi",
+    )
+
+    elements: list = [
+        Paragraph("Daily Status Report", _title_sty),
+        Paragraph(
+            f"<b>Employee:</b> {_esc(employee_name)}  |  "
+            f"<b>Date:</b> {report_date.strftime('%d %B %Y')}",
+            _meta_sty,
+        ),
+        Paragraph(
+            f"<b>Status:</b> {_esc(getattr(report, 'status', ''))}  |  "
+            f"<b>Check-in:</b> {_fmt_time(check_in)}  |  "
+            f"<b>Check-out:</b> {_fmt_time(check_out)}  |  "
+            f"<b>Late:</b> {'Yes' if getattr(report, 'is_late', False) else 'No'}",
+            _meta_sty,
+        ),
+        Spacer(1, 4 * mm),
+    ]
+
+    # Summary stats in a 4-column label/value grid
+    summary_pairs = [
+        ("Visits Planned", str(getattr(report, "visits_planned", 0))),
+        ("Visits Completed", str(getattr(report, "visits_completed", 0))),
+        ("Orders Captured", str(getattr(report, "orders_captured", 0))),
+        ("Follow-ups Scheduled", str(getattr(report, "follow_ups_scheduled", 0))),
+        ("Hot Leads", str(getattr(report, "hot_leads", 0))),
+        ("Warm Leads", str(getattr(report, "warm_leads", 0))),
+        ("Cold Leads", str(getattr(report, "cold_leads", 0))),
+        ("End-of-day Note", str(getattr(report, "end_of_day_note", "") or "—")),
+    ]
+    sum_body: list = []
+    for i in range(0, len(summary_pairs), 2):
+        row: list = []
+        for lbl, val in summary_pairs[i : i + 2]:
+            row.extend([
+                Paragraph(f"<b>{_esc(lbl)}</b>", _cell_sty),
+                Paragraph(_esc(val), _cell_sty),
+            ])
+        while len(row) < 4:
+            row.append(Paragraph("", _cell_sty))
+        sum_body.append(row)
+    sum_tbl = Table(sum_body, colWidths=[48 * mm, 42 * mm, 48 * mm, 42 * mm])
+    sum_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), _CREAM),
+        ("BOX", (0, 0), (-1, -1), 0.5, _AMBER),
+        ("INNERGRID", (0, 0), (-1, -1), 0.25, _c.HexColor("#E0DCC8")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(sum_tbl)
+    elements.append(Spacer(1, 4 * mm))
+
+    # Visits — with Remarks column (meeting highlights + farmer concerns)
+    # Column widths total 180mm (A4 portrait with 15mm side margins each)
+    elements.append(Paragraph("Visits", _sec_sty))
+    visit_rows = [
+        [
+            v["farmer_name"],
+            v.get("customer_type", ""),
+            v.get("purpose") or "—",
+            _fmt_time(v.get("check_in_at")),
+            _fmt_time(v.get("check_out_at")),
+            v.get("lead_status") or "—",
+            _remarks(v),
+        ]
+        for v in detail["visits"]
+    ] or [["—", "—", "—", "—", "—", "—", "—"]]
+    elements.append(_make_table(
+        ["Customer", "Type", "Purpose", "Check-in", "Check-out", "Lead", "Remarks"],
+        visit_rows,
+        [38, 18, 22, 14, 14, 18, 56],
+    ))
+    elements.append(Spacer(1, 4 * mm))
+
+    # Orders — "Expected Delivery Date" label
+    elements.append(Paragraph("Orders", _sec_sty))
+    order_rows = [
+        [
+            o["farmer_name"],
+            o.get("customer_type", ""),
+            str(o.get("bags_count", "")),
+            _fmt_date(o.get("delivery_date")),
+            o.get("payment_mode") or "—",
+        ]
+        for o in detail["orders"]
+    ] or [["—", "—", "—", "—", "—"]]
+    elements.append(_make_table(
+        ["Customer", "Type", "Bags", "Expected Delivery Date", "Payment Mode"],
+        order_rows,
+        [50, 22, 15, 48, 45],
+    ))
+    elements.append(Spacer(1, 4 * mm))
+
+    # Follow-ups — "NA" row when empty
+    elements.append(Paragraph("Follow-ups", _sec_sty))
+    fu_rows = [
+        [
+            f["farmer_name"],
+            _fmt_date(f.get("scheduled_date")),
+            str(f.get("scheduled_time") or "—"),
+            f.get("purpose") or "—",
+        ]
+        for f in detail["follow_ups"]
+    ] or [["NA", "NA", "NA", "NA"]]
+    elements.append(_make_table(
+        ["Customer", "Scheduled Date", "Time", "Purpose"],
+        fu_rows,
+        [55, 35, 25, 65],
+    ))
+
+    def _footer(canvas, _doc) -> None:
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(_GRAY)
+        canvas.drawString(15 * mm, 8 * mm, "Samarth Sathi — Daily Status Report")
+        canvas.drawRightString(195 * mm, 8 * mm, f"Page {_doc.page}")
+        canvas.restoreState()
+
+    doc.build(elements, onFirstPage=_footer, onLaterPages=_footer)
+
+    safe_name = employee_name.replace(" ", "_")
+    fname = f"DSR_{safe_name}_{report_date.isoformat()}.pdf"
+    return StreamingResponse(
+        iter([bio.getvalue()]),
+        media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={fname}"},
     )
 
