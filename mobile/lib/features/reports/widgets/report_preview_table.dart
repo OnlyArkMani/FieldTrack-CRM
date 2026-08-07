@@ -214,7 +214,7 @@ class _TableView extends StatelessWidget {
                                 padding: const EdgeInsets.only(right: 8),
                                 child: col.isSessionHistory
                                     ? _SessionHistoryCell(text: cell.text)
-                                    : _buildCellWidget(context, cell),
+                                    : _buildCellWidget(context, cell, col.label),
                               ),
                             );
                           },
@@ -231,7 +231,7 @@ class _TableView extends StatelessWidget {
     );
   }
 
-  Widget _buildCellWidget(BuildContext context, ReportTableCell cell) {
+  Widget _buildCellWidget(BuildContext context, ReportTableCell cell, String colLabel) {
     if (cell.hasBadge) {
       return Align(
         alignment: Alignment.centerLeft,
@@ -253,14 +253,23 @@ class _TableView extends StatelessWidget {
       );
     }
 
+    final colLower = colLabel.toLowerCase();
+    final isLongTextColumn = colLower.contains('summary') ||
+        colLower.contains('reason') ||
+        colLower.contains('remark') ||
+        colLower.contains('note') ||
+        colLower.contains('address') ||
+        colLower.contains('description');
+
     return Text(
       cell.text,
       style: AppTextStyles.bodyMedium.copyWith(
         fontSize: 12,
         fontWeight: cell.isBold ? FontWeight.w600 : FontWeight.w400,
         color: Theme.of(context).colorScheme.onSurface,
+        height: 1.35,
       ),
-      maxLines: 1,
+      maxLines: isLongTextColumn ? 10 : 2,
       overflow: TextOverflow.ellipsis,
     );
   }
@@ -337,35 +346,49 @@ class _SessionHistoryCellState extends State<_SessionHistoryCell> {
         ...visible.map((item) {
           final (bg, fg, dot) = _getStyle(item.label);
           return Padding(
-            padding: const EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.only(bottom: 6),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
-              child: Row(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: fg.withValues(alpha: 0.15)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Dot
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        item.label,
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fg),
+                      ),
+                      if (item.time != null) ...[
+                        const SizedBox(width: 4),
+                        Text(
+                          item.time!,
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: fg),
+                        ),
+                      ],
+                    ],
                   ),
-                  const SizedBox(width: 4),
-                  // Label
-                  Text(item.label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: fg)),
-                  if (item.time != null) ...[
-                    const SizedBox(width: 3),
-                    Text(item.time!, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: fg.withValues(alpha: 0.75))),
-                  ],
-                  if (item.note != null) ...[
-                    const SizedBox(width: 3),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 80),
-                      child: Text(
-                        item.note!,
-                        style: TextStyle(fontSize: 9, fontStyle: FontStyle.italic, color: fg.withValues(alpha: 0.65)),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                  if (item.note != null && item.note!.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      item.note!,
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.w500,
+                        color: fg.withValues(alpha: 0.85),
                       ),
                     ),
                   ],
@@ -379,23 +402,27 @@ class _SessionHistoryCellState extends State<_SessionHistoryCell> {
             onTap: () => setState(() => _expanded = !_expanded),
             child: Container(
               margin: const EdgeInsets.only(top: 2),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFF94A3B8), width: 1),
-                borderRadius: BorderRadius.circular(999),
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     _expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                    size: 12,
-                    color: const Color(0xFF64748B),
+                    size: 14,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
-                  const SizedBox(width: 2),
+                  const SizedBox(width: 4),
                   Text(
                     _expanded ? 'Show less' : '+${items.length - _kVisibleLimit} more',
-                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
                 ],
               ),
