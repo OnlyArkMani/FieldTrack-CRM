@@ -699,6 +699,7 @@ def _dsr_csv_response(
         f"{getattr(report, 'cold_leads', 0)}",
     ])
     w.writerow(["End-of-day note", getattr(report, "end_of_day_note", "") or ""])
+    w.writerow(["Late checkout reason", getattr(report, "late_checkout_reason", "") or ""])
     w.writerow([])
 
     w.writerow(["Visits"])
@@ -907,6 +908,7 @@ def _dsr_pdf_response(
         ("Warm Leads", str(getattr(report, "warm_leads", 0))),
         ("Cold Leads", str(getattr(report, "cold_leads", 0))),
         ("End-of-day Note", str(getattr(report, "end_of_day_note", "") or "—")),
+        ("Late Checkout Reason", str(getattr(report, "late_checkout_reason", "") or "—")),
     ]
     sum_body: list = []
     for i in range(0, len(summary_pairs), 2):

@@ -68,32 +68,21 @@ export default function AttendancePage() {
     {
       key: 'summary',
       header: 'Work summary',
+      render: (r) => (
+        <span className="line-clamp-2 max-w-xs text-xs text-text-primary" title={r.work_summary}>
+          {r.work_summary || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'late_reason',
+      header: 'Late reason',
       render: (r) => {
-        if (!r.work_summary && !r.late_checkout_reason) {
-          return <span className="text-text-secondary">—</span>;
-        }
-
+        if (!r.late_checkout_reason) return <span className="text-text-secondary">—</span>;
         return (
-          <div
-            className="max-w-sm text-xs space-y-1"
-            title={
-              r.late_checkout_reason
-                ? `${r.work_summary || ''}\nLate Reason: ${r.late_checkout_reason}`
-                : r.work_summary
-            }
-          >
-            {r.work_summary && (
-              <div className="text-text-primary font-medium truncate">
-                {r.work_summary}
-              </div>
-            )}
-            {r.late_checkout_reason && (
-              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] bg-status-danger/10 text-status-danger font-medium border border-status-danger/20 max-w-full">
-                <span className="font-semibold shrink-0">Late Reason:</span>
-                <span className="truncate">{r.late_checkout_reason}</span>
-              </div>
-            )}
-          </div>
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-status-danger/10 text-status-danger font-medium border border-status-danger/20 max-w-xs truncate" title={r.late_checkout_reason}>
+            {r.late_checkout_reason}
+          </span>
         );
       },
     },

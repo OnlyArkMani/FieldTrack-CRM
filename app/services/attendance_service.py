@@ -629,6 +629,7 @@ class AttendanceService:
             total_duration_minutes=attendance.total_duration_minutes,
             total_distance_meters=attendance.total_distance_meters,
             work_summary=attendance.work_summary,
+            late_checkout_reason=attendance.late_checkout_reason,
             current_state=state,  # type: ignore[arg-type]
             sessions=[
                 SessionOut.model_validate(s)

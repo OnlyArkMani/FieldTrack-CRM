@@ -563,6 +563,14 @@ function DsrDetailPanel({ employeeId, employeeName, reportId, date, onClose }) {
               </Section>
             )}
 
+            {dsr.late_checkout_reason && (
+              <Section title="Reason for Late Checkout">
+                <div className="rounded-card bg-status-danger/10 border border-status-danger/20 p-3 text-sm font-medium text-status-danger">
+                  {dsr.late_checkout_reason}
+                </div>
+              </Section>
+            )}
+
             {existingComment && (
               <Section title="Your Previous Comment">
                 <p className="text-sm text-text-primary whitespace-pre-wrap">{existingComment}</p>
