@@ -11,10 +11,12 @@ SOFT DELETE:
 """
 from datetime import date, datetime, timedelta, timezone
 
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import bad_request, conflict, forbidden, not_found
 from app.core.redis import Keys, get_redis
+from app.models.crm import Farmer
 from app.models.enums import UserRole
 from app.models.user import Team, User
 from app.repositories.team_repository import TeamRepository, TeamRow
@@ -253,6 +255,13 @@ class TeamService:
 
         user.team_id = team_id
         self.db.add(user)
+
+        # Attach any previously unassigned farmers created by this employee to the team
+        await self.db.execute(
+            update(Farmer)
+            .where(Farmer.created_by == user.id, Farmer.team_id.is_(None))
+            .values(team_id=team_id)
+        )
         self.repo.add_audit_log(
             user_id=actor.id,
             action="TEAM_MEMBER_ADDED",
