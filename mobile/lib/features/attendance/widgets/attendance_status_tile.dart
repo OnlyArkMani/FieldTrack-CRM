@@ -41,14 +41,17 @@ class AttendanceStatusTile extends ConsumerWidget {
   Future<void> _checkOut(BuildContext context, WidgetRef ref) async {
     final uiState = ref.read(attendanceProvider);
     final attendance = uiState.attendance;
-    final String? summary;
+    final WorkSummaryResult? summaryResult;
     if (uiState.state == MachineState.reCheckedIn && attendance != null) {
-      summary = await showReCheckOutSummaryModal(context, attendance: attendance);
+      summaryResult = await showReCheckOutSummaryModal(context, attendance: attendance);
     } else {
-      summary = await showWorkSummarySheet(context);
+      summaryResult = await showWorkSummarySheet(context);
     }
-    if (summary == null || !context.mounted) return;
-    await ref.read(attendanceProvider.notifier).end(summary);
+    if (summaryResult == null || !context.mounted) return;
+    await ref.read(attendanceProvider.notifier).end(
+          workSummary: summaryResult.workSummary,
+          lateCheckoutReason: summaryResult.lateCheckoutReason,
+        );
     if (!context.mounted) return;
     final state = ref.read(attendanceProvider);
     final attendanceId = state.attendance?.id;

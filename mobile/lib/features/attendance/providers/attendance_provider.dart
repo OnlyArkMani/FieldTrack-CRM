@@ -164,10 +164,15 @@ class AttendanceNotifier extends Notifier<AttendanceUiState> {
         call: (lat, lng) => _repo.reCheckIn(lat, lng, remark: remark),
       );
 
-  Future<void> end(String workSummary) => _run(
+  Future<void> end({String? workSummary, String? lateCheckoutReason}) => _run(
         SessionType.end,
         optimistic: () => _optimisticAppend(SessionType.end, MachineState.ended),
-        call: (lat, lng) => _repo.end(lat, lng, workSummary: workSummary),
+        call: (lat, lng) => _repo.end(
+          lat,
+          lng,
+          workSummary: workSummary,
+          lateCheckoutReason: lateCheckoutReason,
+        ),
       );
 
   /// Mark a day as leave — today by default, or a future `date`. No GPS

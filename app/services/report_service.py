@@ -413,7 +413,7 @@ class ReportService:
 
         columns = [
             "Employee", "Date", "Start", "End", "Session History",
-            "Duration", "Distance (km)", "Status", "Work Summary",
+            "Duration", "Distance (km)", "Status", "Work Summary", "Late Checkout Reason",
         ]
         table_rows: list[list[Any]] = []
         total_minutes = 0
@@ -433,6 +433,7 @@ class ReportService:
                 round(att.total_distance_meters / 1000, 2),
                 att.status.value,
                 (att.work_summary or "").strip(),
+                (att.late_checkout_reason or "").strip(),
             ])
 
         summary = [

@@ -281,6 +281,9 @@ async def _generate_in_session(
     # ── is_late ────────────────────────────────────────────────────────────
     is_late = _is_late_now(settings.business_timezone)
 
+    initial_end_note = att_row.work_summary if att_row and att_row.work_summary else None
+    initial_late_reason = att_row.late_checkout_reason if att_row and att_row.late_checkout_reason else None
+
     # ── Upsert daily_reports ──────────────────────────────────────────────
     stmt = (
         pg_insert(DailyReport)
@@ -288,6 +291,8 @@ async def _generate_in_session(
             employee_id=employee_id,
             report_date=report_date,
             attendance_id=attendance_id,
+            end_of_day_note=initial_end_note,
+            late_checkout_reason=initial_late_reason,
             visits_planned=visits_planned,
             visits_completed=visits_completed_count,
             visits_skipped=visits_skipped_count,
@@ -310,6 +315,8 @@ async def _generate_in_session(
             constraint="uq_daily_reports_employee_id_report_date",
             set_={
                 "attendance_id": attendance_id,
+                "end_of_day_note": func.coalesce(DailyReport.end_of_day_note, initial_end_note),
+                "late_checkout_reason": func.coalesce(DailyReport.late_checkout_reason, initial_late_reason),
                 "visits_planned": visits_planned,
                 "visits_completed": visits_completed_count,
                 "visits_skipped": visits_skipped_count,

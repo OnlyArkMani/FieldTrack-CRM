@@ -222,6 +222,21 @@ export default function ReportPreviewTable({ data, loading, error, onRetry }) {
         render: (row) => <SessionHistoryCell value={row[col.key]} />,
       };
     }
+    // Detect Late Checkout Reason column by header (case-insensitive)
+    if (col.header?.toLowerCase().includes('late checkout reason')) {
+      return {
+        ...col,
+        render: (row) => {
+          const val = row[col.key];
+          if (!val || val === '—') return <span className="text-text-secondary">—</span>;
+          return (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-status-danger/10 text-status-danger font-medium border border-status-danger/20">
+              {val}
+            </span>
+          );
+        },
+      };
+    }
     return col;
   });
 

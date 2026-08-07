@@ -48,6 +48,7 @@ class Attendance(Base, TimestampMixin):
     total_duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_distance_meters: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     work_summary: Mapped[str | None] = mapped_column(Text)
+    late_checkout_reason: Mapped[str | None] = mapped_column(Text)
 
     sessions: Mapped[list["AttendanceSession"]] = relationship(
         back_populates="attendance",

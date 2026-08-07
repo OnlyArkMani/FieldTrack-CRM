@@ -39,6 +39,7 @@ class AttendanceEndRequest(GpsPoint):
     # the service auto-fills "Auto clock-out on logout." in that case.
     # When a value IS supplied (manual End tap), min_length=10 still applies.
     work_summary: str | None = Field(default=None, max_length=500)
+    late_checkout_reason: str | None = Field(default=None, max_length=500)
 
 
 class LeaveRequest(BaseModel):
@@ -109,6 +110,7 @@ class AttendanceOut(BaseModel):
     total_duration_minutes: int
     total_distance_meters: float
     work_summary: str | None
+    late_checkout_reason: str | None = None
     current_state: CurrentState
     sessions: list[SessionOut]
     employee: AttendanceEmployeeRef | None = None

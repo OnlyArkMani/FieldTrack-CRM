@@ -6,11 +6,17 @@ import '../../../core/widgets/app_button.dart';
 
 const _kMaxChars = 500;
 
+class WorkSummaryResult {
+  const WorkSummaryResult({this.workSummary, this.lateCheckoutReason});
+  final String? workSummary;
+  final String? lateCheckoutReason;
+}
+
 /// Work-summary capture on END. Non-dismissible by barrier tap or drag — the
-/// user must submit or explicitly Cancel. Returns the summary string on submit,
+/// user must submit or explicitly Cancel. Returns WorkSummaryResult on submit,
 /// or null on cancel. If checking out post 7:00 PM (19:00), requires a reason.
-Future<String?> showWorkSummarySheet(BuildContext context) {
-  return showModalBottomSheet<String>(
+Future<WorkSummaryResult?> showWorkSummarySheet(BuildContext context) {
+  return showModalBottomSheet<WorkSummaryResult>(
     context: context,
     isScrollControlled: true,
     isDismissible: false, // can't tap-away
@@ -213,16 +219,19 @@ class _WorkSummarySheetState extends State<_WorkSummarySheet>
                     onPressed: canSubmit
                         ? () {
                             final workSummary = _controller.text.trim();
-                            final lateReason = _lateReasonController.text.trim();
-                            final parts = <String>[];
-                            if (workSummary.isNotEmpty) {
-                              parts.add(workSummary);
-                            }
-                            if (isLateCheckout && lateReason.isNotEmpty) {
-                              parts.add('Reason for Late Checkout: $lateReason');
-                            }
-                            final result = parts.join('\n\n');
-                            Navigator.of(context).pop(result.isEmpty ? null : result);
+                            final lateReason =
+                                _lateReasonController.text.trim();
+                            Navigator.of(context).pop(
+                              WorkSummaryResult(
+                                workSummary: workSummary.isNotEmpty
+                                    ? workSummary
+                                    : null,
+                                lateCheckoutReason:
+                                    isLateCheckout && lateReason.isNotEmpty
+                                        ? lateReason
+                                        : null,
+                              ),
+                            );
                           }
                         : null,
                   ),

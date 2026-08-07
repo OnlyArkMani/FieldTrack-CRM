@@ -74,14 +74,17 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
     // buttons shouldn't behave differently for the same underlying state.
     final uiState = ref.read(attendanceProvider);
     final attendance = uiState.attendance;
-    final String? summary;
+    final WorkSummaryResult? summaryResult;
     if (uiState.state == MachineState.reCheckedIn && attendance != null) {
-      summary = await showReCheckOutSummaryModal(context, attendance: attendance);
+      summaryResult = await showReCheckOutSummaryModal(context, attendance: attendance);
     } else {
-      summary = await showWorkSummarySheet(context);
+      summaryResult = await showWorkSummarySheet(context);
     }
-    if (summary == null || !mounted) return;
-    await ref.read(attendanceProvider.notifier).end(summary);
+    if (summaryResult == null || !mounted) return;
+    await ref.read(attendanceProvider.notifier).end(
+          workSummary: summaryResult.workSummary,
+          lateCheckoutReason: summaryResult.lateCheckoutReason,
+        );
     if (!mounted) return;
     final attendanceState = ref.read(attendanceProvider);
     final attendanceId = attendanceState.attendance?.id;

@@ -144,12 +144,15 @@ class AttendanceRepository {
   Future<Attendance> end(
     double lat,
     double lng, {
-    required String workSummary,
+    String? workSummary,
+    String? lateCheckoutReason,
   }) async {
     final data = await _api.post('/attendance/end', body: {
       'lat': lat,
       'lng': lng,
-      'work_summary': workSummary,
+      if (workSummary != null) 'work_summary': workSummary,
+      if (lateCheckoutReason != null)
+        'late_checkout_reason': lateCheckoutReason,
     });
     return Attendance.fromJson(data);
   }

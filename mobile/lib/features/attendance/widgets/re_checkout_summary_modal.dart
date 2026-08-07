@@ -6,16 +6,17 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
 import '../models/attendance.dart';
+import 'work_summary_sheet.dart';
 
 /// Shows a summary modal when checking out from a Re-Checked In session.
 /// Displays all existing check-in/out timestamps, re-checkin time & remark,
 /// and allows inputting the work summary before confirming final checkout.
 /// Requires a reason if checking out post 7:00 PM (19:00).
-Future<String?> showReCheckOutSummaryModal(
+Future<WorkSummaryResult?> showReCheckOutSummaryModal(
   BuildContext context, {
   required Attendance attendance,
 }) {
-  return showModalBottomSheet<String>(
+  return showModalBottomSheet<WorkSummaryResult>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Theme.of(context).cardColor,
@@ -63,16 +64,13 @@ class _ReCheckOutSummaryModalState extends State<_ReCheckOutSummaryModal> {
       return;
     }
 
-    final parts = <String>[];
-    if (workSummary.isNotEmpty) {
-      parts.add(workSummary);
-    }
-    if (isLateCheckout && lateReason.isNotEmpty) {
-      parts.add('Reason for Late Checkout: $lateReason');
-    }
-
-    final result = parts.join('\n\n');
-    Navigator.of(context).pop(result.isEmpty ? null : result);
+    Navigator.of(context).pop(
+      WorkSummaryResult(
+        workSummary: workSummary.isNotEmpty ? workSummary : null,
+        lateCheckoutReason:
+            isLateCheckout && lateReason.isNotEmpty ? lateReason : null,
+      ),
+    );
   }
 
   @override

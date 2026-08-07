@@ -108,7 +108,9 @@ async def end(
 ) -> AttendanceOut:
     result = await AttendanceService(db).transition_state(
         user=user, action=SessionType.END, lat=body.lat, lng=body.lng,
-        work_summary=body.work_summary, ip=_client_ip(request),
+        work_summary=body.work_summary,
+        late_checkout_reason=body.late_checkout_reason,
+        ip=_client_ip(request),
     )
     # Generate DSR in the background — does not block the END response.
     # No work_summary means this is mobile's auto-clock-out-on-logout (the

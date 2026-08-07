@@ -196,6 +196,7 @@ class AttendanceService:
         lng: float,
         notes: str | None = None,
         work_summary: str | None = None,
+        late_checkout_reason: str | None = None,
         ip: str | None = None,
     ) -> AttendanceOut:
         day = self._today()
@@ -230,6 +231,8 @@ class AttendanceService:
             await self._append_session(attendance, action, now, lat, lng, notes)
             if action == SessionType.END:
                 attendance.work_summary = work_summary
+                if late_checkout_reason is not None:
+                    attendance.late_checkout_reason = late_checkout_reason
                 attendance.total_duration_minutes = calculate_duration(
                     attendance.sessions
                 )

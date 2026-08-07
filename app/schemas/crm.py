@@ -330,6 +330,7 @@ class DailyReportResponse(BaseModel):
     check_out_lat: float | None = None  # added migration 0011
     check_out_lng: float | None = None
     end_of_day_note: str | None
+    late_checkout_reason: str | None = None
     manager_comment: str | None = None  # added migration 0006
     submitted_at: datetime | None
     is_late: bool

@@ -441,6 +441,7 @@ class DailyReport(Base):
     check_out_lat: Mapped[float | None] = mapped_column(Float)  # added migration 0011
     check_out_lng: Mapped[float | None] = mapped_column(Float)
     end_of_day_note: Mapped[str | None] = mapped_column(Text)  # max 300 chars (validated in schema)
+    late_checkout_reason: Mapped[str | None] = mapped_column(Text)
     manager_comment: Mapped[str | None] = mapped_column(Text)   # added migration 0006
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_late: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)  # after 7:30 PM
