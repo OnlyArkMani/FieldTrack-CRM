@@ -120,6 +120,8 @@ class FarmerMeetAttendee(BaseModel):
     # Each attendee's own village — distinct from the meet's venue village
     # below, since attendees at one meet often come from different villages.
     village: str = Field(min_length=1, max_length=200)
+    remarks: str | None = Field(default=None)
+    notes: str | None = Field(default=None)
     # Client-generated UUID from the mobile offline queue (per attendee).
     # Omitted for online creates.
     client_id: str | None = Field(default=None, max_length=36)

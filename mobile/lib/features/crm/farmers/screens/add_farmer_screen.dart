@@ -216,6 +216,10 @@ class _AddFarmerScreenState extends ConsumerState<AddFarmerScreen> {
                 Text('${attendee.phone} · ${attendee.village}',
                     style:
                         AppTextStyles.caption.copyWith(color: colors.textSecondary)),
+                if (attendee.remarks != null && attendee.remarks!.isNotEmpty)
+                  Text('Remarks: ${attendee.remarks}',
+                      style: AppTextStyles.caption
+                          .copyWith(color: colors.textSecondary, fontStyle: FontStyle.italic)),
               ],
             ),
           ),

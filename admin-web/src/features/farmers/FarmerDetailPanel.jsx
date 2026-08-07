@@ -163,6 +163,14 @@ export default function FarmerDetailPanel({ farmerId, open, onClose }) {
                 <Mini label="Cattle" value={farmer.total_cattle ?? 0} />
               </div>
 
+              {farmer.notes && (
+                <Section title={farmer.customer_type === 'FARMER_MEET' ? 'Remarks' : 'Notes'}>
+                  <p className="text-xs text-text-primary bg-bg rounded-btn p-3 whitespace-pre-wrap">
+                    {farmer.notes}
+                  </p>
+                </Section>
+              )}
+
               {/* Latest livestock */}
               <Section title="Latest livestock">
                 {farmer.latest_livestock ? (

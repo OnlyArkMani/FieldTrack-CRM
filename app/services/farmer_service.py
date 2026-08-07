@@ -278,7 +278,7 @@ class FarmerService:
                 lat=payload.lat,
                 lng=payload.lng,
                 total_cattle=0,
-                notes=payload.notes,
+                notes=attendee.remarks or attendee.notes or payload.notes,
                 is_active=True,
                 client_id=attendee.client_id,
             )

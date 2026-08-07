@@ -418,6 +418,8 @@ class _HeaderCard extends StatelessWidget {
                 ),
               ),
             ),
+          if (farmer.notes != null && farmer.notes!.isNotEmpty)
+            _line(context, Icons.notes_rounded, farmer.notes!),
         ],
       ),
     );

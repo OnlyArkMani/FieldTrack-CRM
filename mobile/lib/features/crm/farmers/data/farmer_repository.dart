@@ -447,7 +447,13 @@ class FarmerRepository {
   /// transaction. All attendees share the venue's address/district/etc.;
   /// name/phone/village vary per row.
   Future<List<FarmerDetail>> createBatch({
-    required List<({String name, String phone, String village})> attendees,
+    required List<
+        ({
+          String name,
+          String phone,
+          String village,
+          String? remarks,
+        })> attendees,
     String? village,
     String? district,
     String? address,
@@ -474,6 +480,7 @@ class FarmerRepository {
           'customer_type': CustomerType.farmer.wire,
           if (a.phone.isNotEmpty) 'phone': a.phone,
           'village': a.village,
+          if (a.remarks != null && a.remarks!.isNotEmpty) 'notes': a.remarks,
           if (village != null && village.isNotEmpty) '_venue_village': village,
           if (district != null && district.isNotEmpty) 'district': district,
           if (address != null && address.isNotEmpty) 'address': address,
@@ -497,7 +504,15 @@ class FarmerRepository {
     }
     final data = await _api.post('/farmers/batch', body: {
       'attendees': attendees
-          .map((a) => {'name': a.name, 'phone': a.phone, 'village': a.village})
+          .map((a) => {
+                'name': a.name,
+                'phone': a.phone,
+                'village': a.village,
+                if (a.remarks != null && a.remarks!.isNotEmpty)
+                  'remarks': a.remarks,
+                if (a.remarks != null && a.remarks!.isNotEmpty)
+                  'notes': a.remarks,
+              })
           .toList(),
       if (village != null && village.isNotEmpty) 'village': village,
       if (district != null && district.isNotEmpty) 'district': district,

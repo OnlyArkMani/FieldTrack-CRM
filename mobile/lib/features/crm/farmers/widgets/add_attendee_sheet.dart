@@ -9,13 +9,15 @@ import '../../../../core/widgets/app_text_field.dart';
 import '../../../../services/village/widgets/village_search_field.dart';
 
 /// One Farmer Meet attendee collected by the sheet below.
-typedef AttendeeInput = ({String name, String phone, String village});
+typedef AttendeeInput = ({
+  String name,
+  String phone,
+  String village,
+  String? remarks,
+});
 
 /// Bottom sheet to add one Farmer Meet attendee. Pops with the entered
-/// (name, phone, village) triple, or null if dismissed without saving.
-/// Venue fields (address/district/PIN/...) live on the parent form and are
-/// shared by every attendee — village is entered per attendee since
-/// attendees at one meet often come from different villages.
+/// (name, phone, village, remarks) quadruple, or null if dismissed without saving.
 class AddAttendeeSheet {
   AddAttendeeSheet._();
 
@@ -24,8 +26,8 @@ class AddAttendeeSheet {
     return AppBottomSheet.show<AttendeeInput>(
       context,
       title: 'Add a farmer',
-      initialSize: 0.6,
-      maxSize: 0.6,
+      initialSize: 0.75,
+      maxSize: 0.85,
       child: _AddAttendeeForm(key: formKey),
       footer: AppButton(
         label: 'Add farmer',
@@ -47,6 +49,7 @@ class _AddAttendeeFormState extends State<_AddAttendeeForm> {
   final _name = TextEditingController();
   final _phone = TextEditingController();
   final _village = TextEditingController();
+  final _remarks = TextEditingController();
   String? _nameError;
   String? _phoneError;
   String? _villageError;
@@ -56,6 +59,7 @@ class _AddAttendeeFormState extends State<_AddAttendeeForm> {
     _name.dispose();
     _phone.dispose();
     _village.dispose();
+    _remarks.dispose();
     super.dispose();
   }
 
@@ -63,6 +67,8 @@ class _AddAttendeeFormState extends State<_AddAttendeeForm> {
     final name = _name.text.trim();
     final phone = _phone.text.trim();
     final village = _village.text.trim();
+    final remarks = _remarks.text.trim();
+
     setState(() {
       _nameError = name.isEmpty ? 'Name is required' : null;
       _villageError = village.isEmpty ? 'Village is required' : null;
@@ -77,7 +83,12 @@ class _AddAttendeeFormState extends State<_AddAttendeeForm> {
       }
     });
     if (name.isEmpty || village.isEmpty || _phoneError != null) return;
-    Navigator.of(context).pop((name: name, phone: phone, village: village));
+    Navigator.of(context).pop((
+      name: name,
+      phone: phone,
+      village: village,
+      remarks: remarks.isEmpty ? null : remarks,
+    ));
   }
 
   @override
@@ -119,11 +130,19 @@ class _AddAttendeeFormState extends State<_AddAttendeeForm> {
           controller: _village,
           hint: "Farmer's village/town/city",
           errorText: _villageError,
-          textInputAction: TextInputAction.done,
+          textInputAction: TextInputAction.next,
           onSelected: (v) => setState(() {
             _village.text = v.formattedAddress;
             _villageError = null;
           }),
+        ),
+        const SizedBox(height: AppDimens.grid * 2),
+        AppTextField(
+          label: 'Remarks',
+          controller: _remarks,
+          hint: 'Farmer remarks or notes (optional)',
+          textInputAction: TextInputAction.done,
+          prefixIcon: Icons.notes_rounded,
         ),
       ],
     );

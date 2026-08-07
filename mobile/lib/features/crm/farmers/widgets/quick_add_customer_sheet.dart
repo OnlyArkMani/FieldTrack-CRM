@@ -28,7 +28,7 @@ class QuickAddCustomerSheet {
     return AppBottomSheet.show<FarmerListItem>(
       context,
       title: 'Add customer',
-      initialSize: 0.65,
+      initialSize: 0.75,
       maxSize: 0.9,
       child: _QuickAddCustomerForm(
         key: formKey,
@@ -112,6 +112,7 @@ class _QuickAddCustomerFormState extends ConsumerState<_QuickAddCustomerForm> {
   final _name = TextEditingController();
   final _phone = TextEditingController();
   final _address = TextEditingController();
+  final _remarks = TextEditingController();
 
   CustomerType _type = CustomerType.farmer;
   String? _nameError;
@@ -123,6 +124,7 @@ class _QuickAddCustomerFormState extends ConsumerState<_QuickAddCustomerForm> {
     _name.dispose();
     _phone.dispose();
     _address.dispose();
+    _remarks.dispose();
     super.dispose();
   }
 
@@ -130,6 +132,8 @@ class _QuickAddCustomerFormState extends ConsumerState<_QuickAddCustomerForm> {
     final name = _name.text.trim();
     final phone = _phone.text.trim();
     final address = _address.text.trim();
+    final remarks = _remarks.text.trim();
+
     setState(() {
       _nameError = name.isEmpty ? 'Name is required' : null;
       if (phone.isEmpty) {
@@ -153,6 +157,7 @@ class _QuickAddCustomerFormState extends ConsumerState<_QuickAddCustomerForm> {
             customerType: _type,
             phone: phone,
             address: address,
+            notes: remarks.isNotEmpty ? remarks : null,
           );
       if (!mounted) return;
       HapticFeedback.mediumImpact();
@@ -196,8 +201,6 @@ class _QuickAddCustomerFormState extends ConsumerState<_QuickAddCustomerForm> {
                 AppTextStyles.caption.copyWith(color: colors.textSecondary)),
         const SizedBox(height: AppDimens.grid),
         InputDecorator(
-          // No overrides — inherits the app's InputDecorationTheme (fill,
-          // padding, border) so this matches the AppTextFields below exactly.
           decoration: const InputDecoration(),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<CustomerType>(
@@ -245,13 +248,25 @@ class _QuickAddCustomerFormState extends ConsumerState<_QuickAddCustomerForm> {
           controller: _address,
           hint: 'Address',
           errorText: _addressError,
-          textInputAction: TextInputAction.done,
+          textInputAction: _type == CustomerType.farmer
+              ? TextInputAction.next
+              : TextInputAction.done,
           prefixIcon: Icons.location_on_rounded,
           onSelected: (v) => setState(() {
             _address.text = v.formattedAddress;
             _addressError = null;
           }),
         ),
+        if (_type == CustomerType.farmer) ...[
+          const SizedBox(height: AppDimens.grid * 2),
+          AppTextField(
+            label: 'Remarks',
+            controller: _remarks,
+            hint: 'Farmer remarks or notes (optional)',
+            textInputAction: TextInputAction.done,
+            prefixIcon: Icons.notes_rounded,
+          ),
+        ],
       ],
     );
   }
