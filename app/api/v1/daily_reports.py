@@ -14,7 +14,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import (
@@ -25,7 +25,7 @@ from app.core.dependencies import (
 from app.core.exceptions import forbidden, not_found
 from app.models.crm import DailyReport, Farmer, Visit, VisitPlan, VisitPlanItem
 from app.models.enums import UserRole
-from app.models.user import User
+from app.models.user import Team, User
 from app.schemas.common import CursorPage, decode_cursor, encode_cursor
 from app.schemas.crm import DailyReportResponse
 from app.services.dsr_service import (
@@ -239,6 +239,15 @@ async def submit(
     return DailyReportResponse.model_validate(report)
 
 
+async def _resolve_manager_team_ids(db: AsyncSession, user: User) -> list[int]:
+    """Resolve team IDs managed by this user. A team's manager is defined by
+    `Team.manager_id == user.id` (or fallback `user.team_id`)."""
+    stmt = select(Team.id).where(
+        or_(Team.manager_id == user.id, Team.id == user.team_id)
+    )
+    return list((await db.execute(stmt)).scalars().all())
+
+
 # -- Manager: team DSRs ----------------------------------------------------
 
 @router.get("/team", response_model=list[TeamDsrItem])
@@ -257,9 +266,10 @@ async def team_dsrs(
     """
     emp_filters = [User.role == UserRole.EMPLOYEE, User.is_active.is_(True)]
     if user.role == UserRole.MANAGER:
-        if not user.team_id:
+        managed_team_ids = await _resolve_manager_team_ids(db, user)
+        if not managed_team_ids:
             return []
-        emp_filters.append(User.team_id == user.team_id)
+        emp_filters.append(User.team_id.in_(managed_team_ids))
     elif user.role == UserRole.ADMIN:
         if team_id is not None:
             emp_filters.append(User.team_id == team_id)
@@ -322,7 +332,8 @@ async def team_dsr_detail(
 ) -> DsrDetailResponse:
     if manager.role == UserRole.MANAGER:
         emp = await db.get(User, employee_id)
-        if emp is None or emp.team_id != manager.team_id:
+        managed_team_ids = await _resolve_manager_team_ids(db, manager)
+        if emp is None or emp.team_id not in managed_team_ids:
             raise forbidden("Employee is not on your team")
 
     detail = await get_dsr_with_details(db, employee_id=employee_id, report_date=report_date)
@@ -343,8 +354,10 @@ async def download_team_dsr(
     emp = await db.get(User, employee_id)
     if emp is None:
         raise not_found("Employee not found")
-    if manager.role == UserRole.MANAGER and emp.team_id != manager.team_id:
-        raise forbidden("Employee is not on your team")
+    if manager.role == UserRole.MANAGER:
+        managed_team_ids = await _resolve_manager_team_ids(db, manager)
+        if emp.team_id not in managed_team_ids:
+            raise forbidden("Employee is not on your team")
     detail = await get_dsr_with_details(db, employee_id=employee_id, report_date=report_date)
     if detail is None:
         raise not_found("No DSR found for this employee on this date")
@@ -421,9 +434,10 @@ async def archive(
     base_filters = []
     # Scope: managers are pinned to their own team; admins may filter.
     if user.role == UserRole.MANAGER:
-        if not user.team_id:
+        managed_team_ids = await _resolve_manager_team_ids(db, user)
+        if not managed_team_ids:
             return CursorPage[ArchiveDsrItem](items=[], next_cursor=None, total=0, has_more=False)
-        base_filters.append(User.team_id == user.team_id)
+        base_filters.append(User.team_id.in_(managed_team_ids))
         if employee_id:
             base_filters.append(DailyReport.employee_id == employee_id)
     else:
