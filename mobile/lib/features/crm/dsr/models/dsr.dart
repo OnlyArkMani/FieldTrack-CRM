@@ -14,6 +14,7 @@ class DsrSummary {
     required this.isLate,
     this.submittedAt,
     this.endOfDayNote,
+    this.lateCheckoutReason,
     this.managerComment,
   });
 
@@ -28,6 +29,7 @@ class DsrSummary {
   final bool isLate;
   final DateTime? submittedAt;
   final String? endOfDayNote;
+  final String? lateCheckoutReason;
   final String? managerComment;
 
   bool get isSubmitted => status == 'SUBMITTED';
@@ -48,6 +50,7 @@ class DsrSummary {
             ? DateTime.parse(j['submitted_at'] as String)
             : null,
         endOfDayNote: j['end_of_day_note'] as String?,
+        lateCheckoutReason: j['late_checkout_reason'] as String?,
         managerComment: j['manager_comment'] as String?,
       );
 }
@@ -106,6 +109,7 @@ class DsrDetail extends DsrSummary {
     required super.isLate,
     super.submittedAt,
     super.endOfDayNote,
+    super.lateCheckoutReason,
     super.managerComment,
     required this.visits,
     required this.orders,
@@ -132,6 +136,7 @@ class DsrDetail extends DsrSummary {
             ? DateTime.parse(j['submitted_at'] as String)
             : null,
         endOfDayNote: j['end_of_day_note'] as String?,
+        lateCheckoutReason: j['late_checkout_reason'] as String?,
         managerComment: j['manager_comment'] as String?,
         visitsPlanCount: j['visits_planned'] as int? ?? 0,
         visits: (j['visits'] as List<dynamic>? ?? [])

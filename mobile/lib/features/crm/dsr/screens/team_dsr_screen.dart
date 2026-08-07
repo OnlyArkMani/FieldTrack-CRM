@@ -260,69 +260,179 @@ class _MemberDsrSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.appColors;
+    final scheme = Theme.of(context).colorScheme;
     final future =
         ref.read(dsrRepositoryProvider).teamMemberDsr(employeeId, date);
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.7,
-      maxChildSize: 0.92,
+      initialChildSize: 0.75,
+      maxChildSize: 0.95,
       builder: (context, controller) => FutureBuilder<DsrDetail>(
         future: future,
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return const SizedBox(
-                height: 200, child: Center(child: CircularProgressIndicator()));
+                height: 250, child: Center(child: CircularProgressIndicator()));
           }
           if (snap.hasError || snap.data == null) {
-            return const SizedBox(
-                height: 200,
-                child: Center(child: Text('No DSR found for this date.')));
+            return SizedBox(
+                height: 250,
+                child: Center(
+                    child: Text('No DSR found for this date.',
+                        style: AppTextStyles.body
+                            .copyWith(color: colors.textSecondary))));
           }
           final d = snap.data!;
+          final initial =
+              employeeName.isNotEmpty ? employeeName[0].toUpperCase() : 'E';
+
           return ListView(
             controller: controller,
             padding: const EdgeInsets.all(AppDimens.grid * 2),
             children: [
-              Text(employeeName,
-                  style: AppTextStyles.heading.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface)),
-              Text(DateFormat('d MMMM yyyy').format(date),
-                  style: AppTextStyles.caption
-                      .copyWith(color: colors.textSecondary)),
-              const SizedBox(height: AppDimens.grid * 1.5),
-              Wrap(spacing: 12, runSpacing: 8, children: [
-                _stat(context, 'Visits', d.visitsCompleted.toString()),
-                _stat(context, 'Orders', d.ordersCaptures.toString()),
-                _stat(context, 'Hot', d.hotLeads.toString()),
-                _stat(context, 'Warm', d.warmLeads.toString()),
-                _stat(context, 'Cold', d.coldLeads.toString()),
-              ]),
-              if (d.visits.isNotEmpty) ...[
-                const SizedBox(height: AppDimens.grid * 2),
-                _sectionTitle(context, 'Visits'),
-                ...d.visits.map((v) => _TeamVisitTile(visit: v)),
-              ],
-              if (d.orders.isNotEmpty) ...[
-                const SizedBox(height: AppDimens.grid * 2),
-                _sectionTitle(context, 'Orders'),
-                ...d.orders.map((o) => _row(context, o.farmerName,
-                    '${o.bagsCount} bags · ${DateFormat('d MMM').format(o.deliveryDate)}')),
-              ],
-              if (d.followUps.isNotEmpty) ...[
-                const SizedBox(height: AppDimens.grid * 2),
-                _sectionTitle(context, 'Follow-ups'),
-                ...d.followUps.map((f) => _row(context, f.farmerName,
-                    DateFormat('d MMM').format(f.scheduledDate))),
-              ],
+              // Header Card with Avatar
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: scheme.primary.withValues(alpha: 0.15),
+                    child: Text(
+                      initial,
+                      style: AppTextStyles.heading
+                          .copyWith(color: scheme.primary),
+                    ),
+                  ),
+                  const SizedBox(width: AppDimens.grid * 1.5),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          employeeName,
+                          style: AppTextStyles.heading.copyWith(
+                              color: scheme.onSurface,
+                              fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          DateFormat('EEEE, d MMMM yyyy').format(date),
+                          style: AppTextStyles.caption
+                              .copyWith(color: colors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (d.isSubmitted)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        d.isLate ? 'Late Submission' : 'Submitted',
+                        style: AppTextStyles.caption.copyWith(
+                            color: d.isLate ? Colors.orange.shade800 : Colors.green.shade700,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppDimens.grid * 2),
+
+              // Metrics Card Row
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: scheme.outline.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _statItem(context, 'Visits', d.visitsCompleted.toString(),
+                        scheme.primary),
+                    _divider(context),
+                    _statItem(context, 'Orders', d.ordersCaptures.toString(),
+                        Colors.green.shade700),
+                    _divider(context),
+                    _statItem(
+                        context, 'Hot', d.hotLeads.toString(), Colors.red.shade700),
+                    _divider(context),
+                    _statItem(
+                        context, 'Warm', d.warmLeads.toString(), Colors.orange.shade800),
+                    _divider(context),
+                    _statItem(
+                        context, 'Cold', d.coldLeads.toString(), Colors.blue.shade700),
+                  ],
+                ),
+              ),
+
+              // Employee Note Callout Card
               if (d.endOfDayNote != null && d.endOfDayNote!.isNotEmpty) ...[
                 const SizedBox(height: AppDimens.grid * 2),
-                _sectionTitle(context, "Employee's note"),
-                Text(d.endOfDayNote!,
-                    style: AppTextStyles.body.copyWith(
-                        fontStyle: FontStyle.italic,
-                        color: colors.textSecondary)),
+                _calloutCard(
+                  context,
+                  title: "Employee's note",
+                  content: d.endOfDayNote!,
+                  icon: Icons.chat_bubble_outline_rounded,
+                  color: scheme.primary,
+                ),
               ],
-              const SizedBox(height: AppDimens.grid * 2),
+
+              // Late Checkout Reason Callout Card
+              if (d.lateCheckoutReason != null &&
+                  d.lateCheckoutReason!.isNotEmpty) ...[
+                const SizedBox(height: AppDimens.grid * 1.5),
+                _calloutCard(
+                  context,
+                  title: "Late checkout reason",
+                  content: d.lateCheckoutReason!,
+                  icon: Icons.warning_amber_rounded,
+                  color: Colors.amber.shade900,
+                ),
+              ],
+
+              // Manager Comment Callout Card
+              if (d.managerComment != null &&
+                  d.managerComment!.isNotEmpty) ...[
+                const SizedBox(height: AppDimens.grid * 1.5),
+                _calloutCard(
+                  context,
+                  title: "Manager comment",
+                  content: d.managerComment!,
+                  icon: Icons.rate_review_rounded,
+                  color: Colors.green.shade700,
+                ),
+              ],
+
+              // Visits Section
+              if (d.visits.isNotEmpty) ...[
+                const SizedBox(height: AppDimens.grid * 2.5),
+                _sectionHeader(context, 'Visits', d.visits.length),
+                const SizedBox(height: AppDimens.grid),
+                ...d.visits.map((v) => _TeamVisitTile(visit: v)),
+              ],
+
+              // Orders Section
+              if (d.orders.isNotEmpty) ...[
+                const SizedBox(height: AppDimens.grid * 2.5),
+                _sectionHeader(context, 'Orders Captured', d.orders.length),
+                const SizedBox(height: AppDimens.grid),
+                ...d.orders.map((o) => _orderTile(context, o)),
+              ],
+
+              // Follow-ups Section
+              if (d.followUps.isNotEmpty) ...[
+                const SizedBox(height: AppDimens.grid * 2.5),
+                _sectionHeader(context, 'Scheduled Follow-ups', d.followUps.length),
+                const SizedBox(height: AppDimens.grid),
+                ...d.followUps.map((f) => _followUpTile(context, f)),
+              ],
+
+              const SizedBox(height: AppDimens.grid * 3),
             ],
           );
         },
@@ -330,44 +440,154 @@ class _MemberDsrSheet extends ConsumerWidget {
     );
   }
 
-  Widget _stat(BuildContext context, String label, String value) {
+  Widget _statItem(
+      BuildContext context, String label, String value, Color color) {
     final colors = context.appColors;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(value,
             style: AppTextStyles.heading
-                .copyWith(color: Theme.of(context).colorScheme.onSurface)),
+                .copyWith(color: color, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 2),
         Text(label,
-            style: AppTextStyles.caption.copyWith(color: colors.textSecondary)),
+            style: AppTextStyles.caption
+                .copyWith(color: colors.textSecondary, fontSize: 11)),
       ],
     );
   }
 
-  Widget _sectionTitle(BuildContext context, String t) => Padding(
-        padding: const EdgeInsets.only(bottom: AppDimens.grid),
-        child: Text(t,
-            style: AppTextStyles.bodyMedium
-                .copyWith(color: Theme.of(context).colorScheme.onSurface)),
-      );
+  Widget _divider(BuildContext context) {
+    return Container(
+      height: 24,
+      width: 1,
+      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+    );
+  }
 
-  Widget _row(BuildContext context, String left, String right) {
+  Widget _calloutCard(
+    BuildContext context, {
+    required String title,
+    required String content,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Text(
+                title,
+                style: AppTextStyles.caption.copyWith(
+                    color: color, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            content,
+            style: AppTextStyles.body.copyWith(
+                color: Theme.of(context).colorScheme.onSurface,
+                height: 1.35),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionHeader(BuildContext context, String title, int count) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Text(title,
+            style: AppTextStyles.bodyMedium.copyWith(
+                color: scheme.onSurface, fontWeight: FontWeight.bold)),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: scheme.primary.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            '$count',
+            style: AppTextStyles.caption.copyWith(
+                color: scheme.primary, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _orderTile(BuildContext context, DsrOrder o) {
     final colors = context.appColors;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: scheme.outline.withValues(alpha: 0.2)),
+      ),
       child: Row(
         children: [
+          Icon(Icons.shopping_bag_outlined, size: 18, color: Colors.green.shade700),
+          const SizedBox(width: 10),
           Expanded(
-            child: Text(left,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.body
-                    .copyWith(color: Theme.of(context).colorScheme.onSurface)),
+            child: Text(
+              o.farmerName,
+              style: AppTextStyles.body.copyWith(color: scheme.onSurface),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          const SizedBox(width: 8),
-          Text(right,
-              style:
-                  AppTextStyles.caption.copyWith(color: colors.textSecondary)),
+          Text(
+            '${o.bagsCount} bags · ${DateFormat('d MMM').format(o.deliveryDate)}',
+            style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _followUpTile(BuildContext context, DsrFollowUp f) {
+    final colors = context.appColors;
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: scheme.outline.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.event_repeat_rounded, size: 18, color: scheme.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              f.farmerName,
+              style: AppTextStyles.body.copyWith(color: scheme.onSurface),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Text(
+            DateFormat('d MMM yyyy').format(f.scheduledDate),
+            style: AppTextStyles.caption.copyWith(color: colors.textSecondary),
+          ),
         ],
       ),
     );
